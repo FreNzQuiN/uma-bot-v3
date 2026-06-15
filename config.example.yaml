@@ -1,0 +1,157 @@
+# ============================================================
+# Uma Club Bot v3 — Configuration Example
+# ============================================================
+# Copy this file to config.yaml and fill in your values.
+# All values have sensible defaults; only circleId is required.
+#
+# Time references use WIB (Asia/Jakarta).
+# Data source: uma.moe (updates once daily at ~22:00 WIB).
+# ============================================================
+
+# Your Uma Musume circle ID (required)
+# Find it in the URL when viewing your circle on uma.moe
+circleId: 232229195
+
+# Timezone for all user-facing dates and schedules
+timezone: Asia/Jakarta
+
+# ============================================================
+# Command settings
+# ============================================================
+commands:
+  # Prefix(es) that trigger bot commands (e.g., /daily, !daily)
+  prefixes: ["/"]
+  # Maximum offset allowed for each report type
+  maxDailyOffset: 31
+  maxWeeklyOffset: 5
+  maxMonthlyOffset: 12
+
+# ============================================================
+# Access control
+# ============================================================
+
+# WhatsApp JIDs of bot administrators
+# Admin can use admin-only commands and access all report commands
+admins:
+  - "628xxxxxxxx@s.whatsapp.net"
+
+groups:
+  # Groups where report commands are allowed for non-admins
+  command:
+    - "xxxx@g.us"
+  # Groups where auto-delivered reports go
+  announcement:
+    - "yyyy@g.us"
+  # Groups/chats for alert delivery (admin-only alerts)
+  alertAdmin:
+    - "zzzz@g.us"
+
+# ============================================================
+# Member requirements
+# ============================================================
+requirements:
+  # Monthly fan requirement per member
+  monthlyFans: 20000000
+  # Weekly fan requirement per member
+  weeklyFans: 7000000
+  # Number of weeks in a month for weekly-to-monthly derivation
+  weeksInMonthEquivalent: 4
+
+# ============================================================
+# Auto-delivery schedule (WIB)
+# ============================================================
+schedule:
+  daily:
+    enabled: true
+    time: "22:05"
+  weekly:
+    enabled: true
+    # Days of month when weekly report is sent
+    days: [7, 14, 21, 28]
+    time: "22:05"
+  monthly:
+    enabled: true
+    # Day of month when monthly report is sent
+    day: 1
+    time: "22:12"
+
+# ============================================================
+# Catch-up (recover missed reports on restart)
+# ============================================================
+catchUp:
+  enabled: true
+  # Maximum reports to send per startup to avoid spam
+  maxReportsPerStartup: 10
+
+# ============================================================
+# Alerts (admin-only by default)
+# ============================================================
+alerts:
+  enabled: true
+  # Where alerts go: "admin" (admin JIDs) or "group" (alertAdmin groups)
+  defaultRecipients: admin
+
+  performanceDrop:
+    enabled: true
+    # Alert when today's gain < thresholdPercent% of 7-day average
+    thresholdPercent: 50
+    # Minimum days of history before triggering
+    minHistoryDays: 7
+
+  demotionRisk:
+    enabled: true
+    # Alert when demotion buffer < bufferDays of current pace
+    bufferDays: 3
+
+  streakBreak:
+    enabled: true
+
+  newTransfer:
+    enabled: true
+
+  rankDrop:
+    # COULD priority — disabled by default
+    enabled: false
+    # Alert when rank drops more than N positions in a day
+    positions: 10
+
+  quietHours:
+    # Suppress alerts during quiet hours
+    enabled: false
+    start: "23:00"
+    end: "06:00"
+
+# ============================================================
+# Member status
+# ============================================================
+memberStatus:
+  # Per-report stale thresholds (consecutive zero-gain days)
+  staleAfterDaysDaily: 0
+  staleAfterDaysWeekly: 3
+  staleAfterDaysMonthly: 7
+
+# ============================================================
+# Message formatting
+# ============================================================
+message:
+  # WhatsApp message character limit (4096 is the platform max)
+  maxLength: 4096
+  # Split long messages at newline boundaries
+  splitAtNewline: true
+  # Language for bot messages (id = Indonesian)
+  language: id
+
+# ============================================================
+# Logging
+# ============================================================
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+  # Log file path (relative to project root)
+  logFile: data/logs/bot.log
+  # Max file size in MB before rotation
+  maxSizeMB: 5
+  # Max rotated files to keep (0 = no rotation)
+  maxFiles: 3
+  # Also output to console
+  console: true

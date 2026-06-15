@@ -1,0 +1,43 @@
+node_modules/
+dist/
+coverage/
+
+# SQLite
+data/bot.db
+data/bot.db.*
+*.db
+*.db-journal
+
+# Auth & config with secrets
+data/auth/
+config.yaml
+.env
+.env.*
+
+# Snapshot data cache
+data/snapshots/
+
+# Reverse engineering artifacts
+data/*.png
+data/*.txt
+data/*.html
+data/uma-moe-main.js
+data/chunk-chunk-*.js
+data/circle-api-response.json
+data/live-circle-response.json
+
+# Runtime files
+data/bot.pid
+*.log
+.session_learnings.md
+
+# Compiled scripts
+scripts/*.js
+
+# Test output artifacts
+tests/stats_output.txt
+tests/stats_output2.txt
+
+# OS files
+.DS_Store
+Thumbs.db

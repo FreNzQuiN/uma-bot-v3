@@ -1,0 +1,109 @@
+/**
+ * Timezone utilities using Node.js Intl API.
+ *
+ * Architecture:
+ * - Data source (uma.moe) scrapes at 00:00 JST → 'Asia/Tokyo' is the data timezone
+ * - Display timezone comes from config (default: 'Asia/Jakarta' / WIB)
+ * - All internal date logic uses the data timezone (JST)
+ * - Display conversion uses the configured display timezone
+ *
+ * Uses Intl.DateTimeFormat with IANA timezone names — handles DST and rules correctly.
+ * No hardcoded UTC offsets.
+ */
+
+const DATA_TIMEZONE = 'Asia/Tokyo';
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+/**
+ * Extract date components in a specific IANA timezone.
+ * Returns { year, month (1-12), day, hour, minute } in the given timezone.
+ */
+function extractInTimezone(
+  date: Date,
+  tz: string
+): { year: number; month: number; day: number; hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) =>
+    parseInt(parts.find((p) => p.type === type)!.value, 10);
+
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour'),
+    minute: get('minute'),
+  };
+}
+
+/**
+ * Format a Date in a specific timezone as "YYYY-MM-DD".
+ */
+function formatDateInTimezone(date: Date, tz: string): string {
+  const { year, month, day } = extractInTimezone(date, tz);
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+// ============================================================
+// Data timezone (JST) functions — used for all internal logic
+// ============================================================
+
+/** Get the JST date string for a given Date (or now). */
+export function getDataDate(date?: Date): string {
+  return formatDateInTimezone(date ?? new Date(), DATA_TIMEZONE);
+}
+
+/** Get JST date components for a given Date (or now). */
+export function getDataDateComponents(
+  date?: Date
+): { year: number; month: number; day: number } {
+  const { year, month, day } = extractInTimezone(
+    date ?? new Date(),
+    DATA_TIMEZONE
+  );
+  return { year, month, day };
+}
+
+/** Get JST day of month (1-31). */
+export function getDataDay(date?: Date): number {
+  return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).day;
+}
+
+/** Get JST month (1-12). */
+export function getDataMonth(date?: Date): number {
+  return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).month;
+}
+
+/** Get JST year. */
+export function getDataYear(date?: Date): number {
+  return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).year;
+}
+
+// ============================================================
+// Display timezone functions — used for user-facing output
+// ============================================================
+
+/**
+ * Format a Date for display in the configured timezone as "D/M HH:MM".
+ * Used for the footer sync timestamp.
+ */
+export function formatForDisplay(
+  date: Date,
+  displayTimezone: string
+): string {
+  const { day, month, hour, minute } = extractInTimezone(date, displayTimezone);
+  return `${day}/${month} ${pad2(hour)}:${pad2(minute)}`;
+}
+
+

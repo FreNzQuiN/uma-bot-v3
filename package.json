@@ -1,0 +1,46 @@
+{
+  "name": "uma-club-bot-v3",
+  "version": "3.0.0",
+  "description": "WhatsApp bot for Uma Musume club leaders",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "stop": "node scripts/stop.js",
+    "restart": "npm run stop && timeout /t 2 >nul && npm run start",
+    "dev": "ts-node src/index.ts",
+    "dev:watch": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "test": "jest --forceExit --detectOpenHandles",
+    "test:watch": "jest --watch --forceExit --detectOpenHandles",
+    "test:coverage": "jest --coverage --forceExit --detectOpenHandles",
+    "setup": "node -e \"require('fs').copyFileSync('config.example.yaml','config.yaml');console.log('config.yaml created — edit it with your circle details')\"",
+    "health": "curl -s http://127.0.0.1:3000/health | node -e \"process.stdin.on('data',d=>{const j=JSON.parse(d);console.log(j.success?'✅ Bot is running':'❌ Bot is down');console.log('Time:',j.data?.timestamp)})\"",
+    "db:reset": "node -e \"const fs=require('fs');if(fs.existsSync('data/bot.db')){fs.unlinkSync('data/bot.db');console.log('Database reset')}else{console.log('No database found')}\"",
+    "db:backup": "node -e \"const fs=require('fs');if(fs.existsSync('data/bot.db')){const ts=new Date().toISOString().replace(/[:.]/g,'-');fs.copyFileSync('data/bot.db',\\\"data/bot.db.\\\"+ts);console.log('Backup created: data/bot.db.'+ts)}else{console.log('No database found')}\"",
+    "clean": "node -e \"const fs=require('fs');['dist','coverage'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true});console.log('Removed '+d)}})\"",
+    "lint:check": "tsc --noEmit",
+    "fetch": "ts-node -e \"const{loadConfig}=require('./src/config');const{UmaMoeClient}=require('./src/api/uma-moe');const{saveSnapshot}=require('./src/data/snapshot');const config=loadConfig();const client=new UmaMoeClient();const now=new Date();client.fetchCircleData(config.circleId,now.getFullYear(),now.getMonth()+1).then(s=>{const d=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));const ds=\\\"\\\"+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');saveSnapshot(s,ds);console.log('Snapshot saved for '+ds)}).catch(e=>console.error('Fetch failed:',e.message))\"",
+    "docker:build": "docker build -t uma-club-bot .",
+    "docker:run": "docker run -d --name uma-bot -v \"%cd%/data:/app/data\" -v \"%cd%/config.yaml:/app/config.yaml\" --env-file .env uma-club-bot",
+    "docker:stop": "docker stop uma-bot && docker rm uma-bot"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
+    "sql.js": "^1.12.0",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.52.0",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0",
+    "yaml": "^2.7.1",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.3",
+    "@types/node-cron": "^3.0.11",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.4",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}
