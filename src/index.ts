@@ -18,12 +18,21 @@ import { Scheduler } from './scheduler/scheduler';
 import { CatchUpManager } from './scheduler/catchup';
 import { WhatsAppClient } from './whatsapp/client';
 import { setupCommandHandler } from './whatsapp/dispatch';
-import { detectAlerts, formatAlerts } from './alerts/alerts';
+import { detectAlerts, formatAlerts, aggregateAlerts } from './alerts/alerts';
 import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, snapshotExists, updateMemberHistory, ensureMonthSnapshot, getDataDayFromSnapshot } from './data/snapshot';
 import { getDataDate, getDataDateComponents } from './utils/timezone';
-import { writeFileSync, unlinkSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
 import { recordConfigReload, recordSchedulerRestart, getRuntimeStats } from './runtime';
+
+import { generateDailyReport } from './reports/daily';
+import { generateWeeklyReport } from './reports/weekly';
+import { generateMonthlyReport } from './reports/monthly';
+import { generateRanksReport } from './reports/ranks';
+import { generateBottomReport } from './reports/bottom';
+import { generateStatsReport } from './reports/stats';
+import { generateMembersReport } from './reports/members';
+import { generateTierReport } from './reports/tier';
 
 const PID_FILE = 'data/bot.pid';
 
@@ -83,7 +92,6 @@ async function main() {
   log.info('Bot', `Log level: ${config.logging.level}`);
 
   // ── 1b. Watch config.yaml for manual edits (polling-based, reliable on Windows) ──
-  const { statSync, readFileSync } = await import('fs');
   const configPath = require('path').resolve('config.yaml');
   let lastConfigMtime = 0;
   let lastConfigHash = '';
@@ -231,17 +239,11 @@ async function main() {
     if (!snapshot) {
       throw new Error(`No snapshot available for ${type} report`);
     }
+    if (snapshot.members.length === 0) {
+      throw new Error(`Snapshot has no members for ${type} report`);
+    }
 
     const currentConfig = getConfig();
-
-    const { generateDailyReport } = await import('./reports/daily');
-    const { generateWeeklyReport } = await import('./reports/weekly');
-    const { generateMonthlyReport } = await import('./reports/monthly');
-    const { generateRanksReport } = await import('./reports/ranks');
-    const { generateBottomReport } = await import('./reports/bottom');
-    const { generateStatsReport } = await import('./reports/stats');
-    const { generateMembersReport } = await import('./reports/members');
-    const { generateTierReport } = await import('./reports/tier');
 
     // ════════════════════════════════════════════════════════════════
     // Month-alignment guard for daily/weekly (Step 4)
@@ -432,7 +434,8 @@ async function main() {
   }
 
   // ── 6. Start API server ──
-  const apiPort = parseInt(process.env.API_PORT ?? '3000', 10);
+  const apiPortRaw = parseInt(process.env.API_PORT ?? '3000', 10);
+  const apiPort = (apiPortRaw >= 1 && apiPortRaw <= 65535) ? apiPortRaw : 3000;
   const api = new ApiServer(apiPort, getSnapshot, getConfig);
   api.setWhatsAppConnected(() => waClient.isConnected());
   await api.start();
@@ -464,11 +467,8 @@ async function main() {
 
         const result = await catchUp.executeCatchUp(sendReportCollectingAlerts, async (types) => {
           const snapshot = getSnapshot();
-          if (!snapshot) return;
+          if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
           const currentConfig = getConfig();
-          const { generateDailyReport } = await import('./reports/daily');
-          const { generateWeeklyReport } = await import('./reports/weekly');
-          const { generateMonthlyReport } = await import('./reports/monthly');
           const parts: string[] = [];
           for (const type of types) {
             switch (type) {
@@ -484,7 +484,6 @@ async function main() {
 
         // Send aggregated catch-up alerts
         if (allCatchUpAlerts.length > 0) {
-          const { aggregateAlerts } = await import('./alerts/alerts');
           const aggregated = aggregateAlerts(allCatchUpAlerts);
           if (aggregated) {
             const currentConfig = getConfig();
@@ -539,10 +538,6 @@ async function main() {
           log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for combined report`, err);
         }
       }
-
-      const { generateDailyReport } = await import('./reports/daily');
-      const { generateWeeklyReport } = await import('./reports/weekly');
-      const { generateMonthlyReport } = await import('./reports/monthly');
 
       const parts: string[] = [];
       for (const type of types) {
