@@ -2,6 +2,8 @@ declare module 'qrcode-terminal' {
   export function generate(text: string, options?: { small?: boolean }): void;
 }
 
+// Partial declaration — covers only methods used by this project.
+// Expand as needed when new sql.js APIs are used.
 declare module 'sql.js' {
   interface Database {
     run(sql: string, params?: unknown[]): void;

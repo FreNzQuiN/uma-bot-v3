@@ -9,11 +9,20 @@ import type { BotConfig, Snapshot } from '../types';
 import type { Database } from '../db/database';
 import type { WhatsAppClient, IncomingMessage } from './client';
 import { parseCommand, resolveMemberName } from './commands';
-import { canUseCommand, isAdmin } from './access';
+import { canUseCommand, isAdmin, ADMIN_COMMANDS } from './access';
 import { handleSetReq, handleConfig, handleStatus, handleCatchUp, handleAlerts } from './admin';
 import { computeMembers } from '../reports/compute';
 import { log } from '../utils/logger';
 import { getRuntimeStats, getUptimeMs, recordMessageParsed, recordMessageResponded, recordMessageFailed } from '../runtime';
+
+// ============================================================
+// Command sets
+// ============================================================
+
+const REPORT_COMMANDS = new Set([
+  'daily', 'weekly', 'monthly', 'ranks', 'bottom',
+  'stats', 'members', 'tier', 'compare', 'analyze',
+]);
 
 // ============================================================
 // Loading messages (Bourbon-flavored rotation)
@@ -96,10 +105,14 @@ async function dispatchMessage(
   onConfigUpdate?: (config: BotConfig) => void
 ): Promise<void> {
   // Extract message text
+  // Use || not ?? — protobuf-decoded messages have conversation:"" (empty string),
+  // which ?? treats as non-nullish, short-circuiting before reaching extendedTextMessage.text
+  const extMsg = msg.message?.extendedTextMessage as Record<string, unknown> | undefined;
   const text =
-    msg.message?.conversation ??
-    msg.message?.extendedTextMessage?.text ??
-    '';
+    msg.message?.conversation
+    || msg.message?.extendedTextMessage?.text
+    || (extMsg?.displayText as string)
+    || '';
   if (!text) {
     log.debug('Dispatch', 'Empty message text — skipping');
     return;
@@ -129,8 +142,172 @@ async function dispatchMessage(
   await generateAndSend(client, config, db, getSnapshot, parsed, chatJid, senderJid, prefetchSnapshot, onConfigUpdate);
 }
 
+// ============================================================
+// Command handlers (extracted from generateAndSend)
+// ============================================================
+
+async function handlePingCommand(
+  client: WhatsAppClient,
+  chatJid: string
+): Promise<void> {
+  const uptimeStr = formatUptime();
+  await client.sendOrEdit(chatJid, null, `🏓 pong — bot aktif | uptime: ${uptimeStr}`);
+}
+
+async function handleHelpCommand(
+  client: WhatsAppClient,
+  chatJid: string,
+  senderJid: string,
+  config: BotConfig
+): Promise<void> {
+  const senderIsAdmin = isAdmin(senderJid, config);
+
+  const lines = [
+    '📋 *Command Registry*',
+    '',
+    '*Laporan:*',
+    '`/daily` [offset] — Laporan harian',
+    '`/weekly` [offset] — Laporan mingguan',
+    '`/monthly` [offset] — Laporan bulanan',
+    '`/ranks` — Peringkat top 10',
+    '`/bottom` — Perlu perhatian',
+    '`/stats` — Statistik klub',
+    '`/members` — Daftar anggota',
+    '`/tier` — Tier intelligence',
+    '`/compare` A B — Bandingkan 2 anggota',
+    '`/analyze` Nama — Analisis anggota',
+    '',
+    '*Lainnya:*',
+    '`/ping` — Cek apakah bot aktif',
+  ];
+
+  if (senderIsAdmin) {
+    lines.push('', '*Admin Only:*');
+    lines.push('`/setreq` — Lihat/atur requirement');
+    lines.push('`/config` — Lihat konfigurasi');
+    lines.push('`/status` — Status bot');
+    lines.push('`/catchup on|off` — Toggle catch-up');
+    lines.push('`/alerts on|off` — Toggle alerts');
+    lines.push('`/schedule` — Pengaturan jadwal');
+    lines.push('`/debug` — Info debug bot');
+    lines.push('`/admin` — Info perintah admin');
+  }
+
+  const helpText = lines.join('\n');
+  await client.sendOrEdit(chatJid, null, helpText);
+}
+
+async function handleAdminReferenceCommand(
+  client: WhatsAppClient,
+  chatJid: string
+): Promise<void> {
+  const lines = [
+    '⚙️ *Admin Commands*',
+    '',
+    '`/setreq` — Lihat/atur requirement',
+    '`/config` — Lihat konfigurasi',
+    '`/status` — Status bot',
+    '`/catchup on|off` — Toggle catch-up',
+    '`/alerts on|off` — Toggle alerts',
+    '`/schedule` — Pengaturan jadwal',
+    '`/debug` — Info debug bot',
+  ];
+  await client.sendOrEdit(chatJid, null, lines.join('\n'));
+}
+
+async function handleReportCommand(
+  client: WhatsAppClient,
+  config: BotConfig,
+  db: Database,
+  getSnapshot: () => Snapshot | null,
+  parsed: { command: string; args: string[]; offset: number | null; raw: string },
+  chatJid: string,
+  prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>
+): Promise<void> {
+  const { command, args, offset } = parsed;
+
+  const snapshot = getSnapshot();
+  if (!snapshot) {
+    const reply = '⚠️ Belum ada data. Tunggu sync berikutnya atau coba lagi nanti.';
+    await client.sendOrEdit(chatJid, null, reply);
+    return;
+  }
+
+  // Send loading message (both group and private chat)
+  let loadingMsgId: string | null = null;
+
+  // Validate offset before sending loading message
+  if (offset !== null) {
+    const maxOffset = command === 'daily' ? config.commands.maxDailyOffset
+      : command === 'weekly' ? config.commands.maxWeeklyOffset
+      : command === 'monthly' ? config.commands.maxMonthlyOffset
+      : null;
+    if (maxOffset !== null && Math.abs(offset) > maxOffset) {
+      const reply = `Batas offset untuk /${command} adalah ${maxOffset}.`;
+      await client.sendOrEdit(chatJid, null, reply);
+      return;
+    }
+  }
+
+  loadingMsgId = await client.sendOrEdit(chatJid, null, pickLoadingMessage());
+
+  // Pre-fetch target month for /monthly with offset > 0
+  if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && prefetchSnapshot) {
+    const absOffset = Math.abs(offset);
+    const { year: snapYear, month: snapMonth } = snapshot.members[0];
+    let targetMonth = snapMonth - absOffset;
+    let targetYear = snapYear;
+    while (targetMonth <= 0) {
+      targetMonth += 12;
+      targetYear--;
+    }
+    if (targetYear !== snapYear || targetMonth !== snapMonth) {
+      try {
+        await prefetchSnapshot(targetYear, targetMonth);
+      } catch (err) {
+        log.warn('Dispatch', `Failed to pre-fetch month ${targetYear}-${targetMonth} for /monthly ${offset}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  let report: string;
+  try {
+    report = await generateReport(command, args, offset, snapshot, config, db);
+  } catch (err) {
+    log.error('Dispatch', `Report generation failed for /${command}`, err);
+    await client.sendOrEdit(chatJid, loadingMsgId, '⚠️ Gagal memproses laporan. Coba lagi.');
+    return;
+  }
+  await client.sendOrEdit(chatJid, loadingMsgId, report);
+}
+
+async function handleAdminCommand(
+  client: WhatsAppClient,
+  command: string,
+  args: string[],
+  config: BotConfig,
+  db: Database,
+  chatJid: string,
+  onConfigUpdate?: (config: BotConfig) => void
+): Promise<void> {
+  const result = processAdminCommand(command, args, config, db);
+
+  // Admin commands that modify config already wrote to config.yaml via saveConfig().
+  // Update in-memory config immediately; the watcher will also detect the file change.
+  if (typeof result === 'object' && 'config' in result && onConfigUpdate) {
+    onConfigUpdate(result.config);
+  }
+
+  const message = typeof result === 'string' ? result : result.message;
+  await client.sendOrEdit(chatJid, null, message);
+}
+
+// ============================================================
+// Report generation dispatcher
+// ============================================================
+
 /**
- * Generate the appropriate report and send it.
+ * Route a parsed command to the appropriate handler.
  */
 async function generateAndSend(
   client: WhatsAppClient,
@@ -143,151 +320,16 @@ async function generateAndSend(
   prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>,
   onConfigUpdate?: (config: BotConfig) => void
 ): Promise<void> {
-  const { command, args, offset } = parsed;
+  const { command, args } = parsed;
 
-  // Ping command — immediate response, no snapshot needed, follows access control
-  if (command === 'ping') {
-    const uptimeStr = formatUptime();
-    await client.sendOrEdit(chatJid, null, `🏓 pong — bot aktif | uptime: ${uptimeStr}`);
-    return;
-  }
-
-  // Help command — no snapshot needed, follows access control
-  if (command === 'help') {
-    const senderIsAdmin = isAdmin(senderJid, config);
-
-    const lines = [
-      '📋 *Command Registry*',
-      '',
-      '*Laporan:*',
-      '`/daily` [offset] — Laporan harian',
-      '`/weekly` [offset] — Laporan mingguan',
-      '`/monthly` [offset] — Laporan bulanan',
-      '`/ranks` — Peringkat top 10',
-      '`/bottom` — Perlu perhatian',
-      '`/stats` — Statistik klub',
-      '`/members` — Daftar anggota',
-      '`/tier` — Tier intelligence',
-      '`/compare` A B — Bandingkan 2 anggota',
-      '`/analyze` Nama — Analisis anggota',
-      '',
-      '*Lainnya:*',
-      '`/ping` — Cek apakah bot aktif',
-    ];
-
-    if (senderIsAdmin) {
-      lines.push('', '*Admin Only:*');
-      lines.push('`/setreq` — Lihat/atur requirement');
-      lines.push('`/config` — Lihat konfigurasi');
-      lines.push('`/status` — Status bot');
-      lines.push('`/catchup on|off` — Toggle catch-up');
-      lines.push('`/alerts on|off` — Toggle alerts');
-      lines.push('`/schedule` — Pengaturan jadwal');
-      lines.push('`/debug` — Info debug bot');
-      lines.push('`/admin` — Info perintah admin');
-    }
-
-    const helpText = lines.join('\n');
-
-    await client.sendOrEdit(chatJid, null, helpText);
-    return;
-  }
-
-  // Admin command reference — admin-only, no snapshot needed
-  if (command === 'admin') {
-    const lines = [
-      '⚙️ *Admin Commands*',
-      '',
-      '`/setreq` — Lihat/atur requirement',
-      '`/config` — Lihat konfigurasi',
-      '`/status` — Status bot',
-      '`/catchup on|off` — Toggle catch-up',
-      '`/alerts on|off` — Toggle alerts',
-      '`/schedule` — Pengaturan jadwal',
-      '`/debug` — Info debug bot',
-    ];
-    await client.sendOrEdit(chatJid, null, lines.join('\n'));
-    return;
-  }
-
-  // Check if snapshot is needed for report commands
-  const REPORT_COMMANDS = new Set([
-    'daily', 'weekly', 'monthly', 'ranks', 'bottom',
-    'stats', 'members', 'tier', 'compare', 'analyze',
-  ]);
-
-  if (REPORT_COMMANDS.has(command)) {
-    const snapshot = getSnapshot();
-    if (!snapshot) {
-      const reply = '⚠️ Belum ada data. Tunggu sync berikutnya atau coba lagi nanti.';
-      await client.sendOrEdit(chatJid, null, reply);
-      return;
-    }
-
-    // Send loading message (both group and private chat)
-    let loadingMsgId: string | null = null;
-
-    // Validate offset before sending loading message
-    if (offset !== null) {
-      const maxOffset = command === 'daily' ? config.commands.maxDailyOffset
-        : command === 'weekly' ? config.commands.maxWeeklyOffset
-        : command === 'monthly' ? config.commands.maxMonthlyOffset
-        : null;
-      if (maxOffset !== null && Math.abs(offset) > maxOffset) {
-        const reply = `Batas offset untuk /${command} adalah ${maxOffset}.`;
-        await client.sendOrEdit(chatJid, null, reply);
-        return;
-      }
-    }
-
-    loadingMsgId = await client.sendOrEdit(chatJid, null, pickLoadingMessage());
-
-    // Pre-fetch target month for /monthly with offset > 0
-    if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && prefetchSnapshot) {
-      const absOffset = Math.abs(offset);
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      let targetMonth = snapMonth - absOffset;
-      let targetYear = snapYear;
-      while (targetMonth <= 0) {
-        targetMonth += 12;
-        targetYear--;
-      }
-      if (targetYear !== snapYear || targetMonth !== snapMonth) {
-        try {
-          await prefetchSnapshot(targetYear, targetMonth);
-        } catch (err) {
-          log.warn('Dispatch', `Failed to pre-fetch month ${targetYear}-${targetMonth} for /monthly ${offset}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    }
-
-    const report = await generateReport(command, args, offset, snapshot, config, db);
-
-    await client.sendOrEdit(chatJid, loadingMsgId, report);
-    return;
-  }
-
-  // Admin commands
-  const ADMIN_COMMANDS = new Set(['setreq', 'config', 'status', 'catchup', 'alerts', 'schedule', 'debug']);
-
-  if (ADMIN_COMMANDS.has(command)) {
-    const result = handleAdminCommand(command, args, config, db);
-
-    // Admin commands that modify config already wrote to config.yaml via saveConfig().
-    // Update in-memory config immediately; the watcher will also detect the file change.
-    if (typeof result === 'object' && 'config' in result && onConfigUpdate) {
-      onConfigUpdate(result.config);
-    }
-
-    const message = typeof result === 'string' ? result : result.message;
-
-    await client.sendOrEdit(chatJid, null, message);
-    return;
-  }
+  if (command === 'ping') return handlePingCommand(client, chatJid);
+  if (command === 'help') return handleHelpCommand(client, chatJid, senderJid, config);
+  if (command === 'admin') return handleAdminReferenceCommand(client, chatJid);
+  if (REPORT_COMMANDS.has(command)) return handleReportCommand(client, config, db, getSnapshot, parsed, chatJid, prefetchSnapshot);
+  if (ADMIN_COMMANDS.has(command)) return handleAdminCommand(client, command, args, config, db, chatJid, onConfigUpdate);
 
   // Unknown command
-  const reply = `❌ Perintah /${command} tidak dikenal. Coba /help untuk lihat daftar.`;
-  await client.sendOrEdit(chatJid, null, reply);
+  await client.sendOrEdit(chatJid, null, `❌ Perintah /${command} tidak dikenal. Coba /help untuk lihat daftar.`);
 }
 
 /**
@@ -343,7 +385,7 @@ async function generateReport(
         return '❌ Cara pakai: /compare <AnggotaA> <AnggotaB>';
       }
       // 5-step member resolution via resolveMemberName
-      const members = computeMembers(snapshot, config, db);
+      const members = computeMembers(snapshot, config);
       const resolvedA = resolveMemberName(nameA, members);
       const resolvedB = resolveMemberName(nameB, members);
       if (!resolvedA && !resolvedB) {
@@ -364,7 +406,7 @@ async function generateReport(
         return '❌ Cara pakai: /analyze <NamaAnggota>';
       }
       // 5-step member resolution via resolveMemberName
-      const members = computeMembers(snapshot, config, db);
+      const members = computeMembers(snapshot, config);
       const resolved = resolveMemberName(name, members);
       if (!resolved) {
         return `❌ "${name}" tidak ditemukan. Cek ejaan nama.`;
@@ -377,10 +419,10 @@ async function generateReport(
 }
 
 /**
- * Handle admin commands. Returns either a plain message string
+ * Process admin commands. Returns either a plain message string
  * or { config, message } when the command modifies config.
  */
-function handleAdminCommand(
+function processAdminCommand(
   command: string,
   args: string[],
   config: BotConfig,

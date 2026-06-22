@@ -19,11 +19,9 @@ export function computeTierData(snapshot: Snapshot): TierData {
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
   const dataDay = getDataDayFromSnapshot(snapshot);
-  const daysInMonth = new Date(
-    snapshot.members[0].year,
-    snapshot.members[0].month,
-    0
-  ).getDate();
+  const daysInMonth = snapshot.members.length > 0
+    ? new Date(snapshot.members[0].year, snapshot.members[0].month, 0).getDate()
+    : 30;
   const daysLeft = Math.max(0, daysInMonth - dataDay);
 
   // Current pace: total fans accumulated / days elapsed
@@ -59,7 +57,6 @@ export function computeTierData(snapshot: Snapshot): TierData {
   if (fans_to_next_tier > 0 && daysLeft > 0) {
     if (currentPace >= requiredPace) {
       projectedOutcome = 'promote';
-      riskLevel = 'LOW';
     } else if (projectedOutcome !== 'demotion_risk') {
       projectedOutcome = 'stay';
     }

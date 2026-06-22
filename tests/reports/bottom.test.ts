@@ -18,14 +18,13 @@ import {
 import { formatNumber } from '../../src/reports/format';
 import { computeMembers } from '../../src/reports/compute';
 import type { Snapshot, BotConfig } from '../../src/types';
-
-const SNAPSHOT_PATH = path.join(__dirname, '../../examples/snapshot-june-12.json');
+import { loadRealSnapshot, STALE_NAMES, WHATSAPP_MAX_LENGTH } from '../_helpers';
 
 let snapshot: Snapshot;
 let config: BotConfig;
 
 beforeAll(() => {
-  snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+  snapshot = loadRealSnapshot();
   config = loadConfig();
 });
 
@@ -78,7 +77,7 @@ describe('Bottom report: full output and basic structure', () => {
   });
 
   it('output length is under WhatsApp 4096 limit', () => {
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 });
 
@@ -97,7 +96,7 @@ describe('Bottom report: member classification', () => {
       .filter((m) => m.status === 'left')
       .map((m) => m.trainerName)
       .sort();
-    expect(leftNames).toEqual(['DOA IBU', 'Kuro', 'Lebowski', 'Rowking']);
+    expect(leftNames).toEqual([...STALE_NAMES].sort());
   });
 
   it('6 transfer members', () => {
@@ -122,7 +121,7 @@ describe('Bottom report: member classification', () => {
   it('left members excluded from bottom list', () => {
     const report = generateBottomReport(snapshot, config);
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
-    for (const name of ['DOA IBU', 'Kuro', 'Lebowski', 'Rowking']) {
+    for (const name of STALE_NAMES) {
       for (const line of memberLines) {
         expect(line).not.toContain(name);
       }

@@ -13,7 +13,7 @@ import type { BotConfig } from '../types';
 // Admin commands (require admin JID)
 // ============================================================
 
-const ADMIN_COMMANDS = new Set([
+export const ADMIN_COMMANDS = new Set([
   'setreq',
   'config',
   'status',

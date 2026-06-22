@@ -5,17 +5,14 @@
  * Verifies member status classification, gain calculations, and edge cases.
  */
 
-import * as path from 'path';
 import { Snapshot, ComputedMember, BotConfig } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 import { computeMembers } from '../../src/reports/compute';
 import { Database } from '../../src/db/database';
+import { loadRealSnapshot } from '../_helpers';
 
 // Load real snapshot
-const snapshot: Snapshot = require(path.join(
-  __dirname,
-  '../../examples/snapshot-june-12.json'
-));
+const snapshot: Snapshot = loadRealSnapshot();
 
 const config: BotConfig = getDefaultConfig();
 
@@ -401,7 +398,7 @@ describe('computeMembers', () => {
         status: 'left',
       });
 
-      const result = computeMembers(snapshot, config, db);
+      const result = computeMembers(snapshot, config);
       const douIBUResult = result.find((m) => m.trainerName === 'DOA IBU');
       expect(douIBUResult).toBeDefined();
       expect(douIBUResult!.status).toBe('left');
@@ -421,7 +418,7 @@ describe('computeMembers', () => {
         status: 'left',
       });
 
-      const result = computeMembers(snapshot, config, db);
+      const result = computeMembers(snapshot, config);
       const ryuResult = result.find((m) => m.trainerName === 'Ryu');
       expect(ryuResult!.status).toBe('active');
     });
@@ -444,21 +441,21 @@ describe('computeMembers', () => {
         status: 'left',
       });
 
-      const result = computeMembers(snapshot, config, db);
+      const result = computeMembers(snapshot, config);
       const zeroResult = result.find((m) => m.trainerName === 'Zero');
       expect(zeroResult!.status).toBe('active');
     });
 
     it('member NOT in member_history gets normal status (not left)', () => {
       // Ryu is not in DB at all → should get normal active status
-      const result = computeMembers(snapshot, config, db);
+      const result = computeMembers(snapshot, config);
       const ryuResult = result.find((m) => m.trainerName === 'Ryu');
       expect(ryuResult!.status).toBe('active');
     });
 
     it('works without DB (db=undefined) — member_count detects ghosts as left', () => {
       const resultNoDb = computeMembers(snapshot, config);
-      const resultWithDb = computeMembers(snapshot, config, db);
+      const resultWithDb = computeMembers(snapshot, config);
 
       // Without DB, member_count gap still detects 4 ghosts as 'left'
       const leftNoDb = resultNoDb.filter((m) => m.status === 'left');
@@ -486,7 +483,7 @@ describe('computeMembers', () => {
         });
       }
 
-      const result = computeMembers(snapshot, config, db);
+      const result = computeMembers(snapshot, config);
       const leftMembers = result.filter((m) => m.status === 'left');
       expect(leftMembers).toHaveLength(4);
       expect(leftMembers.map((m) => m.trainerName).sort()).toEqual(

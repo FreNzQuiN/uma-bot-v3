@@ -200,10 +200,10 @@ export function isTransferMember(member: {
   previous_circle_id?: number;
   previous_circle_name?: string;
 }): boolean {
-  if (member.previous_circle_id !== undefined) {
+  if (member.previous_circle_id != null) {
     return true;
   }
-  if (member.previous_circle_name !== undefined) {
+  if (member.previous_circle_name != null) {
     return true;
   }
   if (member.daily_fans.length > 0 && member.daily_fans[0] < 0) {

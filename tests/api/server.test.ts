@@ -1,13 +1,10 @@
 import http from 'http';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { ApiServer, createResponse } from '../../src/api/server';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot, BotConfig } from '../../src/types';
+import { loadRealSnapshot } from '../_helpers';
 
-const SNAPSHOT: Snapshot = JSON.parse(
-  readFileSync(join(__dirname, '../../examples/snapshot-june-12.json'), 'utf-8')
-);
+const SNAPSHOT: Snapshot = loadRealSnapshot();
 
 const config: BotConfig = getDefaultConfig();
 const PORT = 18765;
@@ -252,12 +249,15 @@ describe('REST API', () => {
 describe('createResponse', () => {
   it('writes correct status and JSON', () => {
     const mockRes = {
+      setHeader: jest.fn(),
       writeHead: jest.fn(),
       end: jest.fn(),
     } as unknown as http.ServerResponse;
 
     createResponse(mockRes, 200, { success: true, data: 'test' });
 
+    expect(mockRes.setHeader).toHaveBeenCalledWith('X-Content-Type-Options', 'nosniff');
+    expect(mockRes.setHeader).toHaveBeenCalledWith('X-Frame-Options', 'DENY');
     expect(mockRes.writeHead).toHaveBeenCalledWith(200, {
       'Content-Type': 'application/json',
     });

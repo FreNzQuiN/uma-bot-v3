@@ -16,8 +16,6 @@
  * 8. No Markdown formatting (WhatsApp uses *bold* not **bold**)
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { generateRanksReport } from '../../src/reports/ranks';
 import { getDataDayFromSnapshot } from '../../src/data/snapshot';
 import {
@@ -31,14 +29,13 @@ import { formatNumber } from '../../src/reports/format';
 import { CLUB_TIERS } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot } from '../../src/types';
-
-const SNAPSHOT_PATH = path.join(__dirname, '../../examples/snapshot-june-12.json');
+import { loadRealSnapshot, STALE_NAMES } from '../_helpers';
 
 let snapshot: Snapshot;
 const config = getDefaultConfig();
 
 beforeAll(() => {
-  snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+  snapshot = loadRealSnapshot();
 });
 
 // ============================================================
@@ -88,7 +85,7 @@ describe('Member classification for ranks', () => {
         staleNames.push(member.trainer_name);
       }
     }
-    expect(staleNames.sort()).toEqual(['DOA IBU', 'Kuro', 'Lebowski', 'Rowking'].sort());
+    expect(staleNames.sort()).toEqual([...STALE_NAMES].sort());
   });
 
   it('identifies 6 transfer members', () => {
@@ -162,7 +159,7 @@ describe('Monthly gain verification for top 10', () => {
   });
 
   it('stale members have 0 monthly gain', () => {
-    for (const name of ['DOA IBU', 'Kuro', 'Lebowski', 'Rowking']) {
+    for (const name of STALE_NAMES) {
       const m = snapshot.members.find((mm) => mm.trainer_name === name)!;
       expect(getMonthlyGain(m.daily_fans)).toBe(0);
     }
@@ -376,7 +373,7 @@ describe('Transfer badge', () => {
 describe('Stale members excluded from report', () => {
   it('no stale member appears in report', () => {
     const report = generateRanksReport(snapshot, config);
-    const staleNames = ['DOA IBU', 'Kuro', 'Lebowski', 'Rowking'];
+    const staleNames = [...STALE_NAMES];
     for (const name of staleNames) {
       expect(report).not.toContain(name);
     }

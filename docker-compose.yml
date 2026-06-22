@@ -9,6 +9,8 @@ services:
     environment:
       - API_PORT=3000
       - NODE_ENV=production
+      - WA_SESSION_DIR=/app/data/auth
+    env_file: .env
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:

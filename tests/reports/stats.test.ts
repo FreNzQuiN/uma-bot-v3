@@ -6,8 +6,6 @@
  * All tests print full output for visual inspection.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { generateStatsReport } from '../../src/reports/stats';
 import { getDefaultConfig } from '../../src/config';
 import { computeMembers } from '../../src/reports/compute';
@@ -22,47 +20,31 @@ import {
 } from '../../src/data/daily-fans';
 import { formatNumber, formatDateWIB } from '../../src/reports/format';
 import type { Snapshot, BotConfig } from '../../src/types';
+import {
+  loadRealSnapshot,
+  TRANSFER_NAMES,
+  STALE_NAMES,
+  mockCurrentDate,
+  restoreDateMocks,
+  makeEmptySnapshot,
+  parseFormattedGain,
+} from '../_helpers';
 
 // ============================================================
 // Constants & Loaders
 // ============================================================
 
-const SNAPSHOT_PATH = path.join(__dirname, '../../examples/snapshot-june-12.json');
-
 let snapshot: Snapshot;
 let config: BotConfig;
 
 beforeAll(() => {
-  snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+  snapshot = loadRealSnapshot();
   config = getDefaultConfig();
 });
 
 // ============================================================
 // Test Helpers
 // ============================================================
-
-function mockCurrentDate(year: number, month: number, day: number) {
-  // Noon JST = 03:00 UTC. Use fake timers so new Date() returns this time.
-  const utcMs = Date.UTC(year, month - 1, day, 3, 0, 0);
-  jest.useFakeTimers();
-  jest.setSystemTime(new Date(utcMs));
-}
-
-function restoreDateMocks() {
-  jest.useRealTimers();
-}
-
-function makeEmptySnapshot(): Snapshot {
-  return {
-    circle: snapshot.circle,
-    members: [],
-    club_rank: 8,
-    fans_to_next_tier: 349208495,
-    fans_to_lower_tier: 21848493,
-    yesterday_fans_to_next_tier: 305715171,
-    yesterday_fans_to_lower_tier: 20621702,
-  };
-}
 
 function makeAllZeroSnapshot(): Snapshot {
   return {
@@ -145,7 +127,7 @@ describe('Contributing member filter', () => {
     const contributing = members.filter(
       (m) => m.status === 'active'
     );
-    const ghostNames = ['DOA IBU', 'Kuro', 'Rowking', 'Lebowski'];
+    const ghostNames = [...STALE_NAMES];
     for (const name of ghostNames) {
       expect(contributing.find((m) => m.trainerName === name)).toBeUndefined();
     }
@@ -164,8 +146,7 @@ describe('Contributing member filter', () => {
     const contributing = members.filter(
       (m) => m.status === 'active'
     );
-    const transferNames = ['Zero', 'TheTengOne', 'Sairen', 'VitoHoow', 'Ceciria', 'Falkrum'];
-    for (const name of transferNames) {
+    for (const name of TRANSFER_NAMES) {
       expect(contributing.find((m) => m.trainerName === name)).toBeDefined();
     }
   });
@@ -550,7 +531,7 @@ describe('WhatsApp formatting compliance', () => {
 
 describe('Empty snapshot edge case', () => {
   it('returns warning when members array is empty', () => {
-    const emptySnapshot = makeEmptySnapshot();
+    const emptySnapshot = makeEmptySnapshot(snapshot);
     const result = generateStatsReport(emptySnapshot, config);
     expect(result).toBe('ℹ️ *Stats*\nData statistik belum tersedia.');
   });

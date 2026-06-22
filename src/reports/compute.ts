@@ -6,7 +6,6 @@
  */
 
 import { Snapshot, ComputedMember, MemberStatus, BotConfig, WEEK_BLOCKS } from '../types';
-import type { Database } from '../db/database';
 import {
   getLatestDataDay,
   getFirstPositiveDay,
@@ -33,8 +32,7 @@ import { getDataDayFromSnapshot } from '../data/snapshot';
  */
 export function computeMembers(
   snapshot: Snapshot,
-  config: BotConfig,
-  db?: Database
+  config: BotConfig
 ): ComputedMember[] {
   const latestDataDay = getDataDayFromSnapshot(snapshot);
 
@@ -92,8 +90,7 @@ export function computeMembers(
   if (ghostCount > 0) {
     // Among non-left members, find the bottom N by monthlyGain to reclassify as left.
     // These are the likely ghosts — members present in snapshot but not actually in the club.
-    const candidates = membersWithGain
-      .filter((m) => m.status !== 'left')
+    const candidates = [...membersWithGain]
       .sort((a, b) => a.monthlyGain - b.monthlyGain);
 
     const toReclassify = candidates.slice(0, ghostCount);

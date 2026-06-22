@@ -28,7 +28,7 @@ export function generateStatsReport(
     return 'ℹ️ *Stats*\nData statistik belum tersedia.';
   }
 
-  const members = computeMembers(snapshot, config, db);
+  const members = computeMembers(snapshot, config);
   const dataDay = getDataDayFromSnapshot(snapshot);
 
   const contributing = members.filter(

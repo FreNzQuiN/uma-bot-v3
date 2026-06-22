@@ -9,7 +9,7 @@
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { Database } from '../db/database';
 import { computeMembers } from './compute';
-import { formatNumber, formatDateWIB } from './format';
+import { formatNumber, formatDateWIB, sanitizeName, buildFooter, buildDateStr } from './format';
 import { getLeftMembers } from '../data/snapshot';
 
 /**
@@ -63,7 +63,7 @@ export function generateMembersReport(
       : '';
 
     lines.push(
-      `• *${m.trainerName}*${badge} — ${gainStr}${transferInfo}`
+      `• *${sanitizeName(m.trainerName)}*${badge} — ${gainStr}${transferInfo}`
     );
   }
 
@@ -76,10 +76,13 @@ export function generateMembersReport(
       lines.push('');
       for (const lm of leftMembers) {
         const lastSeen = formatDateWIB(lm.last_seen);
-        lines.push(`• ${lm.trainer_name} (terakhir: ${lastSeen})`);
+        lines.push(`• ${sanitizeName(lm.trainer_name)} (terakhir: ${lastSeen})`);
       }
     }
   }
 
+  // Sync footer
+  lines.push('');
+  lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');
 }

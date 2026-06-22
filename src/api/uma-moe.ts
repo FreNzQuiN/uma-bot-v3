@@ -43,25 +43,31 @@ export class UmaMoeClient {
 
     const { chromium } = await import('playwright');
 
-    this.browser = await chromium.launch({
-      headless: true,
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
+    try {
+      this.browser = await chromium.launch({
+        headless: true,
+        args: ['--disable-blink-features=AutomationControlled'],
+      });
 
-    const context = await this.browser.newContext({
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    });
+      const context = await this.browser.newContext({
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      });
 
-    this.page = await context.newPage();
+      this.page = await context.newPage();
 
-    // Visit the site to trigger Turnstile and get warmup cookie
-    await this.page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 30_000 });
+      // Visit the site to trigger Turnstile and get warmup cookie
+      await this.page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 30_000 });
 
-    // Wait for Turnstile to solve
-    await this.page.waitForTimeout(5000);
+      // Wait for Turnstile to solve
+      await this.page.waitForTimeout(5000);
 
-    this.sessionObtainedAt = Date.now();
+      this.sessionObtainedAt = Date.now();
+    } catch (err) {
+      // Clean up on failure
+      await this.closeSession();
+      throw err;
+    }
   }
 
   /**
@@ -74,28 +80,44 @@ export class UmaMoeClient {
 
     const url = `${BASE_URL}/api/v4/circles?circle_id=${circleId}&year=${year}&month=${month}`;
 
+    return this._fetchWithRetry(url, 0);
+  }
+
+  private async _fetchWithRetry(url: string, attempt: number): Promise<Snapshot> {
     const page = this.page!;
-    const result = await page.evaluate(async (fetchUrl: string) => {
-      const response = await fetch(fetchUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    try {
+      const result = await page.evaluate(async (fetchUrl: string) => {
+        const response = await fetch(fetchUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+      }, url);
+
+      // Validate response structure
+      const raw = result as Record<string, unknown>;
+      if (!raw || typeof raw !== 'object') {
+        throw new Error('Invalid response from uma.moe: not an object');
       }
-      return response.json();
-    }, url);
+      if (!raw.circle || typeof raw.circle !== 'object') {
+        throw new Error('Invalid snapshot structure from uma.moe: missing or invalid circle');
+      }
+      if (!Array.isArray(raw.members)) {
+        throw new Error('Invalid snapshot structure from uma.moe: members is not an array');
+      }
 
-    // Validate response structure
-    const raw = result as Record<string, unknown>;
-    if (!raw || typeof raw !== 'object') {
-      throw new Error('Invalid response from uma.moe: not an object');
+      return result as Snapshot;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Retry on 401/403 (token expired)
+      if (attempt < 2 && (msg.includes('HTTP 401') || msg.includes('HTTP 403'))) {
+        log.warn('UmaMoe', `Session expired (${msg}), re-establishing and retrying...`);
+        this.sessionObtainedAt = 0; // Force re-auth
+        await this.ensureSession();
+        return this._fetchWithRetry(url, attempt + 1);
+      }
+      throw err;
     }
-    if (!raw.circle || typeof raw.circle !== 'object') {
-      throw new Error('Invalid snapshot structure from uma.moe: missing or invalid circle');
-    }
-    if (!Array.isArray(raw.members)) {
-      throw new Error('Invalid snapshot structure from uma.moe: members is not an array');
-    }
-
-    return result as Snapshot;
   }
 
   /**

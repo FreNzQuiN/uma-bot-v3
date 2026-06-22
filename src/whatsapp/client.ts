@@ -8,6 +8,7 @@
 import type { WASocket } from '@whiskeysockets/baileys';
 import type { BotConfig } from '../types';
 import { log } from '../utils/logger';
+import { rmSync, existsSync } from 'node:fs';
 import { recordReconnect, recordMessageReceived, recordMessageParsed, recordMessageResponded, recordMessageFailed, recordSocketCreated, recordDisconnect, getRuntimeStats, recordConnectionState } from '../runtime';
 
 // ============================================================
@@ -29,7 +30,7 @@ export interface IncomingMessage {
   pushName?: string;
 }
 
-export type MessageHandler = (msg: IncomingMessage) => void;
+export type MessageHandler = (msg: IncomingMessage) => Promise<void>;
 
 // ============================================================
 // WhatsAppClient
@@ -129,11 +130,21 @@ export class WhatsAppClient {
   private getConfig: () => BotConfig;
   private messageHandlers: MessageHandler[] = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
   private baseReconnectDelay = 1000;
   private connectionState: string = 'disconnected';
   private lastMessageCount = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private authDir = process.env.WA_SESSION_DIR ?? 'data/auth';
+  private chats = new Map<string, { jid: string; name: string; type: 'dm' | 'group' }>();
+
+  /**
+   * Cache of recently sent outgoing messages, keyed by message ID.
+   * Used by the getMessage callback so Baileys can re-encrypt and resend
+   * when a recipient device requests a retry (fixes "Waiting for this message").
+   */
+  private messageCache = new Map<string, Record<string, unknown>>();
+  private static readonly MESSAGE_CACHE_MAX = 2000;
+  private static readonly MESSAGE_CACHE_EVICT = 500;
 
   constructor(getConfig: () => BotConfig) {
     this.getConfig = getConfig;
@@ -150,7 +161,7 @@ export class WhatsAppClient {
    * Check if WhatsApp is connected and ready to send messages.
    */
   isConnected(): boolean {
-    return this.sock !== null && this.sock.user !== undefined;
+    return this.sock !== null && this.sock.user !== undefined && this.connectionState === 'open';
   }
 
   /**
@@ -181,6 +192,15 @@ export class WhatsAppClient {
    * Shows QR code in terminal for scanning.
    */
   async connect(): Promise<void> {
+    // End any existing socket before creating a new one.
+    // Without this, the old socket's creds.update handler still calls its
+    // saveCreds, writing to data/auth/ concurrently with the new socket's
+    // saveCreds — corrupting creds.json (causes badSession / bad mac).
+    if (this.sock) {
+      this.sock.end(undefined);
+      this.sock = null;
+    }
+
     // Suppress libsignal's noisy console.error calls for Bad MAC decryption failures.
     // libsignal/src/session_cipher.js writes directly to console.error (bypassing pino).
     // Baileys handles these internally with retry requests — the console noise is redundant.
@@ -197,15 +217,18 @@ export class WhatsAppClient {
     // Ensure auth directory exists
     const { mkdirSync, existsSync } = await import('fs');
     const { join } = await import('path');
-    const authDir = process.env.WA_SESSION_DIR ?? 'data/auth';
+    const authDir = this.authDir;
     if (!existsSync(authDir)) {
       mkdirSync(authDir, { recursive: true });
     }
 
-    // Load auth state — session-*.json files contain Signal protocol sessions
-    // for each contact. These are ESSENTIAL for decrypting incoming messages.
-    // DO NOT delete them — Baileys handles stale sessions by requesting
-    // new key exchanges automatically when needed.
+    // Load auth state — creds.json provides identity keys; session-*.json
+    // contain Signal Protocol sessions for DM and group contacts.
+    // DO NOT delete session files — they are required for group sender-key
+    // distribution. Without them, the bot cannot encrypt sender-key messages
+    // for group members' devices, causing infinite retry loops.
+    // Stale DM sessions are handled by Baileys' built-in retry mechanism
+    // (re-establishes sessions via pre-key exchange when decryption fails).
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
     const { version } = await fetchLatestBaileysVersion();
@@ -222,21 +245,65 @@ export class WhatsAppClient {
       logger,
       syncFullHistory: false,
       shouldIgnoreJid: () => false,
+      /**
+       * getMessage: Called by Baileys when a recipient device requests a retry
+       * (can't decrypt our message). Baileys re-encrypts with a fresh session
+       * and resends. Without this, Baileys logs "message not available" and the
+       * recipient sees "Waiting for this message. This may take a while."
+       *
+       * See: lib/Socket/messages-recv.js sendMessagesAgain()
+       * See: Types/Socket.d.ts getMessage docs
+       */
+      getMessage: async (key) => {
+        return this.messageCache.get(key.id!) || undefined;
+      },
+      /**
+       * patchMessageBeforeSending: Ensure pre-keys are uploaded to WhatsApp
+       * servers before each send. This prevents "Waiting for this message"
+       * caused by pre-key exhaustion — if the bot runs out of pre-keys,
+       * new sessions cannot be established and messages can't be decrypted.
+       *
+       * See: https://github.com/WhiskeySockets/Baileys/issues/1006
+       */
+      patchMessageBeforeSending: async (msg) => {
+        await this.sock!.uploadPreKeysToServerIfRequired();
+        return msg;
+      },
     });
     recordSocketCreated();
     log.debug('WhatsApp', `Socket created (total=${getRuntimeStats().socketCreatedCount})`);
+    this.chats.clear();
     const sock = this.sock;
 
     // Handle credentials update
     sock.ev.on('creds.update', saveCreds);
 
+    // Accumulate chats for /chats API endpoint
+    sock.ev.on('chats.upsert', (newChats: any[]) => {
+      for (const chat of newChats) {
+        const jid: string = chat.id;
+        if (!jid) continue;
+        const isGroup = jid.endsWith('@g.us');
+        this.chats.set(jid, {
+          jid,
+          name: chat.name ?? chat.subject ?? '',
+          type: isGroup ? 'group' : 'dm',
+        });
+      }
+    });
+
     // Handle incoming messages
-    sock.ev.on('messages.upsert', (upt: any) => {
+    sock.ev.on('messages.upsert', async (upt: any) => {
       const upsertType = upt.type;
       log.debug('WhatsApp', `messages.upsert type=${upsertType} count=${upt.messages?.length ?? 0}`);
 
       if (upsertType !== 'notify') {
         log.debug('WhatsApp', `Non-notify messages.upsert: type=${upsertType} count=${upt.messages?.length ?? 0}`);
+        return;
+      }
+
+      if (!upt?.messages || !Array.isArray(upt.messages)) {
+        log.warn('WhatsApp', 'messages.upsert event has no messages array');
         return;
       }
 
@@ -250,7 +317,7 @@ export class WhatsAppClient {
 
         // Log raw message structure BEFORE normalize (for debugging protocol changes)
         const rawTypes = msg.message ? Object.keys(msg.message).join(',') : 'no-message';
-        log.debug('WhatsApp', `RAW msg from=${msg.key.participant ?? msg.key.remoteJid} chat=${msg.key.remoteJid} pushName=${msg.pushName ?? '?'} types=[${rawTypes}]`);
+        log.debug('WhatsApp', `RAW msg chat=${(msg.key.remoteJid ?? '').replace(/\d+/, '***')} pushName=${(msg.pushName ?? '?').substring(0, 20)} types=[${rawTypes}]`);
 
         // Normalize message content: unwrap ephemeral, view-once, edited wrappers.
         // If the group has disappearing messages, the actual text is nested under
@@ -260,8 +327,14 @@ export class WhatsAppClient {
 
         // Log normalized message content
         const normTypes = msg.message ? Object.keys(msg.message).join(',') : 'null';
-        const textContent = msg.message?.conversation ?? msg.message?.extendedTextMessage?.text ?? '';
-        log.debug('WhatsApp', `NORM msg from=${msg.key.participant ?? msg.key.remoteJid} chat=${msg.key.remoteJid} types=[${normTypes}] text="${textContent.slice(0, 120)}"`);
+        const extMsg = msg.message?.extendedTextMessage as Record<string, unknown> | undefined;
+        // Use || not ?? — protobuf-decoded messages have conversation:"" (empty string),
+        // which ?? treats as non-nullish, short-circuiting before reaching extendedTextMessage.text
+        const textContent = msg.message?.conversation
+          || msg.message?.extendedTextMessage?.text
+          || (extMsg?.displayText as string)
+          || '';
+        log.debug('WhatsApp', `NORM msg chat=${(msg.key.remoteJid ?? '').replace(/\d+/, '***')} types=[${normTypes}] cmd="${textContent.split(/\s+/)[0].slice(0, 20)}"`);
 
         if (!textContent) {
           log.warn('WhatsApp', `Empty content after normalize — raw types were [${rawTypes}], norm types are [${normTypes}]`);
@@ -269,7 +342,7 @@ export class WhatsAppClient {
 
         for (const handler of this.messageHandlers) {
           try {
-            handler(msg as IncomingMessage);
+            await handler(msg as IncomingMessage);
           } catch (err) {
             recordMessageFailed();
             log.warn('WhatsApp', `Message handler error: ${(err as Error).message}`);
@@ -322,28 +395,67 @@ export class WhatsAppClient {
 
           if (statusCode === DisconnectReason.loggedOut) {
             clearTimeout(timeout);
-            reject(new Error('Logged out — please re-scan QR code'));
+            this.sock = null;
+            // Delete stale auth so next connect() shows QR instead of failing
+            try {
+              if (existsSync(this.authDir)) {
+                rmSync(this.authDir, { recursive: true, force: true });
+                log.info('WhatsApp', 'Deleted stale session — reconnecting for QR scan');
+              }
+            } catch (error) {
+              log.warn('WhatsApp', `Failed to delete stale auth directory: ${(error as Error).message}`);
+            }
+            setTimeout(() => {
+              this.connect().catch((err) => {
+                log.error('WhatsApp', `Reconnection after logout failed: ${(err as Error).message}`);
+              });
+            }, 2000);
           } else if (statusCode === DisconnectReason.badSession) {
             clearTimeout(timeout);
-            log.error('WhatsApp', 'Bad session detected (bad mac) — auth credentials may be corrupt');
-            reject(new Error('Bad session — please delete data/auth and re-scan QR code'));
+            this.sock = null;
+            // Delete stale auth so next connect() shows QR instead of failing
+            try {
+              if (existsSync(this.authDir)) {
+                rmSync(this.authDir, { recursive: true, force: true });
+                log.info('WhatsApp', 'Deleted stale session (badSession) — reconnecting for QR scan');
+              }
+            } catch (error) {
+              log.warn('WhatsApp', `Failed to delete stale auth directory: ${(error as Error).message}`);
+            }
+            setTimeout(() => {
+              this.connect().catch((err) => {
+                log.error('WhatsApp', `Reconnection after badSession failed: ${(err as Error).message}`);
+              });
+            }, 2000);
           } else if (statusCode === DisconnectReason.restartRequired) {
             this.reconnectAttempts = 0;
             const delay = this.baseReconnectDelay;
             log.info('WhatsApp', `Restart required, reconnecting in ${delay}ms`);
             clearTimeout(timeout);
             recordReconnect();
-            setTimeout(() => this.connect().then(resolve).catch(reject), delay);
-          } else if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            const delay = this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts);
+            this.sock = null;
+            setTimeout(() => {
+              this.connect().catch((err) => {
+                log.error('WhatsApp', `Reconnection after restartRequired failed: ${(err as Error).message}`);
+              });
+            }, delay);
+          } else {
+            // Network error (connectionClosed, timedOut, etc.) — keep retrying
+            // with capped backoff. Only loggedOut/badSession reject (user must re-scan QR).
+            const delay = Math.min(
+              this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+              300_000 // cap at 5 minutes
+            );
             this.reconnectAttempts++;
             log.warn('WhatsApp', `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
             clearTimeout(timeout);
             recordReconnect();
-            setTimeout(() => this.connect().then(resolve).catch(reject), delay);
-          } else {
-            clearTimeout(timeout);
-            reject(new Error('Max reconnection attempts reached'));
+            this.sock = null;
+            setTimeout(() => {
+              this.connect().catch((err) => {
+                log.error('WhatsApp', `Reconnection failed: ${(err as Error).message}`);
+              });
+            }, delay);
           }
         }
       });
@@ -364,7 +476,8 @@ export class WhatsAppClient {
     const parts = splitMessage(text, config.message.maxLength, config.message.splitAtNewline);
 
     for (const part of parts) {
-      await this.sock.sendMessage(jid, { text: part });
+      const result = await this.sock.sendMessage(jid, { text: part });
+      this.cacheSentMessage(result);
     }
   }
 
@@ -412,7 +525,7 @@ export class WhatsAppClient {
           // Fall through to send as new
         }
       }
-      const sentMsg = await this.sock.sendMessage(jid, { text: parts[0] });
+      const sentMsg = await this.sendMessageWithRetry(jid, { text: parts[0] });
       recordMessageResponded();
       return sentMsg?.key?.id ?? '';
     }
@@ -429,13 +542,73 @@ export class WhatsAppClient {
 
     let lastId = '';
     for (const part of parts) {
-      const sentMsg = await this.sock.sendMessage(jid, { text: part });
+      const sentMsg = await this.sendMessageWithRetry(jid, { text: part });
       if (sentMsg?.key?.id) {
         lastId = sentMsg.key.id;
       }
     }
     recordMessageResponded();
     return lastId;
+  }
+
+  /**
+   * Send a message with error handling for corrupted sender key records.
+   */
+  private async sendMessageWithRetry(jid: string, content: Record<string, unknown>): Promise<{ key?: { id?: string | null } } | undefined> {
+    try {
+      const result = await this.sock!.sendMessage(jid, content as any);
+      this.cacheSentMessage(result);
+      return result;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('senderMessageKeys') || msg.includes('SenderKeyState')) {
+        log.error('WhatsApp', `Corrupted sender key for ${jid.replace(/\d+/, '***')}. Run: rm data/auth/sender-key-${jid}*.json && restart`);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Cache a sent message for retry recovery.
+   * When a recipient can't decrypt a message, Baileys calls getMessage to
+   * re-fetch the original so it can re-encrypt with a fresh session.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private cacheSentMessage(result: { key?: { id?: string | null }; message?: any } | undefined): void {
+    if (result?.key?.id && result.message) {
+      this.messageCache.set(result.key.id, result.message as Record<string, unknown>);
+      // Evict oldest entries when cache exceeds limit
+      if (this.messageCache.size > WhatsAppClient.MESSAGE_CACHE_MAX) {
+        const evictCount = WhatsAppClient.MESSAGE_CACHE_EVICT;
+        let evicted = 0;
+        for (const key of this.messageCache.keys()) {
+          if (evicted >= evictCount) break;
+          this.messageCache.delete(key);
+          evicted++;
+        }
+        log.debug('WhatsApp', `Message cache evicted ${evicted} entries (cache size: ${this.messageCache.size})`);
+      }
+    }
+  }
+
+  /**
+   * Get all groups the bot is participating in.
+   */
+  async getGroups(): Promise<Array<{ id: string; name: string; participants: number }>> {
+    if (!this.sock) return [];
+    const result = await this.sock.groupFetchAllParticipating();
+    return Object.values(result).map(g => ({
+      id: g.id,
+      name: g.subject,
+      participants: g.participants.length,
+    }));
+  }
+
+  /**
+   * Get all chats seen since bot started (accumulated from chats.upsert events).
+   */
+  getChats(): Array<{ jid: string; name: string; type: 'dm' | 'group' }> {
+    return Array.from(this.chats.values());
   }
 
   /**
@@ -449,6 +622,9 @@ export class WhatsAppClient {
    * Disconnect from WhatsApp and clean up.
    */
   disconnect(): void {
+    this.stopHeartbeat();
+    this.connectionState = 'disconnected';
+    this.messageCache.clear();
     if (this.sock) {
       this.sock.end(undefined);
       this.sock = null;

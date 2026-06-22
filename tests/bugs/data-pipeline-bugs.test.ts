@@ -27,14 +27,10 @@ import { generateMembersReport } from '../../src/reports/members';
 import { saveSnapshot } from '../../src/data/snapshot';
 import { detectAlerts } from '../../src/alerts/alerts';
 import { Database } from '../../src/db/database';
+import { loadRealSnapshot } from '../_helpers';
 
 // Load real snapshot
-const realSnapshot: Snapshot = JSON.parse(
-  fs.readFileSync(
-    path.join(__dirname, '../../examples/snapshot-june-12.json'),
-    'utf-8'
-  )
-);
+const realSnapshot: Snapshot = loadRealSnapshot();
 
 const config: BotConfig = getDefaultConfig();
 

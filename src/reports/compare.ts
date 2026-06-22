@@ -9,7 +9,7 @@ import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { WEEK_BLOCKS } from '../types';
 import { computeMembers } from './compute';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { formatNumber, formatDateWIB, buildDateStr, buildFooter } from './format';
+import { formatNumber, formatDateWIB, buildDateStr, buildFooter, sanitizeName } from './format';
 import { computeRollingAverage } from '../data/daily-fans';
 
 export function generateCompareReport(
@@ -46,15 +46,15 @@ export function generateCompareReport(
   // Format member names with transfer badge and bold
   const badgeA = memberA.isTransfer ? ' 🔄' : '';
   const badgeB = memberB.isTransfer ? ' 🔄' : '';
-  const boldA = `*${memberA.trainerName}*${badgeA}`;
-  const boldB = `*${memberB.trainerName}*${badgeB}`;
+  const boldA = `*${sanitizeName(memberA.trainerName)}*${badgeA}`;
+  const boldB = `*${sanitizeName(memberB.trainerName)}*${badgeB}`;
 
   // Snapshot date for context
   const dateStr = buildDateStr(snapshot, latestDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
   const lines: string[] = [];
-  lines.push(`⚔️ *Compare: ${memberA.trainerName} vs ${memberB.trainerName} — ${formattedDate}*`);
+  lines.push(`⚔️ *Compare: ${sanitizeName(memberA.trainerName)} vs ${sanitizeName(memberB.trainerName)} — ${formattedDate}*`);
   lines.push('');
   lines.push(`*Monthly Gain*`);
   lines.push(`• ${boldA}: ${formatNumber(memberA.monthlyGain)}`);
@@ -90,9 +90,9 @@ export function generateCompareReport(
 
   // Winner
   if (memberA.monthlyGain > memberB.monthlyGain) {
-    lines.push(`🏆 *${memberA.trainerName}* unggul di monthly gain`);
+    lines.push(`🏆 *${sanitizeName(memberA.trainerName)}* unggul di monthly gain`);
   } else if (memberB.monthlyGain > memberA.monthlyGain) {
-    lines.push(`🏆 *${memberB.trainerName}* unggul di monthly gain`);
+    lines.push(`🏆 *${sanitizeName(memberB.trainerName)}* unggul di monthly gain`);
   } else {
     lines.push('🤝 *Seri* di monthly gain');
   }

@@ -8,12 +8,14 @@
 import type { Snapshot, BotConfig } from '../types';
 import { computeMembers } from './compute';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { formatNumber, formatDateWIB, buildDateStr, buildFooter } from './format';
+import { formatNumber, formatDateWIB, buildDateStr, buildFooter, sanitizeName } from './format';
 import {
   computeRollingAverage,
   countActiveDays,
 } from '../data/daily-fans';
 
+const TREND_UP_THRESHOLD = 1.1;   // 10% above 7-day avg = upward trend
+const TREND_DOWN_THRESHOLD = 0.9; // 10% below 7-day avg = downward trend
 
 export function generateAnalyzeReport(
   snapshot: Snapshot,
@@ -42,8 +44,8 @@ export function generateAnalyzeReport(
 
   // Trend direction (Indonesian)
   let trend: 'naik' | 'turun' | 'stabil' = 'stabil';
-  if (avg3d > avg7d * 1.1) trend = 'naik';
-  else if (avg3d < avg7d * 0.9) trend = 'turun';
+  if (avg3d > avg7d * TREND_UP_THRESHOLD) trend = 'naik';
+  else if (avg3d < avg7d * TREND_DOWN_THRESHOLD) trend = 'turun';
   const trendEmoji = { naik: '📈', turun: '📉', stabil: '➡️' };
 
   // Requirement status
@@ -68,13 +70,13 @@ export function generateAnalyzeReport(
   const transferBadge = member.isTransfer ? ' 🔄' : '';
 
   // Weekly gains
-  const weekLabels = ['W1', 'W2', 'W3', 'W4', 'W5'];
+  const weekLabels = member.weeklyGains.map((_, i) => `W${i + 1}`);
   const weeklyStr = member.weeklyGains
     .map((g, i) => `${weekLabels[i]}: ${formatNumber(g)}`)
     .join(' | ');
 
   const lines: string[] = [];
-  lines.push(`🔍 *Analyze: ${member.trainerName}${transferBadge} — ${formattedDate}*`);
+  lines.push(`🔍 *Analyze: ${sanitizeName(member.trainerName)}${transferBadge} — ${formattedDate}*`);
   if (member.isTransfer) {
     lines.push(`🔄 Transfer dari ${member.previousCircleName ?? 'unknown'}`);
   }

@@ -30,6 +30,8 @@ export function createResponse(
   status: number,
   body: ApiResponse
 ): void {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
 }
@@ -43,6 +45,9 @@ export class ApiServer {
   private snapshotLoader: () => Snapshot | null;
   private configLoader: () => BotConfig;
   private waConnected: () => boolean = () => false;
+  private waGroups: () => Promise<Array<{ id: string; name: string; participants: number }>> = async () => [];
+  private waChats: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }> = () => [];
+  private requestTimestamps: Map<string, number[]> = new Map();
   private server: http.Server | null = null;
 
   constructor(
@@ -57,6 +62,14 @@ export class ApiServer {
 
   setWhatsAppConnected(check: () => boolean): void {
     this.waConnected = check;
+  }
+
+  setWhatsAppGroups(fetch: () => Promise<Array<{ id: string; name: string; participants: number }>>): void {
+    this.waGroups = fetch;
+  }
+
+  setWhatsAppChats(fetch: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }>): void {
+    this.waChats = fetch;
   }
 
   private get config(): BotConfig {
@@ -95,12 +108,29 @@ export class ApiServer {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const path = url.pathname;
 
-    // CORS headers for local dev
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    log.debug('API', `${req.method} ${path}`);
+
+    const clientIp = req.socket.remoteAddress ?? '127.0.0.1';
+    if (this.isRateLimited(clientIp)) {
+      createResponse(res, 429, { success: false, error: 'Too many requests' });
+      return;
+    }
 
     try {
       if (path === '/health') {
         return this.handleHealth(res);
+      }
+
+      if (path === '/groups') {
+        this.handleGroups(res).catch(err => {
+          log.error('API', 'groups handler error', err);
+          createResponse(res, 500, { success: false, error: 'Internal server error' });
+        });
+        return;
+      }
+
+      if (path === '/chats') {
+        return this.handleChats(res);
       }
 
       const snapshot = this.snapshotLoader();
@@ -133,8 +163,14 @@ export class ApiServer {
         return this.handleMembers(res, snapshot);
       }
       if (path.startsWith('/members/')) {
-        const viewerId = path.split('/')[2];
-        return this.handleMemberDetail(res, snapshot, viewerId);
+        const rawId = path.split('/')[2];
+        if (!rawId || !/^\d{1,15}$/.test(rawId)) {
+          return createResponse(res, 400, {
+            success: false,
+            error: 'Invalid viewerId format',
+          });
+        }
+        return this.handleMemberDetail(res, snapshot, rawId);
       }
       if (path === '/tier') {
         return this.handleTier(res, snapshot);
@@ -178,6 +214,38 @@ export class ApiServer {
         socketCreatedCount: rt.socketCreatedCount,
       },
     });
+  }
+
+  private async handleGroups(res: http.ServerResponse): Promise<void> {
+    if (!this.waConnected()) {
+      return createResponse(res, 503, { success: false, error: 'WhatsApp not connected' });
+    }
+    try {
+      const groups = await this.waGroups();
+      createResponse(res, 200, { success: true, data: groups });
+    } catch (error) {
+      createResponse(res, 500, { success: false, error: (error as Error).message });
+    }
+  }
+
+  private handleChats(res: http.ServerResponse): void {
+    if (!this.waConnected()) {
+      return createResponse(res, 503, { success: false, error: 'WhatsApp not connected' });
+    }
+    const chats = this.waChats();
+    createResponse(res, 200, { success: true, data: chats, meta: { count: chats.length } });
+  }
+
+  private isRateLimited(ip: string): boolean {
+    const now = Date.now();
+    const windowMs = 1000;
+    const maxRequests = 50;
+    const timestamps = this.requestTimestamps.get(ip) ?? [];
+    const recent = timestamps.filter((t) => now - t < windowMs);
+    if (recent.length >= maxRequests) return true;
+    recent.push(now);
+    this.requestTimestamps.set(ip, recent);
+    return false;
   }
 
   private handleReport(

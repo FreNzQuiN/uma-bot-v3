@@ -36,6 +36,8 @@ export interface LoggerConfig {
   maxSizeMB: number;
   maxFiles: number;
   console: boolean;
+  /** Write to log file. Auto-disabled in test environment (JEST_WORKER_ID set). */
+  fileOutput: boolean;
 }
 
 const DEFAULT_CONFIG: LoggerConfig = {
@@ -44,6 +46,9 @@ const DEFAULT_CONFIG: LoggerConfig = {
   maxSizeMB: 5,
   maxFiles: 3,
   console: true,
+  // Jest sets JEST_WORKER_ID for each test worker. Disable file output
+  // automatically so tests don't pollute the real bot.log.
+  fileOutput: !process.env.JEST_WORKER_ID,
 };
 
 // ============================================================
@@ -148,6 +153,8 @@ class Logger {
    * Write a line to the log file with rotation.
    */
   private writeToFile(line: string): void {
+    if (!this.config.fileOutput) return;
+
     this.ensureLogDir();
 
     try {
@@ -158,13 +165,17 @@ class Logger {
         const stat = statSync(filePath);
         const sizeMB = stat.size / (1024 * 1024);
         if (sizeMB >= this.config.maxSizeMB) {
-          this.rotate(filePath);
+          appendFileSync(filePath, line + '\n', 'utf-8');
+          setImmediate(() => this.rotate(filePath));
+          return;
         }
       }
 
       appendFileSync(filePath, line + '\n', 'utf-8');
-    } catch {
-      // Silent — file logging is best-effort, never crash the bot
+    } catch (err) {
+      this.initialized = false;
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[Logger] Write failed: ${msg}\n`);
     }
   }
 
@@ -198,8 +209,9 @@ class Logger {
 
       // Rename current → 1
       renameSync(filePath, `${base}-1${ext}`);
-    } catch {
-      // Silent — rotation is best-effort
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[Logger] Rotation failed: ${msg}\n`);
     }
   }
 
@@ -208,22 +220,22 @@ class Logger {
   // ============================================================
 
   debug(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.message}` : err ? `: ${String(err)}` : '';
+    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
     this.write('debug', tag, message + suffix);
   }
 
   info(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.message}` : err ? `: ${String(err)}` : '';
+    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
     this.write('info', tag, message + suffix);
   }
 
   warn(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.message}` : err ? `: ${String(err)}` : '';
+    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
     this.write('warn', tag, message + suffix);
   }
 
   error(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.message}` : err ? `: ${String(err)}` : '';
+    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
     this.write('error', tag, message + suffix);
   }
 }

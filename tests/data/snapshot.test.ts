@@ -71,7 +71,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 
 const realSnapshot: Snapshot = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, '../../examples/snapshot-june-12.json'),
+    path.join(__dirname, '../examples/snapshot-june-12.json'),
     'utf-8'
   )
 );

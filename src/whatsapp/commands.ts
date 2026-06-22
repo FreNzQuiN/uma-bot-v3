@@ -50,6 +50,15 @@ function levenshteinDistance(a: string, b: string): number {
 }
 
 // ============================================================
+// Strict integer parsing (prevents hex/octal injection)
+// ============================================================
+
+function parseStrictInt(value: string): number | null {
+  if (!/^-?\d+$/.test(value)) return null;
+  return parseInt(value, 10);
+}
+
+// ============================================================
 // parseCommand
 // ============================================================
 
@@ -84,13 +93,10 @@ export function parseCommand(text: string, prefixes: string[]): ParsedCommand | 
   const command = tokens[0].toLowerCase();
   const args = tokens.slice(1);
 
-  // Parse offset: first numeric arg
+  // Parse offset: first numeric arg (strict integer only — no hex/octal)
   let offset: number | null = null;
   if (args.length > 0) {
-    const parsed = Number(args[0]);
-    if (!isNaN(parsed) && args[0].trim() !== '') {
-      offset = parsed;
-    }
+    offset = parseStrictInt(args[0]);
   }
 
   return {

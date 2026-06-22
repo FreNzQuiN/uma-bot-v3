@@ -10,7 +10,7 @@ import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeMembers } from './compute';
 import { getDailyGain } from '../data/daily-fans';
-import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 
 /**
  * Generate the daily report string.
@@ -34,7 +34,7 @@ export function generateDailyReport(
   const absOffset = Math.abs(offset);
   const dataDay = Math.max(1, latestDataDay - absOffset);
 
-  const members = computeMembers(snapshot, config, db);
+  const members = computeMembers(snapshot, config);
 
   // Compute gains for the SPECIFIC offset day, not the latest
   const memberGains = members.map((m) => ({
@@ -109,7 +109,7 @@ export function generateDailyReport(
     const gainStr = `+${formatNumber(member.dailyGain)}`;
     const transferBadge = member.isTransfer ? ' 🔄' : '';
     lines.push(
-      `${member.rank}. *${member.trainerName}*${transferBadge} — ${gainStr}`
+      `${member.rank}. *${sanitizeName(member.trainerName)}*${transferBadge} — ${gainStr}`
     );
   }
 
@@ -121,7 +121,7 @@ export function generateDailyReport(
     } else {
       lines.push('*⚠️ Belum aktif hari ini:*');
       for (const s of staleMembers) {
-        lines.push(`• ${s.trainerName}`);
+        lines.push(`• ${sanitizeName(s.trainerName)}`);
       }
     }
   } else if (contributorCount === 0 && activeCount > 0) {

@@ -39,7 +39,7 @@ const stats: RuntimeStats = {
 };
 
 export function getRuntimeStats(): Readonly<RuntimeStats> {
-  return stats;
+  return { ...stats, lastConfigChangeFields: [...stats.lastConfigChangeFields] };
 }
 
 export function recordReconnect(): void {

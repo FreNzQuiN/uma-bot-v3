@@ -483,14 +483,67 @@ async function main() {
   const apiPort = (apiPortRaw >= 1 && apiPortRaw <= 65535) ? apiPortRaw : 3000;
   const api = new ApiServer(apiPort, getSnapshot, getConfig);
   api.setWhatsAppConnected(() => waClient.isConnected());
+  api.setWhatsAppGroups(() => waClient.getGroups());
+  api.setWhatsAppChats(() => waClient.getChats());
   await api.start();
 
-  // ── 7. Connect WhatsApp (non-blocking) ──
-  // Once connected, run catch-up and start scheduler
+  // ── 7. Start scheduler + Connect WhatsApp ──
+  // Scheduler starts immediately. It handles WA-not-connected gracefully:
+  // deliverReport throws, scheduler marks the run as 'failed'. Reports deliver
+  // normally once WA reconnects — no restart needed.
   let scheduler: Scheduler | undefined;
 
+  // Define scheduled data fetch callback
+  const onDataFetch = async () => {
+    try {
+      const { year: currentYear, month: currentMonth } = getDataDateComponents();
+      const snapshot = await umaMoe.fetchCircleData(config.circleId, currentYear, currentMonth);
+      saveSnapshot(snapshot, getDataDate());
+      log.info('Data', 'Scheduled data fetch completed');
+    } catch (error) {
+      log.error('Data', 'Scheduled data fetch failed', error);
+    }
+  };
+
+  scheduler = new Scheduler(getConfig, db, sendReport, async (types) => {
+    // Combined report: generate all reports and send as one message
+    const snapshot = getSnapshot();
+    if (!snapshot) return;
+
+    const currentConfig = getConfig();
+
+    // Pre-fetch monthly data if monthly report is in the combined set
+    // On day 1, target previous month (offset=-1) for monthly
+    if (types.includes('monthly')) {
+      const { year: curYear, month: curMonth } = getDataDateComponents();
+      let targetMonth = curMonth - 1;
+      let targetYear = curYear;
+      while (targetMonth <= 0) { targetMonth += 12; targetYear--; }
+      try {
+        await ensureMonthSnapshot(umaMoe, currentConfig.circleId, targetYear, targetMonth);
+      } catch (err) {
+        log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for combined report`, err);
+      }
+    }
+
+    const parts: string[] = [];
+    for (const type of types) {
+      switch (type) {
+        case 'daily': parts.push(generateDailyReport(snapshot, currentConfig, undefined, db)); break;
+        case 'weekly': parts.push(generateWeeklyReport(snapshot, currentConfig, undefined, db)); break;
+        case 'monthly': parts.push(generateMonthlyReport(snapshot, currentConfig, -1, db)); break;
+      }
+    }
+    const combined = parts.join('\n\n');
+    await deliverReport(combined, types.join('+'));
+  }, onDataFetch);
+  scheduler.start();
+  log.info('Scheduler', `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(',')}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`);
+
+  // Connect WhatsApp (retries forever on network errors, rejects only for
+  // loggedOut/badSession which require user action).
   waClient.connect().then(async () => {
-    log.info('WhatsApp', 'Connected — running catch-up and starting scheduler');
+    log.info('WhatsApp', 'Connected — running catch-up');
 
     // Run catch-up with alert aggregation
     if (getConfig().catchUp.enabled) {
@@ -549,61 +602,9 @@ async function main() {
         log.debug('CatchUp', 'No missed reports detected');
       }
     }
-
-    // Define scheduled data fetch callback
-    const onDataFetch = async () => {
-      try {
-        const { year: currentYear, month: currentMonth } = getDataDateComponents();
-        const snapshot = await umaMoe.fetchCircleData(config.circleId, currentYear, currentMonth);
-        saveSnapshot(snapshot, getDataDate());
-        log.info('Data', 'Scheduled data fetch completed');
-      } catch (error) {
-        log.error('Data', 'Scheduled data fetch failed', error);
-      }
-    };
-
-    // Start scheduler (only after WhatsApp is connected)
-    scheduler = new Scheduler(getConfig, db, sendReport, async (types) => {
-      // Combined report: generate all reports and send as one message
-      const snapshot = getSnapshot();
-      if (!snapshot) return;
-
-      const currentConfig = getConfig();
-
-      // Pre-fetch monthly data if monthly report is in the combined set
-      // On day 1, target previous month (offset=-1) for monthly
-      if (types.includes('monthly')) {
-        const { year: curYear, month: curMonth } = getDataDateComponents();
-        let targetMonth = curMonth - 1;
-        let targetYear = curYear;
-        while (targetMonth <= 0) { targetMonth += 12; targetYear--; }
-        try {
-          await ensureMonthSnapshot(umaMoe, currentConfig.circleId, targetYear, targetMonth);
-        } catch (err) {
-          log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for combined report`, err);
-        }
-      }
-
-      const parts: string[] = [];
-      for (const type of types) {
-        switch (type) {
-          case 'daily': parts.push(generateDailyReport(snapshot, currentConfig, undefined, db)); break;
-          case 'weekly': parts.push(generateWeeklyReport(snapshot, currentConfig, undefined, db)); break;
-          case 'monthly': parts.push(generateMonthlyReport(snapshot, currentConfig, -1, db)); break;
-        }
-      }
-      const combined = parts.join('\n\n');
-      await deliverReport(combined, types.join('+'));
-    }, onDataFetch);
-    scheduler.start();
-    log.info('Scheduler', `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(',')}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`);
   }).catch((err) => {
-    log.error('WhatsApp', 'Connection failed — running in API-only mode', err);
-
-    // Start scheduler even without WhatsApp (reports will be logged only)
-    scheduler = new Scheduler(getConfig, db, sendReport);
-    scheduler.start();
-    log.info('Scheduler', 'Started (API-only mode, reports logged only)');
+    // Unexpected error — loggedOut/badSession now self-heal via auto-reconnect
+    log.error('WhatsApp', `${(err as Error).message}`);
   });
 
   // ── 8. Graceful shutdown ──

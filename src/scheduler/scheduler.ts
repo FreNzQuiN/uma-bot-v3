@@ -211,73 +211,98 @@ export class Scheduler {
     // Daily schedule
     if (this.config.schedule.daily.enabled) {
       const dailyCron = this.getDailyCron();
-      const task = cron.schedule(dailyCron, async () => {
-        try {
-          const today = getDataDay();
-          const collidingTypes = getCollidingTypes(today, this.config);
+      try {
+        const task = cron.schedule(dailyCron, async () => {
+          try {
+            const today = getDataDay();
+            const collidingTypes = getCollidingTypes(today, this.config);
 
-          if (collidingTypes.length > 1) {
-            await this.recordAndSendCombined(collidingTypes);
-          } else {
-            await this.recordAndSend('daily');
+            if (collidingTypes.length > 1) {
+              await this.recordAndSendCombined(collidingTypes);
+            } else {
+              await this.recordAndSend('daily');
+            }
+          } catch (error) {
+            log.error('Scheduler', 'Daily report failed', error);
           }
-        } catch (error) {
-          log.error('Scheduler', 'Daily report failed', error);
-        }
-      });
-      this.tasks.push(task);
+        });
+        this.tasks.push(task);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error('Scheduler', `Failed to schedule daily: ${msg}`);
+      }
     }
 
     // Weekly schedule — skip only when daily is enabled AND same time (daily handler combines them)
     if (this.config.schedule.weekly.enabled) {
       const weeklyCron = this.getWeeklyCron();
-      const task = cron.schedule(weeklyCron, async () => {
-        try {
-          const today = getDataDay();
-          const collidingTypes = getCollidingTypes(today, this.config);
-          const dailyEnabled = this.config.schedule.daily.enabled;
+      try {
+        const task = cron.schedule(weeklyCron, async () => {
+          try {
+            const today = getDataDay();
+            const collidingTypes = getCollidingTypes(today, this.config);
+            const dailyEnabled = this.config.schedule.daily.enabled;
 
-          if (collidingTypes.includes('daily') && collidingTypes.includes('weekly') && dailyEnabled) {
-            return;
+            if (collidingTypes.includes('daily') && collidingTypes.includes('weekly') && dailyEnabled) {
+              return;
+            }
+
+            const monthlyEnabled = this.config.schedule.monthly.enabled;
+            const isMonthlyDay = this.config.schedule.monthly.day === today;
+            const sameTimeAsMonthly =
+              this.config.schedule.monthly.time === this.config.schedule.weekly.time;
+
+            if (monthlyEnabled && sameTimeAsMonthly && isMonthlyDay) {
+              await this.recordAndSendCombined(['weekly', 'monthly']);
+              return;
+            }
+
+            await this.recordAndSend('weekly');
+          } catch (error) {
+            log.error('Scheduler', 'Weekly report failed', error);
           }
-
-          const monthlyEnabled = this.config.schedule.monthly.enabled;
-          const isMonthlyDay = this.config.schedule.monthly.day === today;
-          const sameTimeAsMonthly =
-            this.config.schedule.monthly.time === this.config.schedule.weekly.time;
-
-          if (monthlyEnabled && sameTimeAsMonthly && isMonthlyDay) {
-            await this.recordAndSendCombined(['weekly', 'monthly']);
-            return;
-          }
-
-          await this.recordAndSend('weekly');
-        } catch (error) {
-          log.error('Scheduler', 'Weekly report failed', error);
-        }
-      });
-      this.tasks.push(task);
+        });
+        this.tasks.push(task);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error('Scheduler', `Failed to schedule weekly: ${msg}`);
+      }
     }
 
     // Monthly schedule — skip only when daily is enabled AND same time (daily handler combines them)
     if (this.config.schedule.monthly.enabled) {
       const monthlyCron = this.getMonthlyCron();
-      const task = cron.schedule(monthlyCron, async () => {
-        try {
-          const today = getDataDay();
-          const collidingTypes = getCollidingTypes(today, this.config);
-          const dailyEnabled = this.config.schedule.daily.enabled;
+      try {
+        const task = cron.schedule(monthlyCron, async () => {
+          try {
+            const today = getDataDay();
+            const collidingTypes = getCollidingTypes(today, this.config);
+            const dailyEnabled = this.config.schedule.daily.enabled;
 
-          if (collidingTypes.includes('daily') && collidingTypes.includes('monthly') && dailyEnabled) {
-            return;
+            // Skip if daily handler will combine with monthly (same time)
+            if (collidingTypes.includes('daily') && collidingTypes.includes('monthly') && dailyEnabled) {
+              return;
+            }
+
+            // Skip if weekly handler already sends combined weekly+monthly (same time)
+            const weeklyEnabled = this.config.schedule.weekly.enabled;
+            const isWeeklyDay = this.config.schedule.weekly.days.includes(today);
+            const sameTimeAsWeekly =
+              this.config.schedule.monthly.time === this.config.schedule.weekly.time;
+            if (weeklyEnabled && sameTimeAsWeekly && isWeeklyDay) {
+              return;
+            }
+
+            await this.recordAndSend('monthly', { offset: -1 });
+          } catch (error) {
+            log.error('Scheduler', 'Monthly report failed', error);
           }
-
-          await this.recordAndSend('monthly', { offset: -1 });
-        } catch (error) {
-          log.error('Scheduler', 'Monthly report failed', error);
-        }
-      });
-      this.tasks.push(task);
+        });
+        this.tasks.push(task);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error('Scheduler', `Failed to schedule monthly: ${msg}`);
+      }
     }
   }
 

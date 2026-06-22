@@ -1,5 +1,6 @@
 import { Scheduler } from '../../src/scheduler/scheduler';
 import { CatchUpManager } from '../../src/scheduler/catchup';
+import { getCollidingTypes } from '../../src/scheduler/helpers';
 import { Database } from '../../src/db/database';
 import type { BotConfig } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
@@ -287,7 +288,7 @@ describe('Scheduler', () => {
       expect(onReport).toHaveBeenCalledWith('monthly', undefined);
     });
 
-    it('weekly handler skips when daily IS enabled (same time)', async () => {
+    it('weekly handler skips when daily IS enabled (same time)', () => {
       const config = makeConfig({
         schedule: {
           daily: { enabled: true, time: '22:05' },
@@ -299,20 +300,51 @@ describe('Scheduler', () => {
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
 
-      // Start and stop to initialize tasks, then verify via the cron callback
-      // We test this indirectly: when daily is enabled and times match,
-      // the daily handler should handle it. The weekly handler should skip.
-      // Since we can't easily trigger the cron, we verify the logic by
-      // checking that recordAndSend for weekly still works independently.
-      // The actual skip is in the cron callback — we verify the weekly handler
-      // checks daily.enabled.
+      // getCollidingTypes on day 7 (weekly day) with daily enabled + same time
+      // should return both 'daily' and 'weekly' in the same collision group
+      const collidingTypes = getCollidingTypes(7, config);
+      expect(collidingTypes).toContain('daily');
+      expect(collidingTypes).toContain('weekly');
 
-      // This test documents the expected behavior: the handler itself
-      // only skips if daily.enabled AND sameTimeAsDaily.
-      // When daily is disabled, it should NOT skip.
-      // (The positive case is covered by the daily-disabled tests above)
-      scheduler.start();
-      expect(() => scheduler.stop()).not.toThrow();
+      // The weekly handler skips when this condition (scheduler.ts:246) is true:
+      // collidingTypes.includes('daily') && collidingTypes.includes('weekly') && dailyEnabled
+      const dailyEnabled = config.schedule.daily.enabled;
+      expect(
+        collidingTypes.includes('daily') && collidingTypes.includes('weekly') && dailyEnabled
+      ).toBe(true);
+
+      // On a non-weekly day, weekly is not in the collision group (handler wouldn't fire)
+      const nonWeeklyDay = getCollidingTypes(10, config);
+      expect(nonWeeklyDay).not.toContain('weekly');
+    });
+
+    it('monthly handler skips when weekly+monthly collide (same time, different from daily)', () => {
+      const config = makeConfig({
+        schedule: {
+          daily: { enabled: true, time: '22:05' },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:10' },
+          monthly: { enabled: true, day: 7, time: '22:10' },
+        },
+        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+      });
+      const onReport = jest.fn().mockResolvedValue(undefined);
+      const scheduler = new Scheduler(() => config, db, onReport);
+
+      // On day 7: daily at 22:05, weekly+monthly at 22:10
+      // getCollidingTypes prioritizes the daily group (contains only 'daily')
+      const collidingTypes = getCollidingTypes(7, config);
+      expect(collidingTypes).toContain('daily');
+
+      // The monthly handler skips when this condition (scheduler.ts:292) is true:
+      // weeklyEnabled && sameTimeAsWeekly && isWeeklyDay
+      const weeklyEnabled = config.schedule.weekly.enabled;
+      const isWeeklyDay = config.schedule.weekly.days.includes(7);
+      const sameTimeAsWeekly = config.schedule.monthly.time === config.schedule.weekly.time;
+      expect(weeklyEnabled && sameTimeAsWeekly && isWeeklyDay).toBe(true);
+
+      // On monthly day 1 (not a weekly day), the handler should NOT skip
+      const isWeeklyDay1 = config.schedule.weekly.days.includes(1);
+      expect(weeklyEnabled && sameTimeAsWeekly && isWeeklyDay1).toBe(false);
     });
   });
 

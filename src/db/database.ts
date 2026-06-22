@@ -6,8 +6,9 @@
  */
 
 import type { ScheduleRunRow, MemberHistoryRow, RankHistoryRow } from '../types';
-import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
+import initSqlJs, { Database as SqlJsDatabase, QueryExecResult } from 'sql.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import * as path from 'path';
 
 export class Database {
   private db: SqlJsDatabase | null = null;
@@ -26,7 +27,7 @@ export class Database {
     if (this.dbPath === ':memory:') {
       this.db = new SQL.Database();
     } else {
-      const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf('/'));
+      const dir = path.dirname(this.dbPath);
       if (dir && !existsSync(dir)) {
         const { mkdirSync } = await import('fs');
         mkdirSync(dir, { recursive: true });
@@ -56,10 +57,38 @@ export class Database {
     return this.db;
   }
 
+  private execSql(sql: string, params?: unknown[]): QueryExecResult[] {
+    try {
+      return this.ensureDb().exec(sql, params);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[DB] SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
+      throw err;
+    }
+  }
+
+  private runSql(sql: string, params?: unknown[]): void {
+    try {
+      this.ensureDb().run(sql, params);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[DB] SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Execute raw SQL without error logging. Intended for transaction control
+   * (BEGIN/COMMIT/ROLLBACK). sql.js is synchronous — no interleaving possible.
+   */
+  rawRun(sql: string, params?: unknown[]): void {
+    this.ensureDb().run(sql, params);
+  }
+
   private createTables(): void {
     const db = this.ensureDb();
 
-    db.run(`
+    this.runSql(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
@@ -67,7 +96,7 @@ export class Database {
       )
     `);
 
-    db.run(`
+    this.runSql(`
       CREATE TABLE IF NOT EXISTS schedule_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         report_type TEXT NOT NULL,
@@ -81,7 +110,7 @@ export class Database {
       )
     `);
 
-    db.run(`
+    this.runSql(`
       CREATE TABLE IF NOT EXISTS alert_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         alert_type TEXT NOT NULL,
@@ -95,7 +124,7 @@ export class Database {
       )
     `);
 
-    db.run(`
+    this.runSql(`
       CREATE TABLE IF NOT EXISTS member_history (
         viewer_id INTEGER PRIMARY KEY,
         trainer_name TEXT NOT NULL,
@@ -108,7 +137,7 @@ export class Database {
       )
     `);
 
-    db.run(`
+    this.runSql(`
       CREATE TABLE IF NOT EXISTS rank_history (
         date TEXT NOT NULL,
         circle_id INTEGER NOT NULL,
@@ -120,6 +149,11 @@ export class Database {
         PRIMARY KEY (date, circle_id)
       )
     `);
+
+    // Performance indexes
+    this.runSql('CREATE INDEX IF NOT EXISTS idx_member_history_circle_id ON member_history(circle_id)');
+    this.runSql('CREATE INDEX IF NOT EXISTS idx_rank_history_circle_date ON rank_history(circle_id, date DESC)');
+    this.runSql('CREATE INDEX IF NOT EXISTS idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)');
   }
 
   // ============================================================
@@ -128,8 +162,8 @@ export class Database {
 
   getLastSuccessfulRun(reportType: string): ScheduleRunRow | null {
     const db = this.ensureDb();
-    const result = db.exec(
-      'SELECT * FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1',
+    const result = this.execSql(
+      'SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1',
       [reportType, 'sent']
     );
     if (result.length === 0 || result[0].values.length === 0) {
@@ -149,7 +183,7 @@ export class Database {
     error_message?: string | null;
   }): number {
     const db = this.ensureDb();
-    db.run(
+    this.runSql(
       `INSERT INTO schedule_runs
         (report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -164,7 +198,7 @@ export class Database {
         run.error_message ?? null,
       ]
     );
-    const result = db.exec('SELECT last_insert_rowid() as id');
+    const result = this.execSql('SELECT last_insert_rowid() as id');
     return result[0].values[0][0] as number;
   }
 
@@ -172,12 +206,12 @@ export class Database {
     const db = this.ensureDb();
     if (status === 'sent') {
       const now = new Date().toISOString();
-      db.run(
+      this.runSql(
         'UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?',
         [status, now, errorMessage ?? null, id]
       );
     } else {
-      db.run(
+      this.runSql(
         'UPDATE schedule_runs SET status = ?, error_message = ? WHERE id = ?',
         [status, errorMessage ?? null, id]
       );
@@ -190,7 +224,7 @@ export class Database {
 
   isAlertAlreadySent(eventKey: string): boolean {
     const db = this.ensureDb();
-    const result = db.exec(
+    const result = this.execSql(
       'SELECT id FROM alert_events WHERE event_key = ? AND status = ?',
       [eventKey, 'sent']
     );
@@ -209,12 +243,12 @@ export class Database {
     const db = this.ensureDb();
 
     // Check if this event_key already exists
-    const existing = db.exec('SELECT id FROM alert_events WHERE event_key = ?', [alert.event_key]);
+    const existing = this.execSql('SELECT id FROM alert_events WHERE event_key = ?', [alert.event_key]);
     if (existing.length > 0 && existing[0].values.length > 0) {
       return existing[0].values[0][0] as number; // return existing ID
     }
 
-    db.run(
+    this.runSql(
       `INSERT INTO alert_events
         (alert_type, event_key, member_viewer_id, report_date, created_at, status, message)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -228,14 +262,14 @@ export class Database {
         alert.message,
       ]
     );
-    const result = db.exec('SELECT last_insert_rowid() as id');
+    const result = this.execSql('SELECT last_insert_rowid() as id');
     return result[0].values[0][0] as number;
   }
 
   markAlertSent(id: number): void {
     const db = this.ensureDb();
     const now = new Date().toISOString();
-    db.run(
+    this.runSql(
       'UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?',
       ['sent', now, id]
     );
@@ -256,7 +290,7 @@ export class Database {
     status?: string;
   }): void {
     const db = this.ensureDb();
-    db.run(
+    this.runSql(
       `INSERT INTO member_history
         (viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -282,8 +316,8 @@ export class Database {
 
   getMembers(circleId: number): MemberHistoryRow[] {
     const db = this.ensureDb();
-    const result = db.exec(
-      'SELECT * FROM member_history WHERE circle_id = ? ORDER BY trainer_name',
+    const result = this.execSql(
+      'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE circle_id = ? ORDER BY trainer_name',
       [circleId]
     );
     if (result.length === 0) return [];
@@ -292,8 +326,8 @@ export class Database {
 
   getMember(viewerId: number): MemberHistoryRow | null {
     const db = this.ensureDb();
-    const result = db.exec(
-      'SELECT * FROM member_history WHERE viewer_id = ?',
+    const result = this.execSql(
+      'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE viewer_id = ?',
       [viewerId]
     );
     if (result.length === 0 || result[0].values.length === 0) return null;
@@ -314,7 +348,7 @@ export class Database {
     fans_to_lower_tier: number;
   }): void {
     const db = this.ensureDb();
-    db.run(
+    this.runSql(
       `INSERT OR REPLACE INTO rank_history
         (date, circle_id, monthly_rank, monthly_point, club_rank, fans_to_next_tier, fans_to_lower_tier)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -332,8 +366,8 @@ export class Database {
 
   getRankHistory(circleId: number, days: number): RankHistoryRow[] {
     const db = this.ensureDb();
-    const result = db.exec(
-      `SELECT * FROM rank_history
+    const result = this.execSql(
+      `SELECT date, circle_id, monthly_rank, monthly_point, club_rank, fans_to_next_tier, fans_to_lower_tier FROM rank_history
        WHERE circle_id = ?
        ORDER BY date DESC
        LIMIT ?`,

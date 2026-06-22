@@ -7,7 +7,7 @@
 
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import { computeMembers } from './compute';
-import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -54,7 +54,7 @@ export function generateRanksReport(snapshot: Snapshot, config: BotConfig): stri
     const num = i < 3 ? '' : `${i + 1}. `;
     const transferBadge = m.isTransfer ? ' 🔄' : '';
     lines.push(
-      `${medal}${num}*${m.trainerName}*${transferBadge} — +${formatNumber(m.monthlyGain)}`
+      `${medal}${num}*${sanitizeName(m.trainerName)}*${transferBadge} — +${formatNumber(m.monthlyGain)}`
     );
   }
 

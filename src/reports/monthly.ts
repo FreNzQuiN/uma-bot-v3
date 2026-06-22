@@ -9,7 +9,7 @@ import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
 import { computeMembers } from './compute';
-import { formatNumber, formatDateWIB, getStaleDataWarning, INDONESIAN_MONTHS, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatNumber, formatDateWIB, getStaleDataWarning, INDONESIAN_MONTHS, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 import { getDataDateComponents } from '../utils/timezone';
 
@@ -57,7 +57,7 @@ export function generateMonthlyReport(
     // If no previous month snapshot, use current (graceful fallback)
   }
 
-  const members = computeMembers(activeSnapshot, config, db);
+  const members = computeMembers(activeSnapshot, config);
 
   const { year, month } = activeSnapshot.members[0];
 
@@ -136,7 +136,7 @@ export function generateMonthlyReport(
   for (const member of contributors) {
     const transferBadge = member.isTransfer ? ' 🔄' : '';
     lines.push(
-      `${member.rank}. *${member.trainerName}*${transferBadge} — +${formatNumber(member.monthlyGain)}`
+      `${member.rank}. *${sanitizeName(member.trainerName)}*${transferBadge} — +${formatNumber(member.monthlyGain)}`
     );
   }
 
@@ -154,7 +154,7 @@ export function generateMonthlyReport(
       for (const m of failingMembers) {
         const deficit = monthlyReq - m.monthlyGain;
         const transferBadge = m.isTransfer ? ' 🔄' : '';
-        lines.push(`❌ *${m.trainerName}*${transferBadge} — kurang ${formatNumber(deficit)}`);
+        lines.push(`❌ *${sanitizeName(m.trainerName)}*${transferBadge} — kurang ${formatNumber(deficit)}`);
       }
     }
   }
@@ -168,7 +168,7 @@ export function generateMonthlyReport(
     lines.push('');
     lines.push(`*⚠️ Belum aktif bulan ini:*`);
     for (const s of staleMembers) {
-      lines.push(`• ${s.trainerName}`);
+      lines.push(`• ${sanitizeName(s.trainerName)}`);
     }
   }
 

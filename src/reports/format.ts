@@ -35,37 +35,12 @@ export function formatNumber(n: number): string {
 // Date formatting
 // ============================================================
 
-export const INDONESIAN_MONTHS = [
-  'Januari',
-  'Februari',
-  'Maret',
-  'April',
-  'Mei',
-  'Juni',
-  'Juli',
-  'Agustus',
-  'September',
-  'Oktober',
-  'November',
-  'Desember',
-];
-
-/**
- * Convert an ISO date string (YYYY-MM-DD) to Indonesian format.
- *
- * @example formatDateWIB('2026-06-11') → '11 Juni 2026'
- */
-export function formatDateWIB(dateStr: string): string {
-  const [yearStr, monthStr, dayStr] = dateStr.split('-');
-  const day = parseInt(dayStr, 10);
-  const month = parseInt(monthStr, 10);
-  const year = parseInt(yearStr, 10);
-  return `${day} ${INDONESIAN_MONTHS[month - 1]} ${year}`;
-}
+// Re-export from utils/timezone for backward compatibility
+import { INDONESIAN_MONTHS, formatDateWIB, getDataDateComponents, formatForDisplay } from '../utils/timezone';
+export { INDONESIAN_MONTHS, formatDateWIB };
 
 import type { Snapshot, BotConfig } from '../types';
 import { getLatestDataDay } from '../data/daily-fans';
-import { getDataDateComponents, formatForDisplay } from '../utils/timezone';
 
 // ============================================================
 // Stale data warning
@@ -100,6 +75,21 @@ export function getStaleDataWarning(
 }
 
 // ============================================================
+// Name sanitization
+// ============================================================
+
+/**
+ * Sanitize a trainer name for safe embedding in WhatsApp formatted messages.
+ * Escapes WhatsApp formatting characters (*, _, ~) to prevent injection.
+ */
+export function sanitizeName(name: string): string {
+  return name
+    .replace(/\*/g, '')
+    .replace(/_/g, ' ')
+    .replace(/~/g, '-');
+}
+
+// ============================================================
 // Shared report helpers
 // ============================================================
 
@@ -108,19 +98,13 @@ export function getStaleDataWarning(
  * Uses the snapshot's year/month and the computed data day.
  */
 export function buildDateStr(snapshot: Snapshot, dataDay?: number): string {
+  if (snapshot.members.length === 0) return 'Unknown-Date';
   const { year, month } = snapshot.members[0];
   const day = dataDay ?? getDataDayFromSnapshot(snapshot);
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function getDataDayFromSnapshot(snapshot: Snapshot): number {
-  let maxDay = 0;
-  for (const member of snapshot.members) {
-    const d = getLatestDataDay(member.daily_fans);
-    if (d > maxDay) maxDay = d;
-  }
-  return maxDay;
-}
+import { getDataDayFromSnapshot } from '../data/snapshot';
 
 /**
  * Build the sync footer for reports.
@@ -159,6 +143,7 @@ export function buildDataLine(formattedDate: string): string {
  * The marker overhead is estimated at 20 chars (covers "Part XX/XX\n").
  */
 export function splitMessage(text: string, maxLength: number, splitAtNewline = true): string[] {
+  const FIXED_MARKER_OVERHEAD = 20;
   if (text.length <= maxLength) {
     return [text];
   }
@@ -183,10 +168,7 @@ export function splitMessage(text: string, maxLength: number, splitAtNewline = t
   for (const line of lines) {
     const candidate = current ? current + '\n' + line : line;
 
-    // Reserve space for Part marker
-    const estimatedParts = parts.length + 2;
-    const markerLen = `Part ${estimatedParts}/${estimatedParts}\n`.length;
-    const effectiveMax = Math.max(1, maxLength - markerLen);
+    const effectiveMax = Math.max(1, maxLength - FIXED_MARKER_OVERHEAD);
 
     if (candidate.length <= effectiveMax) {
       current = candidate;
@@ -212,6 +194,10 @@ export function splitMessage(text: string, maxLength: number, splitAtNewline = t
   }
 
   if (parts.length === 0) {
+    // Fallback: text was all newlines or couldn't be split — ensure maxLength
+    if (text.length > maxLength) {
+      return [text.slice(0, maxLength)];
+    }
     return [text];
   }
 

@@ -9,7 +9,7 @@ import { Snapshot, BotConfig, WEEK_BLOCKS, CLUB_TIERS } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeMembers } from './compute';
-import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
 interface WeeklyRankedMember {
@@ -58,7 +58,7 @@ export function generateWeeklyReport(
   const targetWeek = Math.max(1, currentWeek - absOffset);
   const block = WEEK_BLOCKS.find((b) => b.week === targetWeek)!;
 
-  const members = computeMembers(snapshot, config, db);
+  const members = computeMembers(snapshot, config);
 
   // Build ranked members with weekly gain
   const ranked: WeeklyRankedMember[] = members
@@ -119,7 +119,7 @@ export function generateWeeklyReport(
     for (const member of contributors) {
       const transferBadge = member.isTransfer ? ' 🔄' : '';
       lines.push(
-        `${member.rank}. *${member.trainerName}*${transferBadge} — +${formatNumber(member.weeklyGain)}`
+        `${member.rank}. *${sanitizeName(member.trainerName)}*${transferBadge} — +${formatNumber(member.weeklyGain)}`
       );
     }
   } else {
@@ -138,21 +138,22 @@ export function generateWeeklyReport(
         `*⚠️ Di bawah target ${formatNumber(weeklyReq)}/minggu:*`
       );
       for (const m of belowReq) {
-        lines.push(`• ${m.trainerName}`);
+        lines.push(`• ${sanitizeName(m.trainerName)}`);
       }
     }
   }
 
-  // Stale members (rolling window: consecutive zero-gain days at end >= threshold)
+  // Stale members (rolling window: consecutive zero-gain days at end of target week)
+  const viewedEndDay = Math.min(block.end, latestDataDay);
   const staleThreshold = config.memberStatus.staleAfterDaysWeekly;
   const staleMembers = members.filter((m) =>
-    m.status === 'active' && isStaleForReport(m.dailyFans, latestDataDay, staleThreshold)
+    m.status === 'active' && isStaleForReport(m.dailyFans, viewedEndDay, staleThreshold)
   );
   if (staleMembers.length > 0) {
     lines.push('');
     lines.push(`*⚠️ Belum aktif minggu ini:*`);
     for (const s of staleMembers) {
-      lines.push(`• ${s.trainerName}`);
+      lines.push(`• ${sanitizeName(s.trainerName)}`);
     }
   }
 

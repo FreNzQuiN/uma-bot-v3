@@ -9,7 +9,7 @@ import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeMembers } from './compute';
-import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
 /**
@@ -28,7 +28,7 @@ export function generateBottomReport(
     return 'ℹ️ *Perlu Perhatian*\nData anggota belum tersedia untuk analisis.';
   }
 
-  const members = computeMembers(snapshot, config, db);
+  const members = computeMembers(snapshot, config);
 
   // Active members, sorted by monthly gain ascending (lowest first)
   const contributing = members
@@ -78,7 +78,7 @@ export function generateBottomReport(
       ? ` → ~${formatNumber(projectedMonthEnd)}`
       : '';
     lines.push(
-      `${i + 1}. *${m.trainerName}*${transferBadge} — +${formatNumber(m.monthlyGain)}${deficitStr}${projStr}`
+      `${i + 1}. *${sanitizeName(m.trainerName)}*${transferBadge} — +${formatNumber(m.monthlyGain)}${deficitStr}${projStr}`
     );
   }
 
@@ -91,7 +91,7 @@ export function generateBottomReport(
     lines.push('');
     lines.push(`*⚠️ Tidak ada data (${staleThreshold}+ hari):*`);
     for (const s of staleMembers) {
-      lines.push(`• ${s.trainerName}`);
+      lines.push(`• ${sanitizeName(s.trainerName)}`);
     }
   }
 

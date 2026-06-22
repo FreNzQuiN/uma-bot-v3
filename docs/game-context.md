@@ -67,7 +67,7 @@ uma.moe is a third-party platform that scrapes game data once daily at 00:00 JST
 - Tier thresholds (exact fans needed for promotion/demotion)
 
 See `docs/uma-moe-api.md` for the API documentation (not official, reverse engineered and may be outdated).
-See `examples/snapshot-june-12.json` for real data.
+See `tests/examples/snapshot-june-12.json` for real data.
 
 ## What Is the Bot's Job?
 

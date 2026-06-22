@@ -32,11 +32,13 @@ function extractInTimezone(
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hourCycle: 'h23',
   }).formatToParts(date);
 
-  const get = (type: string) =>
-    parseInt(parts.find((p) => p.type === type)!.value, 10);
+  const get = (type: string) => {
+    const part = parts.find((p) => p.type === type);
+    return parseInt(part?.value ?? '0', 10);
+  };
 
   return {
     year: get('year'),
@@ -88,6 +90,38 @@ export function getDataMonth(date?: Date): number {
 /** Get JST year. */
 export function getDataYear(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).year;
+}
+
+// ============================================================
+// Indonesian date formatting
+// ============================================================
+
+export const INDONESIAN_MONTHS = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+];
+
+/**
+ * Convert an ISO date string (YYYY-MM-DD) to Indonesian format.
+ *
+ * @example formatDateWIB('2026-06-11') → '11 Juni 2026'
+ */
+export function formatDateWIB(dateStr: string): string {
+  const [yearStr, monthStr, dayStr] = dateStr.split('-');
+  const day = parseInt(dayStr, 10);
+  const month = parseInt(monthStr, 10);
+  const year = parseInt(yearStr, 10);
+  return `${day} ${INDONESIAN_MONTHS[month - 1]} ${year}`;
 }
 
 // ============================================================

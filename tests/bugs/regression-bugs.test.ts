@@ -10,22 +10,18 @@
  * TDD: These tests are written FIRST and should FAIL (RED) before fixes.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { CatchUpManager } from '../../src/scheduler/catchup';
 import { Database } from '../../src/db/database';
 import { getDefaultConfig } from '../../src/config';
 import { computeTierData } from '../../src/reports/tier';
 import type { BotConfig, Snapshot } from '../../src/types';
 import { CLUB_TIERS } from '../../src/types';
-import * as fs from 'fs';
-import * as path from 'path';
+import { loadRealSnapshot } from '../_helpers';
 
 // Load real snapshot for tier test
-const realSnapshot: Snapshot = JSON.parse(
-  fs.readFileSync(
-    path.join(__dirname, '../../examples/snapshot-june-12.json'),
-    'utf-8'
-  )
-);
+const realSnapshot: Snapshot = loadRealSnapshot();
 
 function makeConfig(overrides: Partial<BotConfig> = {}): BotConfig {
   const base = getDefaultConfig();

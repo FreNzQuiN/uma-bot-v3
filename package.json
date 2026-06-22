@@ -17,7 +17,9 @@
     "health": "curl -s http://127.0.0.1:3000/health | node -e \"process.stdin.on('data',d=>{const j=JSON.parse(d);console.log(j.success?'✅ Bot is running':'❌ Bot is down');console.log('Time:',j.data?.timestamp)})\"",
     "db:reset": "node -e \"const fs=require('fs');if(fs.existsSync('data/bot.db')){fs.unlinkSync('data/bot.db');console.log('Database reset')}else{console.log('No database found')}\"",
     "db:backup": "node -e \"const fs=require('fs');if(fs.existsSync('data/bot.db')){const ts=new Date().toISOString().replace(/[:.]/g,'-');fs.copyFileSync('data/bot.db',\\\"data/bot.db.\\\"+ts);console.log('Backup created: data/bot.db.'+ts)}else{console.log('No database found')}\"",
+    "unlink": "node -e \"const fs=require('fs');const p=process.env.WA_SESSION_DIR||'data/auth';if(fs.existsSync(p)){fs.rmSync(p,{recursive:true});console.log('Session deleted: '+p)}else{console.log('No session found at '+p)}\"",
     "clean": "node -e \"const fs=require('fs');['dist','coverage'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true});console.log('Removed '+d)}})\"",
+    "postinstall": "node scripts/patch-baileys.js",
     "lint:check": "tsc --noEmit",
     "fetch": "ts-node -e \"const{loadConfig}=require('./src/config');const{UmaMoeClient}=require('./src/api/uma-moe');const{saveSnapshot}=require('./src/data/snapshot');const config=loadConfig();const client=new UmaMoeClient();const now=new Date();client.fetchCircleData(config.circleId,now.getFullYear(),now.getMonth()+1).then(s=>{const d=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));const ds=\\\"\\\"+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');saveSnapshot(s,ds);console.log('Snapshot saved for '+ds)}).catch(e=>console.error('Fetch failed:',e.message))\"",
     "docker:build": "docker build -t uma-club-bot .",
@@ -25,12 +27,12 @@
     "docker:stop": "docker stop uma-bot && docker rm uma-bot"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.16",
-    "sql.js": "^1.12.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
     "node-cron": "^3.0.3",
-    "playwright": "^1.52.0",
     "pino": "^9.6.0",
+    "playwright": "^1.52.0",
     "qrcode-terminal": "^0.12.0",
+    "sql.js": "^1.12.0",
     "yaml": "^2.7.1",
     "zod": "^3.25.67"
   },
@@ -42,5 +44,9 @@
     "ts-jest": "^29.3.4",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "uuid": "^11.1.1",
+    "js-yaml": "^4.2.0"
   }
 }

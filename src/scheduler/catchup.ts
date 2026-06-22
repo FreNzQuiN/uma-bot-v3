@@ -190,6 +190,7 @@ export class CatchUpManager {
         try {
           await sendReport(reportType, { isCatchUp: true });
           this.db.updateRunStatus(runId, 'sent');
+          this.db.save(); // Persist immediately for crash recovery
           sent++;
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
@@ -214,6 +215,7 @@ export class CatchUpManager {
             });
             await onCombinedReport(group);
             this.db.updateRunStatus(runId, 'sent');
+            this.db.save(); // Persist immediately for crash recovery
             // Record individual runs so scheduled reports don't duplicate
             for (const type of group) {
               this.db.recordRun({
@@ -225,6 +227,7 @@ export class CatchUpManager {
                 target_jid: targetJid,
               });
             }
+            this.db.save(); // Persist individual records for crash recovery
             sent++;
             log.info('CatchUp', `Sent combined report: ${combinedKey}`);
           } catch (error) {
@@ -248,6 +251,7 @@ export class CatchUpManager {
             try {
               await sendReport(reportType, { isCatchUp: true });
               this.db.updateRunStatus(runId, 'sent');
+              this.db.save(); // Persist immediately for crash recovery
               sent++;
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : String(error);

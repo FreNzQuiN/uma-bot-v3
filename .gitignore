@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.cache/
 
 # SQLite
 data/bot.db
@@ -33,10 +34,19 @@ data/bot.pid
 
 # Compiled scripts
 scripts/*.js
+!scripts/patch-baileys.js
 
 # Test output artifacts
 tests/stats_output.txt
 tests/stats_output2.txt
+
+# Session artifacts (opencode agent working files)
+.omo/
+.plans/
+output/
+HANDOFF-TDD.md
+audit-findings.json
+audit-findings.md
 
 # OS files
 .DS_Store

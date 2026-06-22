@@ -30,13 +30,17 @@ RUN npm ci --production
 
 # Copy Playwright browsers
 RUN npx playwright install chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
+RUN chown -R node:node /app/playwright-browsers
 
 # Copy source
 COPY dist/ ./dist/
 COPY config.yaml ./
 
 # Create data directory
-RUN mkdir -p data/snapshots data/auth
+RUN mkdir -p data/snapshots data/auth data/logs
+RUN chown -R node:node /app/data
+USER node
 
 # Environment
 ENV NODE_ENV=production

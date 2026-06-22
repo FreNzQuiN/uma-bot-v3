@@ -1,4 +1,7 @@
 import { Database } from '../../src/db/database';
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
 
 let db: Database;
 
@@ -10,6 +13,13 @@ beforeEach(async () => {
 afterEach(() => {
   db.close();
 });
+
+// Helper to remove a file and its parent dirs if they are empty
+function rmrfSync(dir: string): void {
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 describe('Database initialization', () => {
   it('creates tables without error', async () => {
@@ -304,5 +314,277 @@ describe('Rank history', () => {
 
     const history = db.getRankHistory(100, 3);
     expect(history).toHaveLength(3);
+  });
+});
+
+describe('Persistence round-trip', () => {
+  let tmpFile: string;
+
+  beforeEach(() => {
+    tmpFile = path.join(os.tmpdir(), `test-persistence-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+  });
+
+  afterEach(() => {
+    rmrfSync(tmpFile);
+  });
+
+  it('data survives close and reopen from disk', async () => {
+    // Phase 1: create, populate, save, close
+    const db1 = new Database(tmpFile);
+    try {
+      await db1.initialize();
+
+      db1.upsertMember({
+        viewer_id: 77777,
+        trainer_name: 'PersistPlayer',
+        circle_id: 500,
+        first_seen: '2026-06-01',
+        last_seen: '2026-06-20',
+      });
+
+      db1.recordRun({
+        report_type: 'weekly',
+        report_date: '2026-06-20',
+        scheduled_at: '2026-06-20T15:05:00Z',
+        status: 'sent',
+        is_catch_up: false,
+        target_jid: 'group@g.us',
+        sent_at: '2026-06-20T15:05:01Z',
+      });
+
+      db1.save();
+    } finally {
+      db1.close();
+    }
+
+    // Phase 2: reopen with same path and verify
+    const db2 = new Database(tmpFile);
+    try {
+      await db2.initialize();
+
+      const member = db2.getMember(77777);
+      expect(member).not.toBeNull();
+      expect(member!.trainer_name).toBe('PersistPlayer');
+      expect(member!.circle_id).toBe(500);
+      expect(member!.last_seen).toBe('2026-06-20');
+
+      const lastRun = db2.getLastSuccessfulRun('weekly');
+      expect(lastRun).not.toBeNull();
+      expect(lastRun!.report_date).toBe('2026-06-20');
+      expect(lastRun!.target_jid).toBe('group@g.us');
+    } finally {
+      db2.close();
+    }
+  });
+
+  it('persists multiple members across restart', async () => {
+    const db1 = new Database(tmpFile);
+    try {
+      await db1.initialize();
+
+      db1.upsertMember({
+        viewer_id: 1001,
+        trainer_name: 'Alpha',
+        circle_id: 600,
+        first_seen: '2026-06-01',
+        last_seen: '2026-06-15',
+      });
+      db1.upsertMember({
+        viewer_id: 1002,
+        trainer_name: 'Beta',
+        circle_id: 600,
+        first_seen: '2026-06-05',
+        last_seen: '2026-06-18',
+      });
+      db1.save();
+    } finally {
+      db1.close();
+    }
+
+    const db2 = new Database(tmpFile);
+    try {
+      await db2.initialize();
+
+      const members = db2.getMembers(600);
+      expect(members).toHaveLength(2);
+      const names = members.map((m) => m.trainer_name).sort();
+      expect(names).toEqual(['Alpha', 'Beta']);
+    } finally {
+      db2.close();
+    }
+  });
+});
+
+describe('updateRunStatus sent_at timestamp', () => {
+  it('sets sent_at to non-null value when status is sent', () => {
+    const id = db.recordRun({
+      report_type: 'monthly',
+      report_date: '2026-06-01',
+      scheduled_at: '2026-06-01T15:05:00Z',
+      status: 'pending',
+      is_catch_up: false,
+      target_jid: 'group@g.us',
+    });
+
+    db.updateRunStatus(id, 'sent');
+
+    const last = db.getLastSuccessfulRun('monthly');
+    expect(last).not.toBeNull();
+    expect(last!.sent_at).not.toBeNull();
+    expect(typeof last!.sent_at).toBe('string');
+    // sent_at should be a valid ISO date string
+    expect(new Date(last!.sent_at!).getTime()).not.toBeNaN();
+  });
+
+  it('does not set sent_at when status is failed', () => {
+    const id = db.recordRun({
+      report_type: 'monthly',
+      report_date: '2026-06-01',
+      scheduled_at: '2026-06-01T15:05:00Z',
+      status: 'pending',
+      is_catch_up: false,
+      target_jid: 'group@g.us',
+    });
+
+    db.updateRunStatus(id, 'failed', 'timeout');
+
+    const last = db.getLastSuccessfulRun('monthly');
+    expect(last).toBeNull();
+  });
+});
+
+describe('rawRun transaction support', () => {
+  it('persists data inserted within a BEGIN/COMMIT transaction', () => {
+    db.rawRun('BEGIN');
+    db.rawRun(
+      `INSERT INTO schedule_runs
+        (report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['daily', '2026-06-15', '2026-06-15T15:05:00Z', '2026-06-15T15:05:01Z', 'sent', 0, 'test@g.us', null]
+    );
+    db.rawRun('COMMIT');
+
+    const last = db.getLastSuccessfulRun('daily');
+    expect(last).not.toBeNull();
+    expect(last!.report_date).toBe('2026-06-15');
+  });
+
+  it('rolls back data inserted before ROLLBACK', () => {
+    db.rawRun('BEGIN');
+    db.rawRun(
+      `INSERT INTO schedule_runs
+        (report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['daily', '2026-06-15', '2026-06-15T15:05:00Z', null, 'pending', 0, 'test@g.us', null]
+    );
+    db.rawRun('ROLLBACK');
+
+    const last = db.getLastSuccessfulRun('daily');
+    expect(last).toBeNull();
+  });
+});
+
+describe('execSql error handling', () => {
+  it('throws when rawRun receives invalid SQL', () => {
+    expect(() => {
+      db.rawRun('THIS IS NOT VALID SQL');
+    }).toThrow();
+  });
+
+  it('throws when rawRun references a nonexistent table', () => {
+    expect(() => {
+      db.rawRun('INSERT INTO nonexistent_table (col) VALUES (?)', ['value']);
+    }).toThrow();
+  });
+
+  it('getLastSuccessfulRun throws when db is not initialized', () => {
+    const uninitDb = new Database(':memory:');
+    // Not calling initialize() — should throw
+    expect(() => uninitDb.getLastSuccessfulRun('daily')).toThrow('not initialized');
+  });
+});
+
+describe('File-based initialize with directory creation', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = path.join(os.tmpdir(), `test-db-dirs-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  });
+
+  afterEach(() => {
+    rmrfSync(tmpDir);
+  });
+
+  it('creates nested directories that do not exist', async () => {
+    const dbPath = path.join(tmpDir, 'subdir', 'data', 'bot.db');
+
+    // Parent directories do not exist yet
+    expect(fs.existsSync(path.join(tmpDir, 'subdir'))).toBe(false);
+
+    const testDb = new Database(dbPath);
+    try {
+      await testDb.initialize();
+
+      // Directory tree should have been created
+      expect(fs.existsSync(path.join(tmpDir, 'subdir', 'data'))).toBe(true);
+
+      // sql.js keeps data in-memory; file only appears after save()
+      testDb.upsertMember({
+        viewer_id: 88888,
+        trainer_name: 'NestedDirPlayer',
+        circle_id: 700,
+        first_seen: '2026-06-01',
+        last_seen: '2026-06-22',
+      });
+      testDb.save();
+      expect(fs.existsSync(dbPath)).toBe(true);
+
+      // Reopen and verify data survived
+      const db2 = new Database(dbPath);
+      try {
+        await db2.initialize();
+        const member = db2.getMember(88888);
+        expect(member).not.toBeNull();
+        expect(member!.trainer_name).toBe('NestedDirPlayer');
+      } finally {
+        db2.close();
+      }
+    } finally {
+      testDb.close();
+    }
+  });
+
+  it('works when directory already exists', async () => {
+    // Pre-create the directory
+    fs.mkdirSync(path.join(tmpDir, 'existing'), { recursive: true });
+    const dbPath = path.join(tmpDir, 'existing', 'bot.db');
+
+    const testDb = new Database(dbPath);
+    try {
+      await testDb.initialize();
+
+      testDb.upsertMember({
+        viewer_id: 99999,
+        trainer_name: 'ExistingDirPlayer',
+        circle_id: 800,
+        first_seen: '2026-06-01',
+        last_seen: '2026-06-22',
+      });
+      testDb.save();
+      expect(fs.existsSync(dbPath)).toBe(true);
+    } finally {
+      testDb.close();
+    }
+
+    // Verify persisted
+    const db2 = new Database(dbPath);
+    try {
+      await db2.initialize();
+      const member = db2.getMember(99999);
+      expect(member).not.toBeNull();
+      expect(member!.trainer_name).toBe('ExistingDirPlayer');
+    } finally {
+      db2.close();
+    }
   });
 });

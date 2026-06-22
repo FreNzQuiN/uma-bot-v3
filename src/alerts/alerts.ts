@@ -51,7 +51,7 @@ export function detectAlerts(
   log.debug('Alert', `Running alert detection (performanceDrop=${config.alerts.performanceDrop.enabled}, demotionRisk=${config.alerts.demotionRisk.enabled}, streakBreak=${config.alerts.streakBreak.enabled}, newTransfer=${config.alerts.newTransfer.enabled}, rankDrop=${config.alerts.rankDrop.enabled})`);
 
   const alerts: Alert[] = [];
-  const members = computeMembers(snapshot, config, db);
+  const members = computeMembers(snapshot, config);
   const latestDataDay = getDataDayFromSnapshot(snapshot);
   const reportDate = snapshot.circle.last_updated
     ? snapshot.circle.last_updated.split('T')[0]
@@ -177,7 +177,7 @@ export function detectAlerts(
     const displayParts = new Intl.DateTimeFormat('en-US', {
       timeZone: config.timezone,
       hour: '2-digit',
-      hour12: false,
+      hourCycle: 'h23',
     }).formatToParts(now);
     const currentHour = parseInt(displayParts.find((p) => p.type === 'hour')!.value, 10);
 
@@ -207,6 +207,7 @@ export function detectAlerts(
           });
         }
       }
+      log.info('Alert', `${alerts.length} alert(s) suppressed during quiet hours (${startHour}:00-${endHour}:00)`);
       return [];
     }
   }

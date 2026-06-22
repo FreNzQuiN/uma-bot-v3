@@ -9,8 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MemberHistoryRow, Snapshot } from '../types';
 import { getLatestDataDay } from './daily-fans';
-import { formatDateWIB } from '../reports/format';
-import { getDataDate, getDataDateComponents } from '../utils/timezone';
+import { formatDateWIB, getDataDate, getDataDateComponents } from '../utils/timezone';
 import type { UmaMoeClient } from '../api/uma-moe';
 import { log } from '../utils/logger';
 
@@ -23,6 +22,9 @@ const SNAPSHOTS_DIR = 'data/snapshots';
  * @param rootDir Base directory (default: project root)
  */
 function buildSnapshotPath(dataDay: string, rootDir: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataDay)) {
+    throw new Error(`Invalid dataDay format: "${dataDay}". Expected YYYY-MM-DD`);
+  }
   const [year, month, day] = dataDay.split('-');
   return path.join(rootDir, SNAPSHOTS_DIR, year, month, `${day}.json`);
 }
@@ -222,39 +224,50 @@ export function updateMemberHistory(snapshot: Snapshot, db: Database): void {
   const circleId = snapshot.circle.circle_id;
   const currentViewerIds = new Set<number>();
 
-  for (const member of snapshot.members) {
-    currentViewerIds.add(member.viewer_id);
+  try {
+    db.rawRun('BEGIN');
 
-    const existing = db.getMember(member.viewer_id);
-    const firstSeen = existing?.first_seen ?? today;
+    for (const member of snapshot.members) {
+      currentViewerIds.add(member.viewer_id);
 
-    db.upsertMember({
-      viewer_id: member.viewer_id,
-      trainer_name: member.trainer_name,
-      circle_id: member.circle_id,
-      first_seen: firstSeen,
-      last_seen: today,
-      previous_circle_id: member.previous_circle_id ?? null,
-      previous_circle_name: member.previous_circle_name ?? null,
-      status: 'active',
-    });
-  }
+      const existing = db.getMember(member.viewer_id);
+      const firstSeen = existing?.first_seen ?? today;
 
-  // Mark historical members not in current snapshot as 'left'
-  const historicalMembers = db.getMembers(circleId);
-  for (const hist of historicalMembers) {
-    if (!currentViewerIds.has(hist.viewer_id)) {
       db.upsertMember({
-        viewer_id: hist.viewer_id,
-        trainer_name: hist.trainer_name,
-        circle_id: circleId,
-        first_seen: hist.first_seen,
-        last_seen: hist.last_seen,
-        previous_circle_id: hist.previous_circle_id ?? null,
-        previous_circle_name: hist.previous_circle_name ?? null,
-        status: 'left',
+        viewer_id: member.viewer_id,
+        trainer_name: member.trainer_name,
+        circle_id: member.circle_id,
+        first_seen: firstSeen,
+        last_seen: today,
+        previous_circle_id: member.previous_circle_id ?? null,
+        previous_circle_name: member.previous_circle_name ?? null,
+        status: 'active',
       });
     }
+
+    // Mark historical members not in current snapshot as 'left'
+    const historicalMembers = db.getMembers(circleId);
+    for (const hist of historicalMembers) {
+      if (!currentViewerIds.has(hist.viewer_id)) {
+        db.upsertMember({
+          viewer_id: hist.viewer_id,
+          trainer_name: hist.trainer_name,
+          circle_id: circleId,
+          first_seen: hist.first_seen,
+          last_seen: hist.last_seen,
+          previous_circle_id: hist.previous_circle_id ?? null,
+          previous_circle_name: hist.previous_circle_name ?? null,
+          status: 'left',
+        });
+      }
+    }
+
+    db.rawRun('COMMIT');
+  } catch (err) {
+    db.rawRun('ROLLBACK');
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error('Snapshot', `updateMemberHistory failed, rolled back: ${msg}`);
+    throw err;
   }
 }
 

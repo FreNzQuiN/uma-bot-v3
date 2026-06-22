@@ -21,7 +21,7 @@ import { getDefaultConfig } from '../../src/config';
 // Test helpers
 // ============================================================
 
-const ROOT = join(__dirname, '..', '..');
+const ROOT = join(__dirname, '..');
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
