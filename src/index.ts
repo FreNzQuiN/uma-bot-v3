@@ -502,11 +502,11 @@ async function main() {
         // Collect alerts from all catch-up reports
         const allCatchUpAlerts: import('./alerts/alerts').Alert[] = [];
         const sendReportCollectingAlerts = async (type: string, options?: { isCatchUp?: boolean }) => {
-          const reportOptions: Record<string, unknown> = { ...options, collectAlerts: true };
+          const reportOptions: { isCatchUp?: boolean; collectAlerts?: boolean; offset?: number } = { ...options, collectAlerts: true };
           if (type === 'monthly') {
             reportOptions.offset = -1;
           }
-          const alerts = await sendReport(type, reportOptions as Parameters<typeof sendReport>[1]);
+          const alerts = await sendReport(type, reportOptions);
           allCatchUpAlerts.push(...alerts);
         };
 
