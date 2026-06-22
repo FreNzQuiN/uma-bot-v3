@@ -76,7 +76,9 @@ async function main() {
   try {
     if (!existsSync('data')) mkdirSync('data', { recursive: true });
     writeFileSync(PID_FILE, String(process.pid), 'utf-8');
-  } catch {}
+  } catch (err) {
+    log.warn('Bot', `Failed to write PID file: ${err instanceof Error ? err.message : String(err)}`);
+  }
   log.info('Bot', 'Uma Club Bot v3 starting...');
 
   // ── 1. Load config + init DB ──
