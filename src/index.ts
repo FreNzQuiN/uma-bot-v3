@@ -151,7 +151,7 @@ async function main() {
           if (diff.scheduleChanged) {
             log.info('Config', 'Schedule changed — restarting scheduler');
           } else {
-            log.info('Config', 'Non-schedule config applied (groups, alerts, admins, etc.)');
+            log.info('Config', 'Config reloaded from config.yaml');
           }
 
           // Always restart scheduler on any config change
