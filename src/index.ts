@@ -10,7 +10,7 @@
  */
 
 import { loadConfig } from './config';
-import type { BotConfig } from './types';
+import type { BotConfig, Snapshot } from './types';
 import { Database } from './db/database';
 import { UmaMoeClient } from './api/uma-moe';
 import { ApiServer } from './api/server';
@@ -230,23 +230,16 @@ async function main() {
     }
   }
 
-  // ── 4. SendReport: generates report + detects alerts ──
-  // Returns collected alerts when options.collectAlerts is true (for catch-up aggregation)
-  // Throws when no snapshot is available so callers (scheduler, catchup) know it failed.
-  async function sendReport(
+  // ── 4a. Helper functions for sendReport ──
+
+  // Month-alignment + stale data pre-fetch.
+  // If the snapshot is from a different month, or data is 2+ days behind,
+  // fetch fresh data from uma.moe. Returns the (possibly refreshed) snapshot.
+  async function alignSnapshotToMonth(
     type: string,
-    options?: { offset?: number; isCatchUp?: boolean; collectAlerts?: boolean }
-  ): Promise<import('./alerts/alerts').Alert[]> {
-    let snapshot = getSnapshot();
-    if (!snapshot) {
-      throw new Error(`No snapshot available for ${type} report`);
-    }
-    if (snapshot.members.length === 0) {
-      throw new Error(`Snapshot has no members for ${type} report`);
-    }
-
-    const currentConfig = getConfig();
-
+    snapshot: Snapshot,
+    currentConfig: BotConfig
+  ): Promise<Snapshot> {
     // ════════════════════════════════════════════════════════════════
     // Month-alignment guard for daily/weekly (Step 4)
     // ════════════════════════════════════════════════════════════════
@@ -259,7 +252,6 @@ async function main() {
           log.info('Report', `Snapshot is from ${snapYear}-${snapMonth}, fetching current month ${curYear}-${curMonth}`);
           const freshSnapshot = await umaMoe.fetchCircleData(currentConfig.circleId, curYear, curMonth);
           saveSnapshot(freshSnapshot, getDataDate());
-          // REASSIGN — without this, the report uses the original stale snapshot
           snapshot = freshSnapshot;
           log.info('Report', `Fresh data fetched for ${type} report`);
         } catch (err) {
@@ -289,27 +281,17 @@ async function main() {
       }
     }
 
-    // Pre-fetch target month for monthly reports with offset (Step 1a)
-    if (type === 'monthly' && Math.abs(options?.offset ?? 0) > 0) {
-      const absOffset = Math.abs(options!.offset!);
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      let targetMonth = curMonth - absOffset;
-      let targetYear = curYear;
-      while (targetMonth <= 0) {
-        targetMonth += 12;
-        targetYear--;
-      }
-      // Only pre-fetch if target differs from the already-loaded snapshot month
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      if (targetYear !== snapYear || targetMonth !== snapMonth) {
-        try {
-          await ensureMonthSnapshot(umaMoe, currentConfig.circleId, targetYear, targetMonth);
-        } catch (err) {
-          log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for offset report: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    }
+    return snapshot;
+  }
 
+  // Report generation dispatch + catch-up prefix.
+  // Returns the formatted report string, or undefined for unknown report types.
+  function generateReportString(
+    type: string,
+    snapshot: Snapshot,
+    currentConfig: BotConfig,
+    options?: { offset?: number; isCatchUp?: boolean }
+  ): string | undefined {
     let report: string;
     switch (type) {
       case 'daily': report = generateDailyReport(snapshot, currentConfig, options?.offset, db); break;
@@ -320,18 +302,24 @@ async function main() {
       case 'stats': report = generateStatsReport(snapshot, currentConfig, db); break;
       case 'members': report = generateMembersReport(snapshot, currentConfig, db); break;
       case 'tier': report = generateTierReport(snapshot, currentConfig, db); break;
-      default: log.error('Report', `Unknown report type: ${type}`); return [];
+      default: log.error('Report', `Unknown report type: ${type}`); return undefined;
     }
 
     if (options?.isCatchUp) {
       report = `[Mode catch-up — memulihkan laporan yang terlewat]\n${report}`;
     }
 
-    log.info('Report', `${type} report generated (${report.length} chars)`);
+    return report;
+  }
 
-    // Deliver report first — this is the primary deliverable
-    await deliverReport(report, type);
-
+  // Alert detection + recording + delivery.
+  // Returns collected alerts when options.collectAlerts is true (for catch-up aggregation).
+  async function processAlertsForReport(
+    type: string,
+    snapshot: Snapshot,
+    currentConfig: BotConfig,
+    options?: { isCatchUp?: boolean; collectAlerts?: boolean }
+  ): Promise<import('./alerts/alerts').Alert[]> {
     // Detect and record alerts (non-critical — wrapped in try-catch)
     let alerts: import('./alerts/alerts').Alert[] = [];
     try {
@@ -368,6 +356,61 @@ async function main() {
       return alerts;
     }
     return [];
+  }
+
+  // ── 4. SendReport: generates report + detects alerts ──
+  // Returns collected alerts when options.collectAlerts is true (for catch-up aggregation)
+  // Throws when no snapshot is available so callers (scheduler, catchup) know it failed.
+  async function sendReport(
+    type: string,
+    options?: { offset?: number; isCatchUp?: boolean; collectAlerts?: boolean }
+  ): Promise<import('./alerts/alerts').Alert[]> {
+    let snapshot = getSnapshot();
+    if (!snapshot) {
+      throw new Error(`No snapshot available for ${type} report`);
+    }
+    if (snapshot.members.length === 0) {
+      throw new Error(`Snapshot has no members for ${type} report`);
+    }
+
+    const currentConfig = getConfig();
+
+    // ════════════════════════════════════════════════════════════════
+    // Month-alignment + stale data pre-fetch (Steps 4+5)
+    // ════════════════════════════════════════════════════════════════
+    snapshot = await alignSnapshotToMonth(type, snapshot, currentConfig);
+
+    // Pre-fetch target month for monthly reports with offset (Step 1a)
+    if (type === 'monthly' && Math.abs(options?.offset ?? 0) > 0) {
+      const absOffset = Math.abs(options!.offset!);
+      const { year: curYear, month: curMonth } = getDataDateComponents();
+      let targetMonth = curMonth - absOffset;
+      let targetYear = curYear;
+      while (targetMonth <= 0) {
+        targetMonth += 12;
+        targetYear--;
+      }
+      // Only pre-fetch if target differs from the already-loaded snapshot month
+      const { year: snapYear, month: snapMonth } = snapshot.members[0];
+      if (targetYear !== snapYear || targetMonth !== snapMonth) {
+        try {
+          await ensureMonthSnapshot(umaMoe, currentConfig.circleId, targetYear, targetMonth);
+        } catch (err) {
+          log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for offset report: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+
+    // Generate report string
+    const report = generateReportString(type, snapshot, currentConfig, options);
+    if (report === undefined) return [];
+    log.info('Report', `${type} report generated (${report.length} chars)`);
+
+    // Deliver report first — this is the primary deliverable
+    await deliverReport(report, type);
+
+    // Detect, record, and deliver alerts
+    return processAlertsForReport(type, snapshot, currentConfig, options);
   }
 
   // ── 5. Fetch fresh data if latest snapshot is stale ──
