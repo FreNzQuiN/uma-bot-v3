@@ -8,6 +8,7 @@
 import type { WASocket } from '@whiskeysockets/baileys';
 import type { BotConfig } from '../types';
 import { log } from '../utils/logger';
+import { splitMessage } from '../utils/format';
 import { rmSync, existsSync } from 'node:fs';
 import { recordReconnect, recordMessageReceived, recordMessageParsed, recordMessageResponded, recordMessageFailed, recordSocketCreated, recordDisconnect, getRuntimeStats, recordConnectionState } from '../runtime';
 
@@ -471,7 +472,6 @@ export class WhatsAppClient {
       throw new Error('WhatsApp client not connected');
     }
 
-    const { splitMessage } = await import('../reports/format');
     const config = this.getConfig();
     const parts = splitMessage(text, config.message.maxLength, config.message.splitAtNewline);
 
@@ -502,7 +502,6 @@ export class WhatsAppClient {
       throw new Error('WhatsApp client not connected');
     }
 
-    const { splitMessage } = await import('../reports/format');
     const config = this.getConfig();
     const parts = splitMessage(text, config.message.maxLength, config.message.splitAtNewline);
 
