@@ -85,7 +85,7 @@ Logs are saved to `data/logs/pm2-error.log` and `data/logs/pm2-out.log`.
 
 | Script | Description |
 |--------|-------------|
-| `npm test` | Run all 1389 tests |
+| `npm test` | Run all 1599 tests |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with coverage report |
 | `npm run lint:check` | TypeScript type check (no emit) |
@@ -150,6 +150,7 @@ Environment variables (optional, set in `.env` or shell):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `API_PORT` | `3000` | REST API port |
+| `API_TOKEN` | *(none)* | Bearer token for HTTP API auth. If set, all `/` endpoints except `/health` require `Authorization: Bearer <token>`. |
 | `WA_SESSION_DIR` | `data/auth` | WhatsApp session data directory |
 
 ## REST API

@@ -363,6 +363,7 @@ Optional, set in `.env` or shell:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `API_PORT` | `3000` | REST API port |
+| `API_TOKEN` | *(none)* | Bearer token for HTTP API auth. If set, all `/` endpoints except `/health` require `Authorization: Bearer <token>`. If not set, auth is disabled. |
 | `WA_SESSION_DIR` | `data/auth` | WhatsApp session data directory |
 
 These override config.yaml values when present. The `.env` file is gitignored.

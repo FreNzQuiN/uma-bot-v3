@@ -2,7 +2,7 @@
 
 The bot runs a local HTTP API on `127.0.0.1:3000` (configurable via `API_PORT` environment variable).
 
-**Security:** Binds to localhost only. No authentication. Not exposed to the internet.
+**Security:** Binds to localhost only. Optional bearer token authentication via `API_TOKEN` env var. Not exposed to the internet.
 
 ## Base URL
 
@@ -29,6 +29,21 @@ All responses use a standard envelope:
 | `data` | `any` | Response payload (only on success) |
 | `error` | `string` | Error message (only on failure) |
 | `meta` | `object` | Additional metadata (varies by endpoint) |
+
+## Authentication
+
+If the `API_TOKEN` environment variable is set, all endpoints except `/health` require a bearer token:
+
+```
+Authorization: Bearer <your-token>
+```
+
+| Status | Condition |
+|--------|-----------|
+| `401` | Missing or incorrect `Authorization` header |
+| `200` | Valid token or `API_TOKEN` not set (auth disabled) |
+
+`/health` is always accessible without authentication.
 
 ## Rate Limiting
 
@@ -352,6 +367,17 @@ List all WhatsApp chats (DMs and groups). Requires WhatsApp connection.
 ```
 
 Returned for any unrecognized path.
+
+### `401 Unauthorized`
+
+```json
+{
+  "success": false,
+  "error": "Unauthorized"
+}
+```
+
+Missing or invalid bearer token. Only returned when `API_TOKEN` is set.
 
 ### `429 Too Many Requests`
 

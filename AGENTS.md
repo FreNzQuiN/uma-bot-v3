@@ -12,7 +12,7 @@ npm run build        # tsc -> dist/
 npm start            # node dist/index.js
 npm run dev          # ts-node src/index.ts
 npm run dev:watch    # ts-node-dev with hot-reload
-npm test             # jest --forceExit --detectOpenHandles (1389 tests)
+npm test             # jest --forceExit --detectOpenHandles (1599 tests)
 npm run lint:check   # tsc --noEmit (type-check only, no build)
 npm run fetch        # manually fetch uma.moe data for current month
 ```
@@ -43,14 +43,16 @@ src/
 │   ├── uma-moe.ts    # HTTP client for uma.moe circle data API
 │   └── server.ts     # HTTP API (reports, members, tier endpoints)
 ├── data/
-│   ├── snapshot.ts   # Snapshot save/load/path management (data/snapshots/YYYY/MM/DD.json)
-│   └── daily-fans.ts # Daily fan array arithmetic
+│   ├── snapshot.ts         # Snapshot save/load/path management (data/snapshots/YYYY/MM/DD.json)
+│   ├── ensure-snapshot.ts  # ensureMonthSnapshot — fetches missing month data (dependency on API layer)
+│   └── daily-fans.ts       # Daily fan array arithmetic
 ├── db/
 │   └── database.ts   # SQLite via sql.js (member history, rank history, alerts)
 ├── reports/
 │   ├── daily.ts, weekly.ts, monthly.ts, ranks.ts, bottom.ts, stats.ts, members.ts, tier.ts
 │   ├── compare.ts, analyze.ts, combined.ts
-│   ├── compute.ts    # Shared report computation (computeMembers)
+│   ├── compute.ts    # Shared report computation (computeMembers, computeTierData)
+│   ├── registry.ts   # Report type → generator mapping (single source of truth)
 │   └── format.ts     # WhatsApp message formatting + splitting
 ├── alerts/
 │   └── alerts.ts     # Alert detection + formatting (performance drop, demotion risk, etc.)
@@ -67,7 +69,7 @@ src/
 └── utils/
     ├── format.ts     # Pure string utilities (splitMessage)
     ├── logger.ts     # Pino-based logger with file rotation
-    ├── timezone.ts   # WIB (Asia/Jakarta) timezone helpers
+    ├── timezone.ts   # WIB (Asia/Jakarta) timezone helpers (incl. getTargetMonth)
     └── index.ts      # General utilities
 ```
 
@@ -105,22 +107,35 @@ tests/
 ├── _helpers/         # Shared test utilities (snapshot loader, mock date, constants)
 ├── alerts/
 ├── api/
+│   ├── server.test.ts       # HTTP API integration (real HTTP requests)
+│   ├── server-auth.test.ts  # Bearer token auth + rate limiting
+│   └── uma-moe.test.ts
 ├── bugs/             # Regression tests for specific bugs
 ├── config.test.ts
 ├── data/
 ├── db/
 ├── examples/         # Test fixture data (real snapshot JSON)
+├── orchestrator/
+│   └── report-orchestrator.test.ts  # Full pipeline: deliver, alerts, align, generate
 ├── reports/
 │   ├── daily/        # daily.unit, daily.format, daily.dispatch, daily.stale, daily.edge
 │   ├── weekly/       # weekly.unit, weekly.format, weekly.stale, weekly.edge
 │   ├── monthly/      # monthly.unit, monthly.format, monthly.stale, monthly.edge
 │   ├── compute.test.ts, ranks.test.ts, bottom.test.ts, stats.test.ts
 │   ├── members.test.ts, compare.test.ts, analyze.test.ts
-│   ├── formatters.test.ts  # format.ts utilities only
-│   ├── e2e-output.test.ts  # Cross-report consistency + data integrity
+│   ├── combined.test.ts       # Combined report unit tests
+│   ├── golden-inline.test.ts  # Golden-file snapshots for all 8 report types
+│   ├── formatters.test.ts     # format.ts utilities only
+│   ├── e2e-output.test.ts     # Cross-report consistency + data integrity
 │   └── tier.test.ts
 ├── scheduler/
 └── whatsapp/
+    ├── dispatch.test.ts
+    ├── dispatch-fuzz.test.ts  # 56 adversarial inputs (injection, Unicode, etc.)
+    ├── commands.test.ts
+    ├── access.test.ts
+    ├── admin.test.ts
+    └── client.test.ts         # WhatsApp client logic (sendOrEdit, cache, state)
 ```
 
 ---
@@ -131,7 +146,7 @@ All config lives in `config.yaml` (gitignored). Copy from `config.example.yaml`.
 
 Key sections: `circleId`, `admins` (WhatsApp JIDs), `groups` (command/announcement/alertAdmin), `requirements` (fan thresholds), `schedule` (cron times in WIB), `catchUp`, `alerts`, `message` (split settings, language: `id`).
 
-Env vars (optional, `.env`): `API_PORT` (default 3000), `WA_SESSION_DIR` (default `data/auth`).
+Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer token for API auth), `WA_SESSION_DIR` (default `data/auth`).
 
 **Config is validated with Zod at load time.** Invalid config throws immediately with field-level errors.
 

@@ -105,13 +105,15 @@ Snapshot → detectAlerts() → recordAlert() → formatAlerts() → WhatsApp �
 
 ## Key Components
 
-### Snapshot Store (`data/snapshot.ts`)
+### Snapshot Store (`data/snapshot.ts` + `data/ensure-snapshot.ts`)
 
 **What:** Immutable JSON files at `data/snapshots/YYYY/MM/DD.json`.
 
 **Why immutable:** Reports are pure functions on the `daily_fans` array. Recomputing from the same data always produces the same result. Mutating saved data would break this invariant.
 
 **Path convention:** `YYYY/MM/DD` matches the data date (WIB), not the fetch date.
+
+**`ensureMonthSnapshot`** lives in `data/ensure-snapshot.ts` (extracted from `snapshot.ts` to fix a reversed dependency — the data layer should not depend on the API layer). It fetches missing month data from uma.moe when the orchestrator or dispatch layer requests it.
 
 ### SQLite Database (`db/database.ts`)
 
@@ -190,7 +192,9 @@ Uses static imports for all report generators (no dynamic `import()` — no circ
 
 **What:** HTTP API on `127.0.0.1:3000` for external access to reports and data.
 
-**Why localhost only:** Security — the API has no auth. Binding to `127.0.0.1` means only the machine itself can access it.
+**Why localhost only:** Security — limits access to the machine itself. Combined with bearer token auth for additional protection.
+
+**Authentication:** Optional bearer token via `API_TOKEN` env var. If set, all endpoints except `/health` require `Authorization: Bearer <token>`. If not set, auth is disabled (backwards compatible).
 
 **Rate limiting:** 50 requests per second per IP. Returns 429 on excess.
 
@@ -203,6 +207,8 @@ See `docs/api-reference.md` for endpoint details.
 **What:** Generates report strings from snapshot data.
 
 **Core function:** `computeMembers()` in `reports/compute.ts` transforms raw `daily_fans` arrays into rich `ComputedMember` objects. This is called once per pipeline by the orchestrator/dispatch layer and injected into each report generator — never called internally by generators.
+
+**Report registry:** `reports/registry.ts` maps type strings to generator functions. Both `dispatch.ts` and `report-orchestrator.ts` import from the registry — single source of truth for report type routing.
 
 **Report types:**
 | Type | File | What it computes |
@@ -289,7 +295,7 @@ WhatsApp has a 4096-character limit. Long reports are split:
 
 ## Testing Architecture
 
-Tests mirror `src/` structure in `tests/`:
+Tests mirror `src/` structure in `tests/` (1,599 tests across 47 suites):
 
 ```
 src/reports/daily.ts     →  tests/reports/daily/daily.unit.test.ts
@@ -305,6 +311,16 @@ src/reports/daily.ts     →  tests/reports/daily/daily.edge.test.ts
 - `*.dispatch.test.ts` — Integration tests (command routing)
 - `*.stale.test.ts` — Stale data handling
 - `*.edge.test.ts` — Edge cases (empty data, transfers, month boundaries)
+
+**Integration tests:**
+- `tests/api/server.test.ts` — Real HTTP server, real `http.get()` requests
+- `tests/api/server-auth.test.ts` — Bearer token auth + rate limiting
+- `tests/orchestrator/report-orchestrator.test.ts` — Full pipeline (mock deps)
+
+**E2E validation:**
+- `tests/reports/e2e-output.test.ts` — Cross-report consistency from real snapshot
+- `tests/reports/golden-inline.test.ts` — Golden-file snapshots for all 8 report types
+- `tests/whatsapp/dispatch-fuzz.test.ts` — 56 adversarial inputs (injection, Unicode, etc.)
 
 **Shared helpers** in `tests/_helpers/`:
 - `snapshot-loader.ts` — Load real snapshot JSON fixtures
