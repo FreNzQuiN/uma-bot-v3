@@ -93,6 +93,36 @@ export function getDataYear(date?: Date): number {
 }
 
 // ============================================================
+// Month offset calculation
+// ============================================================
+
+/**
+ * Calculate a target month by applying an offset to a base year/month.
+ *
+ * @param curYear  - Base year (e.g. current JST year)
+ * @param curMonth - Base month 1-12 (e.g. current JST month)
+ * @param offsetMonths - Number of months to go back (positive = past, negative = future)
+ * @returns { year, month } of the target month
+ *
+ * @example getTargetMonth(2026, 1, 2)  → { year: 2025, month: 11 }
+ * @example getTargetMonth(2026, 6, 1)  → { year: 2026, month: 5 }
+ */
+export function getTargetMonth(
+  curYear: number,
+  curMonth: number,
+  offsetMonths: number
+): { year: number; month: number } {
+  const absOffset = Math.abs(offsetMonths);
+  let targetMonth = curMonth - absOffset;
+  let targetYear = curYear;
+  while (targetMonth <= 0) {
+    targetMonth += 12;
+    targetYear--;
+  }
+  return { year: targetYear, month: targetMonth };
+}
+
+// ============================================================
 // Indonesian date formatting
 // ============================================================
 

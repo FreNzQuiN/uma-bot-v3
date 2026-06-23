@@ -35,7 +35,6 @@ RUN chown -R node:node /app/playwright-browsers
 
 # Copy source
 COPY dist/ ./dist/
-COPY config.yaml ./
 
 # Create data directory
 RUN mkdir -p data/snapshots data/auth data/logs

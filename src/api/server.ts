@@ -9,8 +9,7 @@
 import http from 'http';
 import type { Snapshot, BotConfig } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers } from '../reports/compute';
-import { computeTierData } from '../reports/tier';
+import { computeMembers, computeTierData } from '../reports/compute';
 import { log } from '../utils/logger';
 import { getRuntimeStats, getUptimeMs } from '../runtime';
 
@@ -55,6 +54,7 @@ export class ApiServer {
   private waChats: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }> = () => [];
   private requestTimestamps: Map<string, number[]> = new Map();
   private server: http.Server | null = null;
+  private apiToken: string | undefined;
 
   constructor(
     port: number,
@@ -65,6 +65,7 @@ export class ApiServer {
     this.port = port;
     this.snapshotLoader = snapshotLoader;
     this.configLoader = typeof config === 'function' ? config : () => config;
+    this.apiToken = process.env.API_TOKEN || undefined;
     if (whatsapp) {
       this.waConnected = whatsapp.isConnected;
       this.waGroups = whatsapp.getGroups;
@@ -114,6 +115,14 @@ export class ApiServer {
     if (this.isRateLimited(clientIp)) {
       createResponse(res, 429, { success: false, error: 'Too many requests' });
       return;
+    }
+
+    if (this.apiToken && path !== '/health') {
+      const authHeader = req.headers.authorization;
+      if (authHeader !== `Bearer ${this.apiToken}`) {
+        createResponse(res, 401, { success: false, error: 'Unauthorized' });
+        return;
+      }
     }
 
     try {
@@ -224,7 +233,8 @@ export class ApiServer {
       const groups = await this.waGroups();
       createResponse(res, 200, { success: true, data: groups });
     } catch (error) {
-      createResponse(res, 500, { success: false, error: (error as Error).message });
+      log.error('API', 'handleGroups error', error);
+      createResponse(res, 500, { success: false, error: 'Internal server error' });
     }
   }
 

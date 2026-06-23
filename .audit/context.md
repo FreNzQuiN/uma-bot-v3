@@ -1,0 +1,21 @@
+# Project Context
+- Language: TypeScript
+- Framework: Node.js (Baileys WhatsApp, sql.js SQLite, Playwright, node-cron)
+- Test framework: Jest + ts-jest
+- Entry points: src/index.ts
+- File count: 37 source files, 41 test files (78 total .ts)
+- LOC: 7,808 (src/ only)
+- Modules:
+  - `src/whatsapp/` — WhatsApp connection, command routing, access control (5 files)
+  - `src/reports/` — Report generation: daily, weekly, monthly, ranks, bottom, stats, members, tier, compare, analyze, combined, compute, format (13 files)
+  - `src/scheduler/` — Cron scheduling, catch-up detection (3 files)
+  - `src/data/` — Snapshot persistence, daily fan arithmetic (2 files)
+  - `src/db/` — SQLite via sql.js (1 file)
+  - `src/api/` — uma.moe HTTP client, HTTP API server (2 files)
+  - `src/alerts/` — Alert detection + formatting (1 file)
+  - `src/orchestrator/` — Report pipeline coordination (1 file)
+  - `src/utils/` — Logger, timezone, format utilities (4 files)
+  - `src/types/` — Shared TypeScript types (2 files)
+  - `src/config.ts` — YAML config + Zod validation + hot-reload
+  - `src/runtime.ts` — Runtime stats
+  - `src/index.ts` — Entry point / composition root

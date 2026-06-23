@@ -11,20 +11,11 @@ import type { UmaMoeClient } from '../api/uma-moe';
 import type { WhatsAppClient } from '../whatsapp/client';
 import { detectAlerts, formatAlerts, type Alert } from '../alerts/alerts';
 import { saveSnapshot, ensureMonthSnapshot, getDataDayFromSnapshot } from '../data/snapshot';
-import { getDataDate, getDataDateComponents } from '../utils/timezone';
+import { getDataDate, getDataDateComponents, getTargetMonth } from '../utils/timezone';
 import { computeMembers } from '../reports/compute';
 import { generateCombinedReport } from '../reports/combined';
+import { generateReportString } from '../reports/registry';
 import { log } from '../utils/logger';
-
-// Report generator imports
-import { generateDailyReport } from '../reports/daily';
-import { generateWeeklyReport } from '../reports/weekly';
-import { generateMonthlyReport } from '../reports/monthly';
-import { generateRanksReport } from '../reports/ranks';
-import { generateBottomReport } from '../reports/bottom';
-import { generateStatsReport } from '../reports/stats';
-import { generateMembersReport } from '../reports/members';
-import { generateTierReport } from '../reports/tier';
 
 export interface ReportOrchestratorDeps {
   getConfig: () => BotConfig;
@@ -164,17 +155,10 @@ export class ReportOrchestrator {
     computedMembers: ComputedMember[],
     options?: { offset?: number; isCatchUp?: boolean }
   ): string | undefined {
-    let report: string;
-    switch (type) {
-      case 'daily': report = generateDailyReport(snapshot, config, computedMembers, options?.offset, this.db); break;
-      case 'weekly': report = generateWeeklyReport(snapshot, config, computedMembers, options?.offset, this.db); break;
-      case 'monthly': report = generateMonthlyReport(snapshot, config, computedMembers, options?.offset, this.db); break;
-      case 'ranks': report = generateRanksReport(snapshot, config, computedMembers); break;
-      case 'bottom': report = generateBottomReport(snapshot, config, computedMembers, this.db); break;
-      case 'stats': report = generateStatsReport(snapshot, config, computedMembers, this.db); break;
-      case 'members': report = generateMembersReport(snapshot, config, computedMembers, this.db); break;
-      case 'tier': report = generateTierReport(snapshot, config, computedMembers, this.db); break;
-      default: log.error('Report', `Unknown report type: ${type}`); return undefined;
+    let report: string | undefined = generateReportString(type, snapshot, config, computedMembers, { offset: options?.offset, db: this.db });
+    if (report === undefined) {
+      log.error('Report', `Unknown report type: ${type}`);
+      return undefined;
     }
 
     if (options?.isCatchUp) {
@@ -230,9 +214,9 @@ export class ReportOrchestrator {
 
         if (!options?.collectAlerts) {
           await this.deliverAlerts(alerts, options?.isCatchUp ?? false);
-          for (const alertId of alertIds) {
-            this.db.markAlertSent(alertId);
-          }
+        }
+        for (const alertId of alertIds) {
+          this.db.markAlertSent(alertId);
         }
       }
     } catch (err) {
@@ -271,14 +255,8 @@ export class ReportOrchestrator {
 
     // Pre-fetch target month for monthly reports with offset
     if (type === 'monthly' && Math.abs(options?.offset ?? 0) > 0) {
-      const absOffset = Math.abs(options!.offset!);
       const { year: curYear, month: curMonth } = getDataDateComponents();
-      let targetMonth = curMonth - absOffset;
-      let targetYear = curYear;
-      while (targetMonth <= 0) {
-        targetMonth += 12;
-        targetYear--;
-      }
+      const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, options!.offset!);
       const { year: snapYear, month: snapMonth } = snapshot.members[0];
       if (targetYear !== snapYear || targetMonth !== snapMonth) {
         try {

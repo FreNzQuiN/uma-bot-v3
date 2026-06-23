@@ -18,9 +18,9 @@ import { Scheduler } from './scheduler/scheduler';
 import { CatchUpManager } from './scheduler/catchup';
 import { WhatsAppClient } from './whatsapp/client';
 import { setupCommandHandler } from './whatsapp/dispatch';
-import { aggregateAlerts } from './alerts/alerts';
+
 import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, updateMemberHistory, ensureMonthSnapshot, getDataDayFromSnapshot } from './data/snapshot';
-import { getDataDate, getDataDateComponents } from './utils/timezone';
+import { getDataDate, getDataDateComponents, getTargetMonth } from './utils/timezone';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
 import { recordConfigReload, recordSchedulerRestart } from './runtime';
@@ -277,9 +277,7 @@ async function main() {
     // Pre-fetch monthly data if monthly report is in the combined set
     if (types.includes('monthly')) {
       const { year: curYear, month: curMonth } = getDataDateComponents();
-      let targetMonth = curMonth - 1;
-      let targetYear = curYear;
-      while (targetMonth <= 0) { targetMonth += 12; targetYear--; }
+      const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, 1);
       try {
         await ensureMonthSnapshot(umaMoe, currentConfig.circleId, targetYear, targetMonth);
       } catch (err) {
@@ -333,23 +331,9 @@ async function main() {
         });
         log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
 
-        // Send aggregated catch-up alerts
+        // Send catch-up alerts via orchestrator
         if (allCatchUpAlerts.length > 0) {
-          const aggregated = aggregateAlerts(allCatchUpAlerts);
-          if (aggregated) {
-            const currentConfig = getConfig();
-            const alertTargets = currentConfig.alerts.defaultRecipients === 'admin'
-              ? currentConfig.admins
-              : currentConfig.groups.alertAdmin;
-            for (const target of alertTargets) {
-              try {
-                await waClient.sendMessage(target, aggregated);
-                log.info('CatchUp', `Aggregated alerts sent to ${target}`);
-              } catch (err) {
-                log.error('CatchUp', `Failed to send catch-up alerts to ${target}`, err);
-              }
-            }
-          }
+          await orchestrator.deliverAlerts(allCatchUpAlerts, true);
         }
       } else {
         log.debug('CatchUp', 'No missed reports detected');

@@ -61,6 +61,7 @@ function suppressLibsignalErrors(): void {
       joined.includes('Session error') ||
       joined.includes('Bad MAC')
     ) {
+      log.debug('WhatsApp', `libsignal noise suppressed: ${joined}`);
       return;
     }
     originalConsoleError(...args);

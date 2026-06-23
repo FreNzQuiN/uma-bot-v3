@@ -11,7 +11,7 @@ import type { Database } from '../db/database';
 import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
 import { formatNumber, formatDateWIB, getStaleDataWarning, INDONESIAN_MONTHS, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { isStaleForReport } from '../data/daily-fans';
-import { getDataDateComponents } from '../utils/timezone';
+import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
 
 /**
  * Format month+year in Indonesian: "Juni 2026".
@@ -42,21 +42,18 @@ export function generateMonthlyReport(
 
   // Handle offset by loading previous month snapshot if available
   let activeSnapshot = snapshot;
+  let fallbackWarning = '';
   const absOffset = Math.abs(offset);
   if (absOffset > 0) {
     const { year: curYear, month: curMonth } = getDataDateComponents();
-    // Calculate target month (calendar-relative, not snapshot-relative)
-    let targetMonth = curMonth - absOffset;
-    let targetYear = curYear;
-    while (targetMonth <= 0) {
-      targetMonth += 12;
-      targetYear--;
-    }
+    const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, offset);
     const prevSnapshots = loadMonthSnapshots(targetYear, targetMonth);
     if (prevSnapshots.length > 0) {
       activeSnapshot = prevSnapshots[prevSnapshots.length - 1]; // latest snapshot for that month
+    } else {
+      // Target snapshot unavailable — use current with warning
+      fallbackWarning = `⚠️ Data bulan ${formatMonthYear(targetYear, targetMonth)} belum tersedia, menampilkan data terkini.\n`;
     }
-    // If no previous month snapshot, use current (graceful fallback)
   }
 
   const { year, month } = activeSnapshot.members[0];
@@ -101,6 +98,11 @@ export function generateMonthlyReport(
 
   // Build report
   const lines: string[] = [];
+
+  // Fallback warning (prepended when target month snapshot unavailable)
+  if (fallbackWarning) {
+    lines.push(fallbackWarning);
+  }
 
   // Title (bold with emoji inside)
   lines.push(`📅 *Monthly Report — ${formatMonthYear(month, year)}*`);

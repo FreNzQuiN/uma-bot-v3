@@ -8,7 +8,7 @@
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeTierData } from '../reports/tier';
+import { computeTierData } from '../reports/compute';
 import { formatNumber } from '../reports/format';
 import {
   computeRollingAverage,
@@ -201,7 +201,7 @@ export function detectAlerts(
             member_viewer_id: alert.memberViewerId,
             report_date: alert.reportDate,
             created_at: new Date().toISOString(),
-            status: 'sent',
+            status: 'suppressed',
             message: alert.message,
           });
         }

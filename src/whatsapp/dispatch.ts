@@ -12,18 +12,12 @@ import { parseCommand, resolveMemberName } from './commands';
 import { canUseCommand, isAdmin, ADMIN_COMMANDS } from './access';
 import { handleSetReq, handleConfig, handleStatus, handleCatchUp, handleAlerts } from './admin';
 import { computeMembers } from '../reports/compute';
-import { generateDailyReport } from '../reports/daily';
-import { generateWeeklyReport } from '../reports/weekly';
-import { generateMonthlyReport } from '../reports/monthly';
-import { generateRanksReport } from '../reports/ranks';
-import { generateBottomReport } from '../reports/bottom';
-import { generateStatsReport } from '../reports/stats';
-import { generateMembersReport } from '../reports/members';
-import { generateTierReport } from '../reports/tier';
+import { generateReportString } from '../reports/registry';
 import { generateCompareReport } from '../reports/compare';
 import { generateAnalyzeReport } from '../reports/analyze';
 import { log } from '../utils/logger';
 import { getRuntimeStats, getUptimeMs, recordMessageParsed, recordMessageResponded, recordMessageFailed } from '../runtime';
+import { getTargetMonth, getDataDateComponents } from '../utils/timezone';
 
 // ============================================================
 // Command sets
@@ -265,20 +259,12 @@ async function handleReportCommand(
 
   // Pre-fetch target month for /monthly with offset > 0
   if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && prefetchSnapshot) {
-    const absOffset = Math.abs(offset);
-    const { year: snapYear, month: snapMonth } = snapshot.members[0];
-    let targetMonth = snapMonth - absOffset;
-    let targetYear = snapYear;
-    while (targetMonth <= 0) {
-      targetMonth += 12;
-      targetYear--;
-    }
-    if (targetYear !== snapYear || targetMonth !== snapMonth) {
-      try {
-        await prefetchSnapshot(targetYear, targetMonth);
-      } catch (err) {
-        log.warn('Dispatch', `Failed to pre-fetch month ${targetYear}-${targetMonth} for /monthly ${offset}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+    const { year: curYear, month: curMonth } = getDataDateComponents();
+    const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, offset);
+    try {
+      await prefetchSnapshot(targetYear, targetMonth);
+    } catch (err) {
+      log.warn('Dispatch', `Failed to pre-fetch month ${targetYear}-${targetMonth} for /monthly ${offset}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -357,23 +343,12 @@ async function generateReport(
 ): Promise<string> {
   const computedMembers = computeMembers(snapshot, config);
 
+  // Try standard report types from registry
+  const registryResult = generateReportString(command, snapshot, config, computedMembers, { offset: offset ?? 0, db });
+  if (registryResult !== undefined) return registryResult;
+
+  // Dispatch-specific commands requiring member resolution
   switch (command) {
-    case 'daily':
-      return generateDailyReport(snapshot, config, computedMembers, offset ?? 0, db);
-    case 'weekly':
-      return generateWeeklyReport(snapshot, config, computedMembers, offset ?? 0, db);
-    case 'monthly':
-      return generateMonthlyReport(snapshot, config, computedMembers, offset ?? 0, db);
-    case 'ranks':
-      return generateRanksReport(snapshot, config, computedMembers);
-    case 'bottom':
-      return generateBottomReport(snapshot, config, computedMembers, db);
-    case 'stats':
-      return generateStatsReport(snapshot, config, computedMembers, db);
-    case 'members':
-      return generateMembersReport(snapshot, config, computedMembers, db);
-    case 'tier':
-      return generateTierReport(snapshot, config, computedMembers, db);
     case 'compare': {
       const nameA = args[0] ?? '';
       const nameB = args[1] ?? '';

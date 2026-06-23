@@ -9,8 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MemberHistoryRow, Snapshot } from '../types';
 import { getLatestDataDay } from './daily-fans';
-import { formatDateWIB, getDataDate, getDataDateComponents } from '../utils/timezone';
-import type { UmaMoeClient } from '../api/uma-moe';
+import { formatDateWIB, getDataDate } from '../utils/timezone';
 import { log } from '../utils/logger';
 
 /** Base directory name under which snapshots are stored (relative to root). */
@@ -372,55 +371,6 @@ export function staleSnapshotMessage(snapshotDate: string | null): string {
   return `Data uma.moe lagi tidak bisa diambil.\nAku pakai snapshot terakhir: ${formatted}.`;
 }
 
-/**
- * Ensure a snapshot exists for the given year/month on disk.
- *
- * 1. Check disk cache first — if snapshots exist for the month, return the latest.
- * 2. Cache miss — fetch from the uma.moe API.
- * 3. Determine save date: current month uses getDataDate(), past months use the last day.
- * 4. Save to disk and return the snapshot.
- *
- * @param umaMoe - UmaMoeClient instance for API calls
- * @param circleId - Circle ID to fetch
- * @param year - Year (e.g. 2026)
- * @param month - Month (1-12)
- * @param rootDir - Base project directory (defaults to process.cwd())
- * @returns The Snapshot (from cache or freshly fetched)
- */
-export async function ensureMonthSnapshot(
-  umaMoe: UmaMoeClient,
-  circleId: number,
-  year: number,
-  month: number,
-  rootDir?: string
-): Promise<Snapshot> {
-  const resolvedRoot = rootDir ?? process.cwd();
-
-  // Check disk cache first
-  const cached = loadMonthSnapshots(year, month, resolvedRoot);
-  if (cached.length > 0) {
-    const latest = cached[cached.length - 1];
-    // Validate that cached snapshot matches the requested circle
-    if (latest.circle.circle_id === circleId) {
-      log.debug('Snapshot', `Cache hit for ${year}-${String(month).padStart(2, '0')}, returning latest cached snapshot`);
-      return latest;
-    }
-    log.warn('Snapshot', `Cached snapshot circle_id ${latest.circle.circle_id} doesn't match requested ${circleId}, fetching fresh`);
-  }
-
-  // Cache miss — fetch from API
-  log.info('Snapshot', `Cache miss for ${year}-${String(month).padStart(2, '0')}, fetching from uma.moe`);
-  const snapshot = await umaMoe.fetchCircleData(circleId, year, month);
-
-  // Determine save date
-  const { year: currYear, month: currMonth } = getDataDateComponents();
-  const isCurrentMonth = currYear === year && currMonth === month;
-  const dataDay = isCurrentMonth
-    ? getDataDate()
-    : `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
-
-  // Save to disk
-  saveSnapshot(snapshot, dataDay, resolvedRoot);
-
-  return snapshot;
-}
+// Re-export ensureMonthSnapshot from its dedicated module to preserve the public API.
+// The function itself lives in ./ensure-snapshot.ts to avoid a data → api dependency.
+export { ensureMonthSnapshot } from './ensure-snapshot';
