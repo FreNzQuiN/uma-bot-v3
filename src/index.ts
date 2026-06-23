@@ -10,7 +10,7 @@
  */
 
 import { loadConfig } from './config';
-import type { BotConfig, Snapshot, ComputedMember } from './types';
+import type { BotConfig, Snapshot } from './types';
 import { Database } from './db/database';
 import { UmaMoeClient } from './api/uma-moe';
 import { ApiServer } from './api/server';
@@ -18,24 +18,14 @@ import { Scheduler } from './scheduler/scheduler';
 import { CatchUpManager } from './scheduler/catchup';
 import { WhatsAppClient } from './whatsapp/client';
 import { setupCommandHandler } from './whatsapp/dispatch';
-import { detectAlerts, formatAlerts, aggregateAlerts } from './alerts/alerts';
-import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, snapshotExists, updateMemberHistory, ensureMonthSnapshot, getDataDayFromSnapshot } from './data/snapshot';
+import { aggregateAlerts } from './alerts/alerts';
+import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, updateMemberHistory, ensureMonthSnapshot, getDataDayFromSnapshot } from './data/snapshot';
 import { getDataDate, getDataDateComponents } from './utils/timezone';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
-import { recordConfigReload, recordSchedulerRestart, getRuntimeStats } from './runtime';
-
+import { recordConfigReload, recordSchedulerRestart } from './runtime';
 import { computeMembers } from './reports/compute';
-
-import { generateDailyReport } from './reports/daily';
-import { generateWeeklyReport } from './reports/weekly';
-import { generateMonthlyReport } from './reports/monthly';
-import { generateRanksReport } from './reports/ranks';
-import { generateBottomReport } from './reports/bottom';
-import { generateStatsReport } from './reports/stats';
-import { generateMembersReport } from './reports/members';
-import { generateTierReport } from './reports/tier';
-import { generateCombinedReport } from './reports/combined';
+import { ReportOrchestrator } from './orchestrator/report-orchestrator';
 
 const PID_FILE = 'data/bot.pid';
 
@@ -109,6 +99,24 @@ async function main() {
     log.warn('Config', `Could not stat config.yaml at startup: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  const umaMoe = new UmaMoeClient();
+  const getSnapshot = () => loadLatestSnapshot();
+  const getConfig = () => config;
+
+  // ── 2. WhatsApp client (connect later) ──
+  const waClient = new WhatsAppClient(getConfig);
+
+  // ── 3. Report orchestrator ──
+  const orchestrator = new ReportOrchestrator({ getConfig, getSnapshot, umaMoe, db, waClient });
+
+  setupCommandHandler(waClient, getConfig, db, getSnapshot, (updatedConfig) => {
+    config = updatedConfig;
+  }, (year: number, month: number) => ensureMonthSnapshot(umaMoe, config.circleId, year, month));
+  log.info('WhatsApp', 'Command dispatch registered');
+
+  // ── 4. Config watcher ──
+  let scheduler: Scheduler | undefined;
+
   setInterval(() => {
     try {
       const currentMtime = statSync(configPath).mtimeMs;
@@ -158,8 +166,6 @@ async function main() {
           }
 
           // Always restart scheduler on any config change
-          // This ensures cron expressions, groups, and all config values
-          // are picked up immediately by scheduled tasks.
           if (scheduler) {
             scheduler.stop();
             scheduler.start();
@@ -175,250 +181,6 @@ async function main() {
   }, 5000);
   log.info('Config', 'Watching config.yaml for changes (polling every 5s)');
 
-  const umaMoe = new UmaMoeClient();
-  const getSnapshot = () => loadLatestSnapshot();
-  const getConfig = () => config;
-
-  // ── 2. WhatsApp client (connect later) ──
-  const waClient = new WhatsAppClient(getConfig);
-  setupCommandHandler(waClient, getConfig, db, getSnapshot, (updatedConfig) => {
-    config = updatedConfig;
-  }, (year: number, month: number) => ensureMonthSnapshot(umaMoe, config.circleId, year, month));
-  log.info('WhatsApp', 'Command dispatch registered');
-
-  // ── 3. Report delivery function ──
-  // Throws on delivery failure so callers know the true status.
-  async function deliverReport(reportText: string, type: string) {
-    const currentConfig = getConfig();
-    if (!waClient.isConnected()) {
-      log.debug('Report', `${type} report generated (${reportText.length} chars) — WhatsApp not connected, skipping delivery`);
-      if (currentConfig.groups.announcement.length > 0) {
-        throw new Error('WhatsApp not connected');
-      }
-      return;
-    }
-    let delivered = false;
-    for (const groupJid of currentConfig.groups.announcement) {
-      try {
-        await waClient.sendMessage(groupJid, reportText);
-        log.info('Report', `${type} report sent to ${groupJid}`);
-        delivered = true;
-      } catch (err) {
-        log.error('Report', `Failed to send ${type} report to ${groupJid}`, err);
-      }
-    }
-    if (!delivered && currentConfig.groups.announcement.length > 0) {
-      throw new Error(`Failed to deliver ${type} report to all announcement groups`);
-    }
-  }
-
-  async function deliverAlerts(alerts: ReturnType<typeof detectAlerts>, isCatchUp: boolean) {
-    if (!waClient.isConnected() || alerts.length === 0) return;
-
-    const alertMessage = formatAlerts(alerts, isCatchUp);
-    if (!alertMessage) return;
-
-    const currentConfig = getConfig();
-    const alertTargets = currentConfig.alerts.defaultRecipients === 'admin'
-      ? currentConfig.admins
-      : currentConfig.groups.alertAdmin;
-
-    for (const target of alertTargets) {
-      try {
-        await waClient.sendMessage(target, alertMessage);
-        log.info('Alert', `Alerts sent to ${target}`);
-      } catch (err) {
-        log.error('Alert', `Failed to send alerts to ${target}`, err);
-      }
-    }
-  }
-
-  // ── 4a. Helper functions for sendReport ──
-
-  // Month-alignment + stale data pre-fetch.
-  // If the snapshot is from a different month, or data is 2+ days behind,
-  // fetch fresh data from uma.moe. Returns the (possibly refreshed) snapshot.
-  async function alignSnapshotToMonth(
-    type: string,
-    snapshot: Snapshot,
-    currentConfig: BotConfig
-  ): Promise<Snapshot> {
-    // ════════════════════════════════════════════════════════════════
-    // Month-alignment guard for daily/weekly (Step 4)
-    // ════════════════════════════════════════════════════════════════
-    // If the snapshot is from a different month, fetch fresh data
-    if (type === 'daily' || type === 'weekly') {
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      if (snapYear !== curYear || snapMonth !== curMonth) {
-        try {
-          log.info('Report', `Snapshot is from ${snapYear}-${snapMonth}, fetching current month ${curYear}-${curMonth}`);
-          const freshSnapshot = await umaMoe.fetchCircleData(currentConfig.circleId, curYear, curMonth);
-          saveSnapshot(freshSnapshot, getDataDate());
-          snapshot = freshSnapshot;
-          log.info('Report', `Fresh data fetched for ${type} report`);
-        } catch (err) {
-          log.warn('Report', `Cannot fetch fresh data for ${type} report (snapshot is from previous month)`, err);
-          throw new Error(`Tidak ada data untuk ${type} report bulan ini. Data terakhir: ${snapYear}-${snapMonth}`);
-        }
-      }
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    // Stale data pre-fetch for daily/weekly (Step 5)
-    // ════════════════════════════════════════════════════════════════
-    // Same-month: if data is 2+ days behind, try refreshing
-    if ((type === 'daily' || type === 'weekly') && snapshot) {
-      const dataDay = getDataDayFromSnapshot(snapshot);
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      const { year: curYear, month: curMonth, day: curDay } = getDataDateComponents();
-      if (snapYear === curYear && snapMonth === curMonth && dataDay < curDay - 1) {
-        try {
-          log.info('Report', `Snapshot data day ${dataDay} is stale (current day ${curDay}), fetching fresh`);
-          const freshSnapshot = await umaMoe.fetchCircleData(currentConfig.circleId, curYear, curMonth);
-          saveSnapshot(freshSnapshot, getDataDate());
-          snapshot = freshSnapshot;
-        } catch (err) {
-          log.warn('Report', `Failed to refresh stale data, using existing snapshot`, err);
-        }
-      }
-    }
-
-    return snapshot;
-  }
-
-  // Report generation dispatch + catch-up prefix.
-  // Returns the formatted report string, or undefined for unknown report types.
-  function generateReportString(
-    type: string,
-    snapshot: Snapshot,
-    currentConfig: BotConfig,
-    computedMembers: ComputedMember[],
-    options?: { offset?: number; isCatchUp?: boolean }
-  ): string | undefined {
-    let report: string;
-    switch (type) {
-      case 'daily': report = generateDailyReport(snapshot, currentConfig, computedMembers, options?.offset, db); break;
-      case 'weekly': report = generateWeeklyReport(snapshot, currentConfig, computedMembers, options?.offset, db); break;
-      case 'monthly': report = generateMonthlyReport(snapshot, currentConfig, computedMembers, options?.offset, db); break;
-      case 'ranks': report = generateRanksReport(snapshot, currentConfig, computedMembers); break;
-      case 'bottom': report = generateBottomReport(snapshot, currentConfig, computedMembers, db); break;
-      case 'stats': report = generateStatsReport(snapshot, currentConfig, computedMembers, db); break;
-      case 'members': report = generateMembersReport(snapshot, currentConfig, computedMembers, db); break;
-      case 'tier': report = generateTierReport(snapshot, currentConfig, computedMembers, db); break;
-      default: log.error('Report', `Unknown report type: ${type}`); return undefined;
-    }
-
-    if (options?.isCatchUp) {
-      report = `[Mode catch-up — memulihkan laporan yang terlewat]\n${report}`;
-    }
-
-    return report;
-  }
-
-  // Alert detection + recording + delivery.
-  // Returns collected alerts when options.collectAlerts is true (for catch-up aggregation).
-  async function processAlertsForReport(
-    type: string,
-    snapshot: Snapshot,
-    currentConfig: BotConfig,
-    computedMembers: ComputedMember[],
-    options?: { isCatchUp?: boolean; collectAlerts?: boolean }
-  ): Promise<import('./alerts/alerts').Alert[]> {
-    // Detect and record alerts (non-critical — wrapped in try-catch)
-    let alerts: import('./alerts/alerts').Alert[] = [];
-    try {
-      alerts = detectAlerts(computedMembers, snapshot, currentConfig, db);
-      if (alerts.length > 0) {
-        log.info('Alert', `${alerts.length} alerts detected for ${type} report`);
-        const alertIds: number[] = [];
-        for (const alert of alerts) {
-          const alertId = db.recordAlert({
-            alert_type: alert.type,
-            event_key: alert.eventKey,
-            member_viewer_id: alert.memberViewerId,
-            report_date: alert.reportDate,
-            created_at: new Date().toISOString(),
-            status: 'pending',
-            message: alert.message,
-          });
-          alertIds.push(alertId);
-        }
-
-        if (!options?.collectAlerts) {
-          await deliverAlerts(alerts, options?.isCatchUp ?? false);
-          for (const alertId of alertIds) {
-            db.markAlertSent(alertId);
-          }
-        }
-      }
-    } catch (err) {
-      log.error('Alert', `Alert processing failed for ${type} report (report was delivered)`, err);
-    }
-
-    // Return alerts for aggregation when requested (catch-up)
-    if (options?.collectAlerts && alerts.length > 0) {
-      return alerts;
-    }
-    return [];
-  }
-
-  // ── 4. SendReport: generates report + detects alerts ──
-  // Returns collected alerts when options.collectAlerts is true (for catch-up aggregation)
-  // Throws when no snapshot is available so callers (scheduler, catchup) know it failed.
-  async function sendReport(
-    type: string,
-    options?: { offset?: number; isCatchUp?: boolean; collectAlerts?: boolean }
-  ): Promise<import('./alerts/alerts').Alert[]> {
-    let snapshot = getSnapshot();
-    if (!snapshot) {
-      throw new Error(`No snapshot available for ${type} report`);
-    }
-    if (snapshot.members.length === 0) {
-      throw new Error(`Snapshot has no members for ${type} report`);
-    }
-
-    const currentConfig = getConfig();
-
-    // ════════════════════════════════════════════════════════════════
-    // Month-alignment + stale data pre-fetch (Steps 4+5)
-    // ════════════════════════════════════════════════════════════════
-    snapshot = await alignSnapshotToMonth(type, snapshot, currentConfig);
-
-    // Pre-fetch target month for monthly reports with offset (Step 1a)
-    if (type === 'monthly' && Math.abs(options?.offset ?? 0) > 0) {
-      const absOffset = Math.abs(options!.offset!);
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      let targetMonth = curMonth - absOffset;
-      let targetYear = curYear;
-      while (targetMonth <= 0) {
-        targetMonth += 12;
-        targetYear--;
-      }
-      // Only pre-fetch if target differs from the already-loaded snapshot month
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      if (targetYear !== snapYear || targetMonth !== snapMonth) {
-        try {
-          await ensureMonthSnapshot(umaMoe, currentConfig.circleId, targetYear, targetMonth);
-        } catch (err) {
-          log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for offset report: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    }
-
-    // Generate report string
-    const computedMembers = computeMembers(snapshot, currentConfig);
-    const report = generateReportString(type, snapshot, currentConfig, computedMembers, options);
-    if (report === undefined) return [];
-    log.info('Report', `${type} report generated (${report.length} chars)`);
-
-    // Deliver report first — this is the primary deliverable
-    await deliverReport(report, type);
-
-    // Detect, record, and deliver alerts
-    return processAlertsForReport(type, snapshot, currentConfig, computedMembers, options);
-  }
-
   // ── 5. Fetch fresh data if latest snapshot is stale ──
   const todayStr = getDataDate();
   const { year: currentYear, month: currentMonth, day: currentDay } = getDataDateComponents();
@@ -428,7 +190,6 @@ async function main() {
   if (latestSnap && latestSnap.members.length > 0) {
     const { year: snapYear, month: snapMonth } = latestSnap.members[0];
     const latestDataDay = getDataDayFromSnapshot(latestSnap);
-    // Data is fresh if: same month AND (today's data exists OR yesterday's data exists and today hasn't completed yet)
     if (snapYear === currentYear && snapMonth === currentMonth && latestDataDay >= currentDay - 1) {
       needFetch = false;
       log.debug('Data', `Latest snapshot data day ${latestDataDay} >= ${currentDay - 1}, skipping fetch`);
@@ -494,12 +255,6 @@ async function main() {
   await api.start();
 
   // ── 7. Start scheduler + Connect WhatsApp ──
-  // Scheduler starts immediately. It handles WA-not-connected gracefully:
-  // deliverReport throws, scheduler marks the run as 'failed'. Reports deliver
-  // normally once WA reconnects — no restart needed.
-  let scheduler: Scheduler | undefined;
-
-  // Define scheduled data fetch callback
   const onDataFetch = async () => {
     try {
       const { year: currentYear, month: currentMonth } = getDataDateComponents();
@@ -511,7 +266,7 @@ async function main() {
     }
   };
 
-  scheduler = new Scheduler(getConfig, db, sendReport, async (types) => {
+  scheduler = new Scheduler(getConfig, db, (type, options) => orchestrator.sendReport(type, options), async (types) => {
     // Combined report: generate all reports and send as one message
     const snapshot = getSnapshot();
     if (!snapshot) return;
@@ -519,7 +274,6 @@ async function main() {
     const currentConfig = getConfig();
 
     // Pre-fetch monthly data if monthly report is in the combined set
-    // On day 1, target previous month (offset=-1) for monthly
     if (types.includes('monthly')) {
       const { year: curYear, month: curMonth } = getDataDateComponents();
       let targetMonth = curMonth - 1;
@@ -533,8 +287,8 @@ async function main() {
     }
 
     const computedMembers = computeMembers(snapshot, currentConfig);
-    const combined = generateCombinedReport(types, snapshot, currentConfig, computedMembers, db);
-    await deliverReport(combined, types.join('+'));
+    const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
+    await orchestrator.deliverReport(combined, types.join('+'));
   }, onDataFetch);
   scheduler.start();
   log.info('Scheduler', `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(',')}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`);
@@ -558,7 +312,7 @@ async function main() {
           if (type === 'monthly') {
             reportOptions.offset = -1;
           }
-          const alerts = await sendReport(type, reportOptions);
+          const alerts = await orchestrator.sendReport(type, reportOptions);
           allCatchUpAlerts.push(...alerts);
         };
 
@@ -567,8 +321,8 @@ async function main() {
           if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
           const currentConfig = getConfig();
           const computedMembers = computeMembers(snapshot, currentConfig);
-          const combined = generateCombinedReport(types, snapshot, currentConfig, computedMembers, db);
-          await deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
+          const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
+          await orchestrator.deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
         });
         log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
 
