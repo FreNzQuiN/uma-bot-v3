@@ -130,7 +130,7 @@ async function dispatchMessage(
   }
 
   recordMessageParsed();
-  log.debug('Dispatch', `Parsed command: /${parsed.command} args=[${parsed.args.join(', ')}] offset=${parsed.offset}`);
+  log.debug('Dispatch', `Parsed command: /${parsed.command} args=[${parsed.args.join(', ').replace(/[\r\n]/g, ' ')}] offset=${parsed.offset}`);
 
   // Determine sender and chat JIDs
   // Use || not ?? — protobuf-decoded messages set participant to "" (empty string)

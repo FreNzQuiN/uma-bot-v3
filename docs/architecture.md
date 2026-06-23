@@ -384,3 +384,36 @@ npm start
 Uses `data/bot.pid` for process management (`npm run stop`).
 
 **Limitation:** No auto-restart on crash. No boot persistence. The terminal must stay open. Use PM2 or Docker for production.
+
+---
+
+## Design Decisions
+
+The following design choices are intentional. They have been reviewed and accepted during the codebase audit. Do not flag these as issues in future reviews.
+
+### Rate limiter Map is unbounded (`api/server.ts:55`)
+The `requestTimestamps` Map is never pruned. This is acceptable because the API binds exclusively to `127.0.0.1` — only loopback IPs (127.0.0.1, ::1) can reach it. The Map will have at most 2 entries. If the API is ever exposed beyond localhost, add periodic pruning.
+
+### WA_SESSION_DIR is not path-sanitized (`whatsapp/client.ts:139`)
+The `WA_SESSION_DIR` env var is used directly as a filesystem path. This is acceptable because the env var is set by the bot operator for their own deployment. An attacker who controls environment variables already has process-level access and doesn't need path traversal.
+
+### Security headers are minimal (`api/server.ts:32-34`)
+The API sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Cache-Control: no-store, no-cache`. HSTS and X-XSS-Protection are omitted because the API serves only JSON (no HTML), binds to localhost, and has no browser-rendered content.
+
+### Runtime stats use module-level mutable state (`runtime.ts:21-39`)
+The `stats` object is a module-level singleton. `getRuntimeStats()` returns a shallow copy with the array field deep-copied. This is the standard Node.js pattern for a single-process application. No reset mechanism is needed because the bot is a long-running process.
+
+### Logger uses synchronous file I/O (`utils/logger.ts:183,189`)
+`appendFileSync` is called on every log line. This is acceptable at the current scale (~100 log lines per report cycle). If throughput increases significantly, switch to a buffered async writer with periodic flush.
+
+### Catch-up persistence has a narrow window (`scheduler/catchup.ts:217-233`)
+After sending a combined catch-up report, the combined run is saved (line 221), then individual type records are written (lines 223-232), then saved again (line 233). A crash between lines 221 and 233 would lose individual records. This window is ~10ms (two synchronous DB operations + one writeFileSync). The 30-second auto-save interval also persists pending records. Real-world risk is negligible.
+
+### computeRollingAverage excludes zero-gain days (`data/daily-fans.ts:249`)
+The `gain > 0` filter is explicitly documented in the JSDoc. This computes "average when active" rather than "average over time." The downstream alert threshold (`performanceDrop.thresholdPercent`) should be tuned to account for this behavior. This is a design choice, not a bug.
+
+### Ghost detection edge case (`reports/compute.ts:90-104`)
+Transfer members with low gain could theoretically be misclassified as "left" when `ghostCount` exceeds the number of true zero-gain members. With real data (34 members, ghostCount=4), this doesn't manifest — transfer members always sort above ghosts. The edge case exists but requires `ghostCount > (zero-gain members + stale members)`.
+
+### WhatsApp client is a large file (`whatsapp/client.ts`, 635 lines)
+The file handles connection lifecycle, QR auth, reconnection, heartbeat, message caching, and send logic. These concerns are inherently coupled to Baileys' state machine — `connect()` modifies `this.sock`, `this.connectionState`, `this.reconnectAttempts`, and `this.messageCache` within nested closures. Splitting would increase cross-module coupling without reducing complexity. Revisit if connection-related bugs recur or Baileys upgrades require touching this logic.

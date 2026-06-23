@@ -336,7 +336,7 @@ export class WhatsAppClient {
           || msg.message?.extendedTextMessage?.text
           || (extMsg?.displayText as string)
           || '';
-        log.debug('WhatsApp', `NORM msg chat=${(msg.key.remoteJid ?? '').replace(/\d+/, '***')} types=[${normTypes}] cmd="${textContent.split(/\s+/)[0].slice(0, 20)}"`);
+        log.debug('WhatsApp', `NORM msg chat=${(msg.key.remoteJid ?? '').replace(/\d+/, '***')} types=[${normTypes}] cmd="${textContent.split(/\s+/)[0].slice(0, 20).replace(/[\r\n]/g, ' ')}"`);
 
         if (!textContent) {
           log.warn('WhatsApp', `Empty content after normalize — raw types were [${rawTypes}], norm types are [${normTypes}]`);

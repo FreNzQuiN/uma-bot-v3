@@ -31,6 +31,7 @@ export function createResponse(
 ): void {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Cache-Control', 'no-store, no-cache');
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
 }
