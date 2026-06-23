@@ -7,6 +7,7 @@
  */
 
 import { generateMonthlyReport } from '../../../src/reports/monthly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getMonthlyGain } from '../../../src/data/daily-fans';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
@@ -25,11 +26,13 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 let loadMonthSnapshotsSpy: jest.SpyInstance;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
   loadMonthSnapshotsSpy = jest.spyOn(
     require('../../../src/data/snapshot'), 'loadMonthSnapshots'
   ).mockReturnValue([]);
@@ -86,7 +89,7 @@ describe('Full monthly report output (offset=0)', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateMonthlyReport(snapshot, config, 0);
+    report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     lines = report.split('\n');
   });
 
@@ -171,7 +174,7 @@ describe('Transfer badges in monthly report', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateMonthlyReport(snapshot, config, 0);
+    report = generateMonthlyReport(snapshot, config, computedMembers, 0);
   });
 
   it('all 6 transfer members have 🔄 badge', () => {
@@ -196,12 +199,12 @@ describe('Transfer badges in monthly report', () => {
 
 describe('Member counts', () => {
   it('summary shows contributor count and total', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('👥 30 kontribusi dari 30 anggota | Total: 347.0M');
   });
 
   it('transfer count is reflected in badge count', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     const transferLines = memberLines.filter((l) => l.includes('🔄'));
     expect(transferLines.length).toBe(6);
@@ -232,7 +235,7 @@ describe('Member counts', () => {
 
 describe('Projected month-end calculation', () => {
   it('projection = (totalGain / 11) * 30 rounded', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     const expectedGains = buildExpectedGains();
     let totalGain = 0;
     for (const g of expectedGains) totalGain += g.gain;
@@ -245,7 +248,7 @@ describe('Projected month-end calculation', () => {
   });
 
   it('projection line uses ~ prefix', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toMatch(/Proyeksi akhir bulan: ~/);
   });
 });
@@ -256,31 +259,31 @@ describe('Projected month-end calculation', () => {
 
 describe('Requirement section', () => {
   it('shows requirement line with formatted monthlyFans', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('*🎯 Requirement: 20.0M/bulan*');
   });
 
   it('shows pass/fail counts with "kurang" (not "gagal")', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toMatch(/✅ \d+ pass \| ❌ \d+ kurang/);
   });
 
   it('only GoldFamily passes 20M requirement', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     // GoldFamily = 27.7M >= 20M, next is RngF = 19.2M < 20M
     expect(report).toContain('✅ 1 pass | ❌ 29 kurang');
   });
 
   it('when monthlyFans = 0, requirement section is not shown', () => {
     const cfg = makeConfig({ monthlyFans: 0 });
-    const report = generateMonthlyReport(snapshot, cfg, 0);
+    const report = generateMonthlyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report).not.toContain('🎯 Requirement');
     expect(report).not.toContain('pass |');
   });
 
   it('when monthlyFans = 10M, more members pass', () => {
     const cfg = makeConfig({ monthlyFans: 10_000_000 });
-    const report = generateMonthlyReport(snapshot, cfg, 0);
+    const report = generateMonthlyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
 
     // Members with monthlyGain >= 10M:
     // GoldFamily: 27.7M, RngF: 19.2M, Aditya: 18.6M, DzFx: 18.2M,
@@ -299,7 +302,7 @@ describe('WhatsApp formatting compliance', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateMonthlyReport(snapshot, config, 0);
+    report = generateMonthlyReport(snapshot, config, computedMembers, 0);
   });
 
   it('has no Markdown # headers', () => {
@@ -339,37 +342,37 @@ describe('WhatsApp formatting compliance', () => {
 
 describe('Header format and metadata', () => {
   it('header always starts with 📅 *Monthly Report —', () => {
-    const report0 = generateMonthlyReport(snapshot, config, 0);
-    const report1 = generateMonthlyReport(snapshot, config, 1);
+    const report0 = generateMonthlyReport(snapshot, config, computedMembers, 0);
+    const report1 = generateMonthlyReport(snapshot, config, computedMembers, 1);
     expect(report0).toMatch(/📅 \*Monthly Report —/);
     expect(report1).toMatch(/📅 \*Monthly Report —/);
   });
 
   it('header shows "Juni 2026" format (month+year)', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('📅 *Monthly Report — Juni 2026*');
   });
 
   it('club name with rank in report', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Hol＿Horse');
     expect(report).toContain('A+');
     expect(report).toContain('#431');
   });
 
   it('data line with date', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Periode data: 11 Juni 2026, 22:00 WIB');
   });
 
   it('summary line shows formatted total', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toMatch(/👥 \d+ kontribusi dari \d+ anggota \| Total: /);
   });
 
   it('formatDateWIB formats correctly', () => {
     // Header uses month+year format
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Juni 2026');
   });
 });
@@ -380,18 +383,18 @@ describe('Header format and metadata', () => {
 
 describe('Report size within WhatsApp limits', () => {
   it('monthly report (offset=0) does not exceed 4096 chars', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
   it('monthly report (offset=1) does not exceed 4096 chars', () => {
-    const report = generateMonthlyReport(snapshot, config, 1);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 1);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
   it('monthly report with 10M requirement does not exceed 4096 chars', () => {
     const cfg = makeConfig({ monthlyFans: 10_000_000 });
-    const report = generateMonthlyReport(snapshot, cfg, 0);
+    const report = generateMonthlyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 });
@@ -402,18 +405,18 @@ describe('Report size within WhatsApp limits', () => {
 
 describe('Special characters in trainer names', () => {
   it('Dyy\u201D with right double quotation mark renders correctly', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     // The name uses U+201D (right double quotation mark), not ASCII "
     expect(report).toContain('Dyy\u201D');
   });
 
   it('Hol＿Horse with full-width underscore renders correctly', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Hol＿Horse');
   });
 
   it('Suzuka Kopling with space renders correctly', () => {
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Suzuka Kopling');
   });
 

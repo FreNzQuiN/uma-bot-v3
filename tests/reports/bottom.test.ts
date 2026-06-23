@@ -46,7 +46,7 @@ describe('Bottom report: full output and basic structure', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateBottomReport(snapshot, config);
+    report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
   });
 
   it('prints the full report for visual verification', () => {
@@ -116,7 +116,7 @@ describe('Bottom report: member classification', () => {
   });
 
   it('left members excluded from bottom list', () => {
-    const report = generateBottomReport(snapshot, config);
+    const report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     for (const name of STALE_NAMES) {
       for (const line of memberLines) {
@@ -126,7 +126,7 @@ describe('Bottom report: member classification', () => {
   });
 
   it('no left section in bottom report (left only in /members)', () => {
-    const report = generateBottomReport(snapshot, config);
+    const report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).not.toContain('🚪 Keluar dari klub:');
   });
 });
@@ -137,7 +137,7 @@ describe('Bottom report: member classification', () => {
 
 describe('Bottom report: sort order', () => {
   it('members sorted by monthlyGain ascending (lowest first)', () => {
-    const report = generateBottomReport(snapshot, config);
+    const report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
 
     const members = computeMembers(snapshot, config);
@@ -176,7 +176,7 @@ describe('Bottom report: individual member calculations', () => {
   const daysInMonth = 30;
 
   beforeAll(() => {
-    report = generateBottomReport(snapshot, config);
+    report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
   });
 
@@ -280,13 +280,13 @@ describe('Bottom report: individual member calculations', () => {
 
 describe('Bottom report: transfer badges', () => {
   it('transfer members in bottom list show badge', () => {
-    const report = generateBottomReport(snapshot, config);
+    const report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('*TheTengOne* \ud83d\udd04');
     expect(report).toContain('*VitoHoow* \ud83d\udd04');
   });
 
   it('non-transfer members have no badge', () => {
-    const report = generateBottomReport(snapshot, config);
+    const report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
       if (!line.includes('TheTengOne') && !line.includes('VitoHoow')) {
@@ -328,7 +328,7 @@ describe('Bottom report: WhatsApp formatting', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateBottomReport(snapshot, config);
+    report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
   });
 
   it('no Markdown bold (**text**)', () => {
@@ -362,7 +362,7 @@ describe('Bottom report: WhatsApp formatting', () => {
 describe('Bottom report: edge cases', () => {
   it('empty members array returns warning', () => {
     const emptySnap: Snapshot = { ...snapshot, members: [] };
-    const result = generateBottomReport(emptySnap, config);
+    const result = generateBottomReport(emptySnap, config, computeMembers(emptySnap, config));
     expect(result).toBe(
       'ℹ️ *Perlu Perhatian*\nData anggota belum tersedia untuk analisis.'
     );
@@ -372,7 +372,7 @@ describe('Bottom report: edge cases', () => {
     const cfg = makeConfig({
       requirements: { monthlyFans: 1, weeklyFans: 0, weeksInMonthEquivalent: 4.2857 },
     });
-    const report = generateBottomReport(snapshot, cfg);
+    const report = generateBottomReport(snapshot, cfg, computeMembers(snapshot, cfg));
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
       expect(line).toContain('\u2705');
@@ -385,7 +385,7 @@ describe('Bottom report: edge cases', () => {
     const cfg = makeConfig({
       requirements: { monthlyFans: 0, weeklyFans: 0, weeksInMonthEquivalent: 4.2857 },
     });
-    const report = generateBottomReport(snapshot, cfg);
+    const report = generateBottomReport(snapshot, cfg, computeMembers(snapshot, cfg));
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
       expect(line).toContain('\u2705');
@@ -396,14 +396,14 @@ describe('Bottom report: edge cases', () => {
     const cfg = makeConfig({
       requirements: { monthlyFans: 25000000, weeklyFans: 5000000, weeksInMonthEquivalent: 4.2857 },
     });
-    const report = generateBottomReport(snapshot, cfg);
+    const report = generateBottomReport(snapshot, cfg, computeMembers(snapshot, cfg));
     expect(report).toContain('Target bulanan: 25.0M');
     expect(report).toContain('Target mingguan: 5.0M');
   });
 
   it('single member snapshot', () => {
     const singleSnap: Snapshot = { ...snapshot, members: [snapshot.members[0]] };
-    const report = generateBottomReport(singleSnap, config);
+    const report = generateBottomReport(singleSnap, config, computeMembers(singleSnap, config));
     expect(report).toContain('Hol＿Horse');
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     expect(memberLines.length).toBe(1);
@@ -417,7 +417,7 @@ describe('Bottom report: edge cases', () => {
         (m) => m.trainer_name === 'Yukil' || m.trainer_name === 'Amanda'
       ),
     };
-    const report = generateBottomReport(limitedSnap, config);
+    const report = generateBottomReport(limitedSnap, config, computeMembers(limitedSnap, config));
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     expect(memberLines.length).toBe(2);
     expect(memberLines[0]).toContain('Yukil');
@@ -428,7 +428,7 @@ describe('Bottom report: edge cases', () => {
     const cfg = makeConfig({
       requirements: { monthlyFans: 1, weeklyFans: 0, weeksInMonthEquivalent: 4.2857 },
     });
-    const report = generateBottomReport(snapshot, cfg);
+    const report = generateBottomReport(snapshot, cfg, computeMembers(snapshot, cfg));
     const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
       expect(line).not.toContain('\u2192');
@@ -437,7 +437,7 @@ describe('Bottom report: edge cases', () => {
 
   it('uses source data day (11), not an offset', () => {
     expect(getDataDayFromSnapshot(snapshot)).toBe(11);
-    const report = generateBottomReport(snapshot, config);
+    const report = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Perlu Perhatian');
   });
 

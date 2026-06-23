@@ -82,7 +82,7 @@ function makeCumulativeFans(startValue: number, dailyGain: number, activeDays: n
 describe('generateAnalyzeReport — valid member found', () => {
   it('produces analysis with member name in header', () => {
     // Arrange & Act
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Assert
     expect(report).toContain('🔍');
@@ -91,7 +91,7 @@ describe('generateAnalyzeReport — valid member found', () => {
   });
 
   it('contains all expected metric sections', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).toContain('*Gain*');
     expect(report).toContain('*Aktivitas*');
@@ -100,7 +100,7 @@ describe('generateAnalyzeReport — valid member found', () => {
   });
 
   it('shows gain metrics with proper labels', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).toMatch(/• Monthly: [\d.,]+[KMB]?/);
     expect(report).toMatch(/• Daily terakhir: [\d.,]+[KMB]?/);
@@ -109,7 +109,7 @@ describe('generateAnalyzeReport — valid member found', () => {
   });
 
   it('shows activity metrics', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).toMatch(/• Hari aktif: \d+\/\d+/);
     expect(report).toMatch(/• Konsistensi: \d+%/);
@@ -117,14 +117,14 @@ describe('generateAnalyzeReport — valid member found', () => {
   });
 
   it('shows weekly breakdown', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Should contain W1, W2, etc. with values
     expect(report).toMatch(/• W\d+:/);
   });
 
   it('shows projection and requirement status', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).toMatch(/• Target: [\d.,]+[KMB]?/);
     expect(report).toMatch(/• Status: (✅|❌)/);
@@ -132,7 +132,7 @@ describe('generateAnalyzeReport — valid member found', () => {
   });
 
   it('includes sync footer', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).toContain('⸻');
     expect(report).toMatch(/Terakhir sync:/);
@@ -146,7 +146,7 @@ describe('generateAnalyzeReport — valid member found', () => {
 describe('generateAnalyzeReport — member not found', () => {
   it('returns error message when member does not exist', () => {
     // Arrange & Act
-    const report = generateAnalyzeReport(snapshot, config, 'ZZZZNOTEXIST');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'ZZZZNOTEXIST');
 
     // Assert
     expect(report).toContain('❌');
@@ -158,14 +158,14 @@ describe('generateAnalyzeReport — member not found', () => {
   });
 
   it('error message uses Indonesian wording', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'GhostPlayer');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'GhostPlayer');
 
     expect(report).toMatch(/tidak ditemukan/);
     expect(report).toMatch(/Cek ejaan nama/);
   });
 
   it('error message includes the queried name', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'PhantomX');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'PhantomX');
 
     expect(report).toContain('PhantomX');
   });
@@ -178,20 +178,20 @@ describe('generateAnalyzeReport — member not found', () => {
 describe('generateAnalyzeReport — transfer members', () => {
   it('shows transfer info for transfer member', () => {
     // Zero transferred from Advent
-    const report = generateAnalyzeReport(snapshot, config, 'Zero');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Zero');
 
     expect(report).toContain('🔄');
     expect(report).toContain('Transfer dari Advent');
   });
 
   it('shows transfer badge in title for transfer member', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Zero');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Zero');
 
     expect(report).toMatch(/Analyze: Zero 🔄/);
   });
 
   it('does not show transfer line for non-transfer member', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Ryu is not a transfer — no "Transfer dari" line
     expect(report).not.toContain('Transfer dari');
@@ -199,7 +199,7 @@ describe('generateAnalyzeReport — transfer members', () => {
 
   it('shows correct previous circle name for different transfers', () => {
     // TheTengOne transferred from Garuda3
-    const report = generateAnalyzeReport(snapshot, config, 'TheTengOne');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'TheTengOne');
 
     expect(report).toContain('Transfer dari Garuda3');
   });
@@ -222,7 +222,7 @@ describe('generateAnalyzeReport — trend detection', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'RisingStar');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'RisingStar');
 
     // Assert — trend should be upward
     expect(report).toMatch(/Trend: 📈 naik/);
@@ -240,7 +240,7 @@ describe('generateAnalyzeReport — trend detection', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'FallingStar');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'FallingStar');
 
     // Assert — trend should be downward
     expect(report).toMatch(/Trend: 📉 turun/);
@@ -253,7 +253,7 @@ describe('generateAnalyzeReport — trend detection', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'SteadyEddie');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'SteadyEddie');
 
     // Assert — trend should be stable
     expect(report).toMatch(/Trend: ➡️ stabil/);
@@ -272,7 +272,7 @@ describe('generateAnalyzeReport — consistency', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'PerfectPlayer');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'PerfectPlayer');
 
     // Assert
     expect(report).toContain('Konsistensi: 100%');
@@ -285,7 +285,7 @@ describe('generateAnalyzeReport — consistency', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'LazyPlayer');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'LazyPlayer');
 
     // Assert
     expect(report).toContain('Konsistensi: 0%');
@@ -311,7 +311,7 @@ describe('generateAnalyzeReport — consistency', () => {
     const customSnapshot = buildSnapshotWithMembers([testMember, helperMember]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'PartTimer');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'PartTimer');
 
     // Assert — 5 active out of 10 data days = 50%
     expect(report).toContain('Konsistensi: 50%');
@@ -330,7 +330,7 @@ describe('generateAnalyzeReport — requirement status', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'Overachiever');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'Overachiever');
 
     // Assert — should show ✅ since monthlyGain >> monthlyFans requirement
     expect(report).toMatch(/Status: ✅/);
@@ -343,7 +343,7 @@ describe('generateAnalyzeReport — requirement status', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'UnderPerformer');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'UnderPerformer');
 
     // Assert — should show ❌ since monthlyGain is 0
     expect(report).toMatch(/Status: ❌/);
@@ -363,7 +363,7 @@ describe('generateAnalyzeReport — projection', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'Pacer');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'Pacer');
 
     // Assert — projection should be shown
     expect(report).toMatch(/Proyeksi akhir bulan: ~/);
@@ -378,7 +378,7 @@ describe('generateAnalyzeReport — projection', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'ZeroData');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'ZeroData');
 
     // Assert — projection should show 0
     expect(report).toContain('Proyeksi akhir bulan: ~0');
@@ -391,7 +391,7 @@ describe('generateAnalyzeReport — projection', () => {
 
 describe('generateAnalyzeReport — WhatsApp formatting', () => {
   it('does not contain Markdown syntax (##, ```, ---)', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).not.toMatch(/^#{1,6}\s/m);
     expect(report).not.toContain('```');
@@ -399,7 +399,7 @@ describe('generateAnalyzeReport — WhatsApp formatting', () => {
   });
 
   it('uses WhatsApp bold syntax (*text*) for emphasis', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).toMatch(/\*Gain\*/);
     expect(report).toMatch(/\*Aktivitas\*/);
@@ -408,19 +408,19 @@ describe('generateAnalyzeReport — WhatsApp formatting', () => {
   });
 
   it('uses bullet points with • character', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report).toContain('•');
   });
 
   it('is under 4096 characters (WhatsApp message limit)', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
   it('report length is reasonable for an analysis (at least 300 chars)', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report.length).toBeGreaterThan(300);
   });
@@ -432,7 +432,7 @@ describe('generateAnalyzeReport — WhatsApp formatting', () => {
 
 describe('generateAnalyzeReport — numerical accuracy', () => {
   it('formats large numbers with K/M/B suffixes', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Members have gains in millions — should show as M
     expect(report).toMatch(/[\d.]+M/);
@@ -445,7 +445,7 @@ describe('generateAnalyzeReport — numerical accuracy', () => {
     expect(ryu).toBeDefined();
 
     // Act
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Assert
     const { formatNumber } = require('../../src/reports/format');
@@ -467,7 +467,7 @@ describe('generateAnalyzeReport — numerical accuracy', () => {
     );
 
     // Act
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Assert — should contain "Hari aktif: X/Y"
     expect(report).toContain(`Hari aktif: ${expectedActive}/${latestDataDay}`);
@@ -486,7 +486,7 @@ describe('generateAnalyzeReport — edge cases', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'GhostMember');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'GhostMember');
 
     // Assert — should produce a valid report (not crash)
     expect(report).toContain('🔍');
@@ -505,7 +505,7 @@ describe('generateAnalyzeReport — edge cases', () => {
     const customSnapshot = buildSnapshotWithMembers([member]);
 
     // Act
-    const report = generateAnalyzeReport(customSnapshot, config, 'SoloPlayer');
+    const report = generateAnalyzeReport(customSnapshot, config, computeMembers(customSnapshot, config), 'SoloPlayer');
 
     // Assert
     expect(report).toContain('🔍');
@@ -515,7 +515,7 @@ describe('generateAnalyzeReport — edge cases', () => {
 
   it('handles members with special characters in names', () => {
     // DOA IBU has a space, Suzuka Kopling has a space
-    const report = generateAnalyzeReport(snapshot, config, 'DOA IBU');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'DOA IBU');
 
     expect(report).toContain('🔍');
     expect(report).toContain('DOA IBU');
@@ -524,15 +524,15 @@ describe('generateAnalyzeReport — edge cases', () => {
   });
 
   it('report is deterministic (same inputs → same output)', () => {
-    const report1 = generateAnalyzeReport(snapshot, config, 'Ryu');
-    const report2 = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report1 = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
+    const report2 = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     expect(report1).toBe(report2);
   });
 
   it('handles member with unicode characters in name', () => {
     // Dyy\u201D has a Unicode right double quotation mark (U+201D)
-    const report = generateAnalyzeReport(snapshot, config, 'Dyy\u201D');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Dyy\u201D');
 
     expect(report).toContain('🔍');
     expect(report).toContain('*Gain*');
@@ -546,7 +546,7 @@ describe('generateAnalyzeReport — edge cases', () => {
 
 describe('generateAnalyzeReport — weekly gains', () => {
   it('shows all 5 weeks in the weekly section', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Should contain W1 through W5
     expect(report).toMatch(/W1: [\d.,]+[KMB]?/);
@@ -557,7 +557,7 @@ describe('generateAnalyzeReport — weekly gains', () => {
   });
 
   it('weekly gains are separated by pipe character', () => {
-    const report = generateAnalyzeReport(snapshot, config, 'Ryu');
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Weekly gains are joined with " | "
     expect(report).toMatch(/W\d+: [\d.,]+[KMB]? \| W\d+:/);

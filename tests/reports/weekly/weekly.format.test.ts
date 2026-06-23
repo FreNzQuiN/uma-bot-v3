@@ -7,6 +7,7 @@
  */
 
 import { generateWeeklyReport } from '../../../src/reports/weekly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { formatNumber } from '../../../src/reports/format';
 import type { Snapshot, BotConfig } from '../../../src/types';
@@ -24,10 +25,12 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -57,7 +60,7 @@ describe('Full weekly report output (offset=0, W2)', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateWeeklyReport(snapshot, config, 0);
+    report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     lines = report.split('\n');
   });
 
@@ -145,7 +148,7 @@ describe('Full weekly report output (offset=0, W2)', () => {
 
   it('stale data warning is present (data is from June 11, running June 13)', () => {
     mockCurrentDate(2026, 6, 13);
-    const freshReport = generateWeeklyReport(snapshot, config, 0);
+    const freshReport = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(freshReport).toContain('⚠️ Data klub mungkin tidak terbaru (update terakhir: 11 Juni 2026)');
     restoreDateMocks();
   });
@@ -159,7 +162,7 @@ describe('Transfer badges in weekly report', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateWeeklyReport(snapshot, config, 0);
+    report = generateWeeklyReport(snapshot, config, computedMembers, 0);
   });
 
   it('all 6 transfer members have 🔄 badge', () => {
@@ -187,7 +190,7 @@ describe('Offset=1 shows W1 (days 1-7)', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateWeeklyReport(snapshot, config, 1);
+    report = generateWeeklyReport(snapshot, config, computedMembers, 1);
     lines = report.split('\n');
   });
 
@@ -238,7 +241,7 @@ describe('WhatsApp formatting compliance', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateWeeklyReport(snapshot, config, 0);
+    report = generateWeeklyReport(snapshot, config, computedMembers, 0);
   });
 
   it('has no Markdown # headers', () => {
@@ -275,33 +278,33 @@ describe('WhatsApp formatting compliance', () => {
 
 describe('Header format and metadata', () => {
   it('header always starts with 📈 *Weekly Report — (bold)', () => {
-    const report0 = generateWeeklyReport(snapshot, config, 0);
-    const report1 = generateWeeklyReport(snapshot, config, 1);
+    const report0 = generateWeeklyReport(snapshot, config, computedMembers, 0);
+    const report1 = generateWeeklyReport(snapshot, config, computedMembers, 1);
     expect(report0).toMatch(/📈 \*Weekly Report —/);
     expect(report1).toMatch(/📈 \*Weekly Report —/);
   });
 
   it('club name, tier, and rank in report', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Hol＿Horse');
     expect(report).toContain('A+');
     expect(report).toContain('#431');
   });
 
   it('data line with date', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Periode data: 11 Juni 2026, 22:00 WIB');
   });
 
   it('period line shows correct day range for each week', () => {
-    const report0 = generateWeeklyReport(snapshot, config, 0); // W2
-    const report1 = generateWeeklyReport(snapshot, config, 1); // W1
+    const report0 = generateWeeklyReport(snapshot, config, computedMembers, 0); // W2
+    const report1 = generateWeeklyReport(snapshot, config, computedMembers, 1); // W1
     expect(report0).toContain('Periode: Hari 8-14');
     expect(report1).toContain('Periode: Hari 1-7');
   });
 
   it('contributor summary line shows formatted total', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).toMatch(/👥 \d+ kontribusi dari \d+ anggota \| Total: [\d.]+[KMB]/);
   });
 });
@@ -312,18 +315,18 @@ describe('Header format and metadata', () => {
 
 describe('Report size within WhatsApp limits', () => {
   it('weekly report (offset=0) does not exceed 4096 chars', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
   it('weekly report (offset=1) does not exceed 4096 chars', () => {
-    const report = generateWeeklyReport(snapshot, config, 1);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 1);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
   it('weekly report with below-requirement does not exceed 4096 chars', () => {
     const cfg = makeConfig({ weeklyFans: 5_000_000 });
-    const report = generateWeeklyReport(snapshot, cfg, 0);
+    const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 });
@@ -334,18 +337,18 @@ describe('Report size within WhatsApp limits', () => {
 
 describe('Special characters in trainer names', () => {
   it('Dyy\u201D with right double quotation mark renders correctly', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     // The name uses U+201D (right double quotation mark), not ASCII "
     expect(report).toContain('Dyy\u201D');
   });
 
   it('Hol＿Horse with full-width underscore renders correctly', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Hol＿Horse');
   });
 
   it('Suzuka Kopling with space renders correctly', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('Suzuka Kopling');
   });
 
@@ -366,7 +369,7 @@ describe('Line-by-line verification of W2 report', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateWeeklyReport(snapshot, config, 0);
+    report = generateWeeklyReport(snapshot, config, computedMembers, 0);
   });
 
   it('report contains bold header', () => {

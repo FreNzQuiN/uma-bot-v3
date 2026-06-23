@@ -1,3 +1,4 @@
+import { computeMembers } from '../../src/reports/compute';
 import { detectAlerts, deduplicateAlerts, formatAlerts, aggregateAlerts } from '../../src/alerts/alerts';
 import { Database } from '../../src/db/database';
 import { getDefaultConfig } from '../../src/config';
@@ -28,13 +29,13 @@ function makeConfig(overrides?: Partial<BotConfig>): BotConfig {
 describe('detectAlerts', () => {
   it('returns empty when alerts disabled', () => {
     const config = makeConfig({ alerts: { ...getDefaultConfig().alerts, enabled: false } as BotConfig['alerts'] });
-    const alerts = detectAlerts(SNAPSHOT, config, db);
+    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     expect(alerts).toHaveLength(0);
   });
 
   it('detects no performance drops when all members are on track', () => {
     const config = makeConfig();
-    const alerts = detectAlerts(SNAPSHOT, config, db);
+    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     // With the real snapshot, some members may trigger alerts
     // Just verify it returns an array of Alert objects
     expect(Array.isArray(alerts)).toBe(true);
@@ -48,7 +49,7 @@ describe('detectAlerts', () => {
 
   it('detects new transfer members', () => {
     const config = makeConfig();
-    const alerts = detectAlerts(SNAPSHOT, config, db);
+    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
     // Snapshot has transfer members: Zero, TheTengOne, Sairen, VitoHoow, Ceciria, Falkrum
     expect(transferAlerts.length).toBeGreaterThan(0);
@@ -62,7 +63,7 @@ describe('detectAlerts', () => {
 
   it('deduplicates alerts via DB', () => {
     const config = makeConfig();
-    const alerts1 = detectAlerts(SNAPSHOT, config, db);
+    const alerts1 = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     // Record all alerts as sent
     for (const alert of alerts1) {
       db.recordAlert({
@@ -87,21 +88,21 @@ describe('detectAlerts', () => {
     }
 
     // Second detection should return fewer (all deduped)
-    const alerts2 = detectAlerts(SNAPSHOT, config, db);
+    const alerts2 = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     expect(alerts2.length).toBe(0);
   });
 
   it('detects demotion risk when tier data shows HIGH risk', () => {
     const config = makeConfig();
     // The snapshot may or may not be HIGH risk — just verify no crash
-    const alerts = detectAlerts(SNAPSHOT, config, db);
+    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     const demotionAlerts = alerts.filter((a) => a.type === 'demotion_risk');
     expect(Array.isArray(demotionAlerts)).toBe(true);
   });
 
   it('does not trigger performance drop for inactive members', () => {
     const config = makeConfig();
-    const alerts = detectAlerts(SNAPSHOT, config, db);
+    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     const perfAlerts = alerts.filter((a) => a.type === 'performance_drop');
     // Verify no stale/inactive member appears in performance alerts
     for (const alert of perfAlerts) {
@@ -124,7 +125,7 @@ describe('detectAlerts', () => {
         defaultRecipients: 'admin' as const,
       },
     });
-    const alerts = detectAlerts(SNAPSHOT, config, db);
+    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     expect(alerts).toHaveLength(0);
   });
 });
@@ -402,7 +403,7 @@ describe('quiet hours edge cases', () => {
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: transfer alert should be suppressed
     expect(alerts).toHaveLength(0);
@@ -415,7 +416,7 @@ describe('quiet hours edge cases', () => {
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: alerts should NOT be suppressed
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
@@ -429,7 +430,7 @@ describe('quiet hours edge cases', () => {
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert
     expect(alerts).toHaveLength(0);
@@ -442,7 +443,7 @@ describe('quiet hours edge cases', () => {
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: alerts should NOT be suppressed (hour 06 is NOT quiet, end is exclusive)
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
@@ -456,7 +457,7 @@ describe('quiet hours edge cases', () => {
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert
     expect(alerts).toHaveLength(0);
@@ -469,7 +470,7 @@ describe('quiet hours edge cases', () => {
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: 22 is before 23, so NOT quiet
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
@@ -483,9 +484,9 @@ describe('quiet hours edge cases', () => {
     const snapshot = makeSnapshotWithTransfer();
 
     // Act & Assert: should not throw (log.info is called internally)
-    expect(() => detectAlerts(snapshot, config, db)).not.toThrow();
+    expect(() => detectAlerts(computeMembers(snapshot, config), snapshot, config, db)).not.toThrow();
     // The function returns empty during quiet hours
-    expect(detectAlerts(snapshot, config, db)).toHaveLength(0);
+    expect(detectAlerts(computeMembers(snapshot, config), snapshot, config, db)).toHaveLength(0);
   });
 });
 
@@ -631,7 +632,7 @@ describe('detection edge cases', () => {
     const snapshot = makeEmptySnapshot();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: no members → no performance_drop, no streak_break, no transfer
     expect(alerts).toHaveLength(0);
@@ -643,7 +644,7 @@ describe('detection edge cases', () => {
     const snapshot = makeSingleMemberSnapshot();
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: should return an array (may or may not have alerts depending on data)
     expect(Array.isArray(alerts)).toBe(true);
@@ -678,7 +679,7 @@ describe('detection edge cases', () => {
     const snapshot = makeAllZeroFansSnapshot(3);
 
     // Act
-    const alerts = detectAlerts(snapshot, config, db);
+    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: each member should trigger a performance_drop
     const perfAlerts = alerts.filter((a) => a.type === 'performance_drop');

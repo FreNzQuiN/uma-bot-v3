@@ -7,6 +7,7 @@
 
 import { Snapshot, BotConfig } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
+import { computeMembers } from '../../src/reports/compute';
 import { generateTierReport } from '../../src/reports/tier';
 import { loadRealSnapshot, WHATSAPP_MAX_LENGTH } from '../_helpers';
 
@@ -21,7 +22,7 @@ describe('E2E: Tier Report', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateTierReport(snapshot, config);
+    report = generateTierReport(snapshot, config, computeMembers(snapshot, config));
   });
 
   it('starts with Tier Intelligence header', () => {

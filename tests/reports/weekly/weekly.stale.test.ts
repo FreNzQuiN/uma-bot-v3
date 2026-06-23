@@ -6,6 +6,7 @@
  */
 
 import { generateWeeklyReport } from '../../../src/reports/weekly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
@@ -20,10 +21,12 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -37,27 +40,27 @@ describe('Stale data warning in weekly report', () => {
 
   it('shows stale warning when snapshot is stale (day 11, today June 13)', () => {
     mockCurrentDate(2026, 6, 13);
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     expect(report).toContain('update terakhir: 11 Juni 2026');
   });
 
   it('does NOT show stale warning when snapshot is fresh (day 11, today June 11)', () => {
     mockCurrentDate(2026, 6, 11);
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 
   it('does NOT show stale warning when snapshot is 1 day old (day 11, today June 12)', () => {
     mockCurrentDate(2026, 6, 12);
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 
   it('stale warning references snapshot date, not offset date', () => {
     mockCurrentDate(2026, 6, 13);
-    const report0 = generateWeeklyReport(snapshot, config, 0);
-    const report1 = generateWeeklyReport(snapshot, config, 1);
+    const report0 = generateWeeklyReport(snapshot, config, computedMembers, 0);
+    const report1 = generateWeeklyReport(snapshot, config, computedMembers, 1);
     expect(report0).toContain('update terakhir: 11 Juni 2026');
     expect(report1).toContain('update terakhir: 11 Juni 2026');
   });
@@ -72,7 +75,7 @@ describe('Stale data warning in weekly report', () => {
         daily_fans: m.daily_fans.map((v, i) => (i < 28 ? v : 0)),
       })),
     };
-    const report = generateWeeklyReport(maySnapshot, config, 0);
+    const report = generateWeeklyReport(maySnapshot, config, computeMembers(maySnapshot, config), 0);
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 });

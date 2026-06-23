@@ -6,6 +6,7 @@
  */
 
 import { generateWeeklyReport } from '../../../src/reports/weekly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getWeeklyGain } from '../../../src/data/daily-fans';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
@@ -23,10 +24,12 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -241,7 +244,7 @@ describe('All 30 W2 contributors verified against raw data', () => {
   let memberLines: string[];
 
   beforeAll(() => {
-    report = generateWeeklyReport(snapshot, config, 0);
+    report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
   });
 

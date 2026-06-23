@@ -69,7 +69,7 @@ function makeSingleMemberSnapshot(): Snapshot {
 
 describe('Stats report full output', () => {
   it('prints the full report for visual inspection', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report.length).toBeGreaterThan(0);
   });
 });
@@ -155,7 +155,7 @@ describe('Contributing member filter', () => {
 
 describe('Total monthly gain', () => {
   it('total = 347,022,758', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Total gain bulanan: 347.0M');
 
     const members = computeMembers(snapshot, config);
@@ -185,7 +185,7 @@ describe('Average monthly gain', () => {
     expect(expected).toBe(11567425);
     expect(formatNumber(expected)).toBe('11.6M');
 
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Gain rata-rata bulanan: 11.6M');
   });
 });
@@ -211,7 +211,7 @@ describe('Median monthly gain', () => {
     expect(median).toBe(9683217);
     expect(formatNumber(median)).toBe('9.7M');
 
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Gain median bulanan: 9.7M');
   });
 });
@@ -233,7 +233,7 @@ describe('Average daily gain', () => {
     expect(avg).toBe(1076248);
     expect(formatNumber(avg)).toBe('1.1M');
 
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Gain rata-rata harian: 1.1M');
   });
 });
@@ -255,7 +255,7 @@ describe('Average active days', () => {
     expect(sum).toBe(278);
     expect(avg).toBe(9);
 
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Rata-rata hari aktif: 9 hari');
   });
 
@@ -273,7 +273,7 @@ describe('Average active days', () => {
 
 describe('Zero gain today', () => {
   it('count = 3 (naku, jgd, Falkrum)', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Zero gain hari ini: 3 orang');
 
     const members = computeMembers(snapshot, config);
@@ -314,7 +314,7 @@ describe('Zero gain today', () => {
 
 describe('Top member (active only)', () => {
   it('top = GoldFamily — 27.7M', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Top: GoldFamily — 27.7M');
 
     const members = computeMembers(snapshot, config);
@@ -336,7 +336,7 @@ describe('Top member (active only)', () => {
 
 describe('Lowest active member', () => {
   it('lowest = Yukil — 4.6M', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Lowest aktif: Yukil — 4.6M');
 
     const members = computeMembers(snapshot, config);
@@ -373,7 +373,7 @@ describe('Projection', () => {
     expect(projected).toBe(946425704);
     expect(formatNumber(projected)).toBe('946.4M');
 
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Proyeksi akhir bulan: ~946.4M');
   });
 });
@@ -392,12 +392,12 @@ describe('Tier projection', () => {
     expect(daysLeft).toBe(19);
     expect(daysToPromote).toBeLessThanOrEqual(daysLeft);
 
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Promosi: kemungkinan besar jika pace bertahan');
   });
 
   it('tier name is A+ for club_rank=8', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('A+');
   });
 });
@@ -408,7 +408,7 @@ describe('Tier projection', () => {
 
 describe('Requirement pass rate', () => {
   it('pass rate = 3% (1/30) with default req=20M', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Requirement pass rate: 3% (1/30)');
   });
 
@@ -425,7 +425,7 @@ describe('Requirement pass rate', () => {
   });
 
   it('pass rate uses contributing.length as denominator', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('(1/30)');
   });
 });
@@ -436,7 +436,7 @@ describe('Requirement pass rate', () => {
 
 describe('Status line adds up to total', () => {
   it('Keluar + Transfer = Total anggota (Aktif includes transfers)', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     const aktifMatch = report.match(/Aktif: (\d+)/);
     const keluarMatch = report.match(/Keluar: (\d+)/);
     const transferMatch = report.match(/Transfer: (\d+)/);
@@ -467,14 +467,14 @@ describe('Status line adds up to total', () => {
 
 describe('Club info in report', () => {
   it('shows circle name, tier, and date', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Hol＿Horse');
     expect(report).toContain('A+');
     expect(report).toContain('11 Juni 2026');
   });
 
   it('shows promotion and demotion gaps', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Promosi: 349.2M | Degradasi: 21.8M');
   });
 });
@@ -485,12 +485,12 @@ describe('Club info in report', () => {
 
 describe('WhatsApp formatting compliance', () => {
   it('uses no Markdown bold (**)', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).not.toMatch(/\*\*[^*]+\*\*/);
   });
 
   it('has no Markdown headers (#)', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     const lines = report.split('\n');
     for (const line of lines) {
       expect(line).not.toMatch(/^#{1,6}\s/);
@@ -498,7 +498,7 @@ describe('WhatsApp formatting compliance', () => {
   });
 
   it('uses emoji prefixes for sections', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('📊');
     expect(report).toContain('📈');
     expect(report).toContain('📅');
@@ -508,13 +508,13 @@ describe('WhatsApp formatting compliance', () => {
   });
 
   it('uses Indonesian month names', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Juni');
     expect(report).not.toContain('June');
   });
 
   it('uses Indonesian labels', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('Rata-rata');
     expect(report).toContain('hari');
     expect(report).toContain('orang');
@@ -529,7 +529,7 @@ describe('WhatsApp formatting compliance', () => {
 describe('Empty snapshot edge case', () => {
   it('returns warning when members array is empty', () => {
     const emptySnapshot = makeEmptySnapshot(snapshot);
-    const result = generateStatsReport(emptySnapshot, config);
+    const result = generateStatsReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
     expect(result).toBe('ℹ️ *Stats*\nData statistik belum tersedia.');
   });
 });
@@ -541,7 +541,7 @@ describe('Empty snapshot edge case', () => {
 describe('All-zero gains edge case', () => {
   it('handles all-zero daily_fans gracefully', () => {
     const allZero = makeAllZeroSnapshot();
-    const report = generateStatsReport(allZero, config);
+    const report = generateStatsReport(allZero, config, computeMembers(allZero, config));
 
     expect(report).toContain('📊 *Stats Overview*');
     expect(report).toContain('Total gain bulanan: 0');
@@ -564,7 +564,7 @@ describe('All-zero gains edge case', () => {
 describe('Single member edge case', () => {
   it('handles single member snapshot', () => {
     const singleMember = makeSingleMemberSnapshot();
-    const report = generateStatsReport(singleMember, config);
+    const report = generateStatsReport(singleMember, config, computeMembers(singleMember, config));
 
     expect(report).toContain('📊 *Stats Overview*');
     expect(report).toContain('Total anggota: 1');
@@ -582,26 +582,26 @@ describe('Stale data warning', () => {
 
   it('shows stale warning when snapshot is 2+ days old', () => {
     mockCurrentDate(2026, 6, 13); // today is June 13, data is from June 11
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     expect(report).toContain('update terakhir: 11 Juni 2026');
   });
 
   it('shows NO stale warning when snapshot is fresh (same day)', () => {
     mockCurrentDate(2026, 6, 11); // today is June 11, data is from June 11
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 
   it('shows NO stale warning when snapshot is 1 day old', () => {
     mockCurrentDate(2026, 6, 12); // today is June 12, data is from June 11
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 
   it('stale warning uses Indonesian date format', () => {
     mockCurrentDate(2026, 6, 13);
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toMatch(/update terakhir: \d+ Juni 2026/);
   });
 
@@ -615,7 +615,7 @@ describe('Stale data warning', () => {
         daily_fans: m.daily_fans.map((v, i) => (i < 28 ? v : 0)),
       })),
     };
-    const report = generateStatsReport(maySnapshot, config);
+    const report = generateStatsReport(maySnapshot, config, computeMembers(maySnapshot, config));
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 });
@@ -629,7 +629,7 @@ describe('Output line structure', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateStatsReport(snapshot, config);
+    report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     lines = report.split('\n');
   });
 
@@ -699,7 +699,7 @@ describe('Stale warning placement', () => {
 
   it('stale warning appears after promotion/demotion line', () => {
     mockCurrentDate(2026, 6, 13);
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     const lines = report.split('\n');
 
     const promoIdx = lines.findIndex((l) => l.startsWith('Promosi:') && l.includes('Degradasi:'));
@@ -733,7 +733,7 @@ describe('Transfer members included in averages', () => {
   });
 
   it('contribution line count matches (30 in denominator)', () => {
-    const report = generateStatsReport(snapshot, config);
+    const report = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).toContain('(1/30)');
   });
 });
@@ -807,7 +807,7 @@ describe('Tier projection: max tier reached', () => {
       ...snapshot,
       fans_to_next_tier: 0,
     };
-    const report = generateStatsReport(maxTierSnapshot, config);
+    const report = generateStatsReport(maxTierSnapshot, config, computeMembers(maxTierSnapshot, config));
     expect(report).toContain('Tier: sudah di tier maksimal');
   });
 });
@@ -822,7 +822,7 @@ describe('Tier projection: promotion not likely', () => {
       ...snapshot,
       fans_to_next_tier: 999_999_999_999, // impossibly large
     };
-    const report = generateStatsReport(hardSnapshot, config);
+    const report = generateStatsReport(hardSnapshot, config, computeMembers(hardSnapshot, config));
     expect(report).toContain('butuh');
     expect(report).toContain('lagi');
   });
@@ -841,7 +841,7 @@ describe('Days elapsed = 0 edge case', () => {
         daily_fans: m.daily_fans.map(() => 0),
       })),
     };
-    const report = generateStatsReport(zeroDaySnapshot, config);
+    const report = generateStatsReport(zeroDaySnapshot, config, computeMembers(zeroDaySnapshot, config));
     expect(report).toContain('Proyeksi akhir bulan: ~0');
   });
 });
@@ -860,7 +860,7 @@ describe('Top/Lowest active section', () => {
         daily_fans: m.daily_fans.map(() => 0),
       })),
     };
-    const report = generateStatsReport(allLeft, config);
+    const report = generateStatsReport(allLeft, config, computeMembers(allLeft, config));
     // No 🏆 or 📉 lines if no active members
     expect(report).not.toContain('🏆 Top:');
     expect(report).not.toContain('📉 Lowest aktif:');

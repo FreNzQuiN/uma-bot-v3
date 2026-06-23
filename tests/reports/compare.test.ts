@@ -96,7 +96,7 @@ function makeCumulativeFans(startValue: number, dailyGain: number, activeDays: n
 describe('generateCompareReport — both members found', () => {
   it('produces formatted comparison with both member names', () => {
     // Arrange & Act
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // Assert — header contains both names
     expect(report).toContain('⚔️');
@@ -106,7 +106,7 @@ describe('generateCompareReport — both members found', () => {
   });
 
   it('contains all expected metric sections', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     expect(report).toContain('*Monthly Gain*');
     expect(report).toContain('*Daily Terakhir*');
@@ -115,13 +115,13 @@ describe('generateCompareReport — both members found', () => {
   });
 
   it('shows requirement section when monthlyFans > 0', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     expect(report).toMatch(/\*Requirement \([\d.,]+[KMB]?\/bulan\)\*/);
   });
 
   it('includes a winner or tie declaration', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // Must have exactly one of: A wins, B wins, or tie
     const hasAWinner = report.includes('unggul di monthly gain');
@@ -130,7 +130,7 @@ describe('generateCompareReport — both members found', () => {
   });
 
   it('includes sync footer', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     expect(report).toContain('⸻');
     expect(report).toMatch(/Terakhir sync:/);
@@ -144,7 +144,7 @@ describe('generateCompareReport — both members found', () => {
 describe('generateCompareReport — member not found', () => {
   it('returns error when first member is not found', () => {
     // Arrange & Act
-    const report = generateCompareReport(snapshot, config, 'ZZZZNOTEXIST', 'Ryu');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'ZZZZNOTEXIST', 'Ryu');
 
     // Assert
     expect(report).toContain('❌');
@@ -156,7 +156,7 @@ describe('generateCompareReport — member not found', () => {
 
   it('returns error when second member is not found', () => {
     // Arrange & Act
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'ZZZZNOTEXIST');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'ZZZZNOTEXIST');
 
     // Assert
     expect(report).toContain('❌');
@@ -167,7 +167,7 @@ describe('generateCompareReport — member not found', () => {
 
   it('returns error when both members are not found', () => {
     // Arrange & Act
-    const report = generateCompareReport(snapshot, config, 'ZZZZNOTEXIST', 'ZZZZALSONOT');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'ZZZZNOTEXIST', 'ZZZZALSONOT');
 
     // Assert
     expect(report).toContain('❌');
@@ -178,7 +178,7 @@ describe('generateCompareReport — member not found', () => {
   });
 
   it('error message uses Indonesian wording', () => {
-    const report = generateCompareReport(snapshot, config, 'Ghost1', 'Ghost2');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ghost1', 'Ghost2');
 
     // Must say "tidak ditemukan" (Indonesian for "not found")
     expect(report).toMatch(/tidak ditemukan/);
@@ -193,7 +193,7 @@ describe('generateCompareReport — member not found', () => {
 describe('generateCompareReport — self-comparison', () => {
   it('works correctly when comparing member to self', () => {
     // Arrange & Act
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'Ryu');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'Ryu');
 
     // Assert — should produce a valid report, not an error
     expect(report).toContain('⚔️');
@@ -206,7 +206,7 @@ describe('generateCompareReport — self-comparison', () => {
   });
 
   it('self-comparison shows tie when monthly gains are equal', () => {
-    const report = generateCompareReport(snapshot, config, 'GoldFamily', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'GoldFamily', 'GoldFamily');
 
     expect(report).toContain('Seri');
     expect(report).not.toContain('unggul');
@@ -226,7 +226,7 @@ describe('generateCompareReport — winner determination', () => {
     const customSnapshot = buildSnapshotWithMembers([highGainMember, lowGainMember]);
 
     // Act
-    const report = generateCompareReport(customSnapshot, config, 'HighGuy', 'LowGuy');
+    const report = generateCompareReport(customSnapshot, config, computeMembers(customSnapshot, config), 'HighGuy', 'LowGuy');
 
     // Assert
     expect(report).toContain('HighGuy');
@@ -240,7 +240,7 @@ describe('generateCompareReport — winner determination', () => {
     const customSnapshot = buildSnapshotWithMembers([lowGainMember, highGainMember]);
 
     // Act
-    const report = generateCompareReport(customSnapshot, config, 'LowGuy', 'HighGuy');
+    const report = generateCompareReport(customSnapshot, config, computeMembers(customSnapshot, config), 'LowGuy', 'HighGuy');
 
     // Assert — HighGuy wins
     expect(report).toContain('HighGuy');
@@ -255,7 +255,7 @@ describe('generateCompareReport — winner determination', () => {
 describe('generateCompareReport — transfer members', () => {
   it('shows transfer badge for transfer member', () => {
     // Zero is a transfer member (previous_circle_name: "Advent")
-    const report = generateCompareReport(snapshot, config, 'Zero', 'Ryu');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Zero', 'Ryu');
 
     // Assert — transfer badge should appear
     expect(report).toContain('🔄');
@@ -265,7 +265,7 @@ describe('generateCompareReport — transfer members', () => {
 
   it('shows transfer badge on both when both are transfers', () => {
     // jgd (from Garuda3) and Zero (from Advent) are both transfers
-    const report = generateCompareReport(snapshot, config, 'Zero', 'jgd');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Zero', 'jgd');
 
     expect(report).toContain('🔄');
     expect(report).toContain('*Monthly Gain*');
@@ -273,7 +273,7 @@ describe('generateCompareReport — transfer members', () => {
 
   it('compare report for two non-transfer members has no transfer badges', () => {
     // Ryu and GoldFamily are not transfers
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // The report should still work, just no 🔄 badge on names
     // (There may be 🔄 in the text if a transfer badge appears — but not on non-transfer names)
@@ -289,7 +289,7 @@ describe('generateCompareReport — transfer members', () => {
 
 describe('generateCompareReport — WhatsApp formatting', () => {
   it('does not contain Markdown syntax (##, ```, ---)', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // WhatsApp uses *bold*, not Markdown ## or ```
     expect(report).not.toMatch(/^#{1,6}\s/m);  // No Markdown headings
@@ -298,7 +298,7 @@ describe('generateCompareReport — WhatsApp formatting', () => {
   });
 
   it('uses WhatsApp bold syntax (*text*) for emphasis', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // Should have WhatsApp bold markers
     expect(report).toMatch(/\*Monthly Gain\*/);
@@ -307,20 +307,20 @@ describe('generateCompareReport — WhatsApp formatting', () => {
   });
 
   it('uses bullet points with • character', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // Metric lines use • bullets
     expect(report).toContain('•');
   });
 
   it('is under 4096 characters (WhatsApp message limit)', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
   it('report length is reasonable for a comparison (at least 200 chars)', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     expect(report.length).toBeGreaterThan(200);
   });
@@ -332,7 +332,7 @@ describe('generateCompareReport — WhatsApp formatting', () => {
 
 describe('generateCompareReport — numerical accuracy', () => {
   it('formats large numbers with K/M/B suffixes', () => {
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // Members in the snapshot have gains in the millions — should show as M
     expect(report).toMatch(/[\d.]+M/);
@@ -347,7 +347,7 @@ describe('generateCompareReport — numerical accuracy', () => {
     expect(gold).toBeDefined();
 
     // Act
-    const report = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     // Assert — monthly gain values from computeMembers should appear in report
     // The formatNumber function converts to K/M/B, so we check the formatted version
@@ -369,7 +369,7 @@ describe('generateCompareReport — edge cases', () => {
     const customSnapshot = buildSnapshotWithMembers([inactiveA, inactiveB]);
 
     // Act
-    const report = generateCompareReport(customSnapshot, config, 'InactiveA', 'InactiveB');
+    const report = generateCompareReport(customSnapshot, config, computeMembers(customSnapshot, config), 'InactiveA', 'InactiveB');
 
     // Assert — should still produce a valid report, likely a tie
     expect(report).toContain('⚔️');
@@ -384,7 +384,7 @@ describe('generateCompareReport — edge cases', () => {
     const customSnapshot = buildSnapshotWithMembers([bigMember, smallMember]);
 
     // Act
-    const report = generateCompareReport(customSnapshot, config, 'BigGuy', 'SmallGuy');
+    const report = generateCompareReport(customSnapshot, config, computeMembers(customSnapshot, config), 'BigGuy', 'SmallGuy');
 
     // Assert — BigGuy should win
     expect(report).toContain('BigGuy');
@@ -400,7 +400,7 @@ describe('generateCompareReport — edge cases', () => {
     const customSnapshot = buildSnapshotWithMembers([memberA, memberB]);
 
     // Act
-    const report = generateCompareReport(customSnapshot, config, 'DayOne', 'DayTwo');
+    const report = generateCompareReport(customSnapshot, config, computeMembers(customSnapshot, config), 'DayOne', 'DayTwo');
 
     // Assert — should still produce a valid report
     expect(report).toContain('⚔️');
@@ -409,7 +409,7 @@ describe('generateCompareReport — edge cases', () => {
 
   it('handles members with special characters in names', () => {
     // DOA IBU has a space, Suzuka Kopling has a space
-    const report = generateCompareReport(snapshot, config, 'DOA IBU', 'Suzuka Kopling');
+    const report = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'DOA IBU', 'Suzuka Kopling');
 
     expect(report).toContain('⚔️');
     expect(report).toContain('*Monthly Gain*');
@@ -417,8 +417,8 @@ describe('generateCompareReport — edge cases', () => {
   });
 
   it('report is deterministic (same inputs → same output)', () => {
-    const report1 = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
-    const report2 = generateCompareReport(snapshot, config, 'Ryu', 'GoldFamily');
+    const report1 = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
+    const report2 = generateCompareReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 'GoldFamily');
 
     expect(report1).toBe(report2);
   });

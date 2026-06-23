@@ -7,6 +7,7 @@
  */
 
 import { generateMonthlyReport } from '../../../src/reports/monthly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getMonthlyGain } from '../../../src/data/daily-fans';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
@@ -24,11 +25,13 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 let loadMonthSnapshotsSpy: jest.SpyInstance;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
   loadMonthSnapshotsSpy = jest.spyOn(
     require('../../../src/data/snapshot'), 'loadMonthSnapshots'
   ).mockReturnValue([]);
@@ -199,7 +202,7 @@ describe('All 30 monthly contributors verified against raw data', () => {
   let memberLines: string[];
 
   beforeAll(() => {
-    report = generateMonthlyReport(snapshot, config, 0);
+    report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
   });
 
@@ -250,7 +253,7 @@ describe('Line-by-line verification of monthly report', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateMonthlyReport(snapshot, config, 0);
+    report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     lines = report.split('\n');
   });
 
@@ -426,7 +429,7 @@ describe('Total gain summation', () => {
     // Total should be a large number (sum of all 34 members)
     expect(total).toBeGreaterThan(0);
 
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     const totalLine = report.split('\n')[6];
     const match = totalLine.match(/Total: ([\d.]+)([KMB])/);
     expect(match).not.toBeNull();

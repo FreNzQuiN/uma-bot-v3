@@ -6,6 +6,7 @@
  */
 
 import { generateDailyReport } from '../../../src/reports/daily';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
 import {
@@ -422,7 +423,7 @@ describe('Exact total gain verification', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateDailyReport(snapshot, getDefaultConfig(), 0);
+    report = generateDailyReport(snapshot, getDefaultConfig(), computeMembers(snapshot, getDefaultConfig()), 0);
   });
 
   it('total gain matches manual sum of all 30 contributing members', () => {
@@ -452,7 +453,7 @@ describe('Exact total gain verification', () => {
   });
 
   it('offset=1 total gain matches manual sum', () => {
-    const report1 = generateDailyReport(snapshot, getDefaultConfig(), 1);
+    const report1 = generateDailyReport(snapshot, getDefaultConfig(), computeMembers(snapshot, getDefaultConfig()), 1);
     const latestDataDay = getDataDayFromSnapshot(snapshot);
     let totalGain = 0;
     let count = 0;

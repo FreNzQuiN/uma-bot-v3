@@ -41,14 +41,14 @@ beforeAll(() => {
 describe('cross-report validation', () => {
   it('all reports produce non-empty output', () => {
     const reports = [
-      generateDailyReport(snapshot, config),
-      generateWeeklyReport(snapshot, config),
-      generateMonthlyReport(snapshot, config),
-      generateRanksReport(snapshot, config),
-      generateBottomReport(snapshot, config),
-      generateStatsReport(snapshot, config),
-      generateMembersReport(snapshot, config),
-      generateTierReport(snapshot, config),
+      generateDailyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateWeeklyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateMonthlyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
+      generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
+      generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
+      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
 
     for (const r of reports) {
@@ -58,14 +58,14 @@ describe('cross-report validation', () => {
 
   it('all reports respect maxLength', () => {
     const reports = [
-      generateDailyReport(snapshot, config),
-      generateWeeklyReport(snapshot, config),
-      generateMonthlyReport(snapshot, config),
-      generateRanksReport(snapshot, config),
-      generateBottomReport(snapshot, config),
-      generateStatsReport(snapshot, config),
-      generateMembersReport(snapshot, config),
-      generateTierReport(snapshot, config),
+      generateDailyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateWeeklyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateMonthlyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
+      generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
+      generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
+      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
 
     for (const r of reports) {
@@ -75,14 +75,14 @@ describe('cross-report validation', () => {
 
   it('all reports contain the club name', () => {
     const reports = [
-      generateDailyReport(snapshot, config),
-      generateWeeklyReport(snapshot, config),
-      generateMonthlyReport(snapshot, config),
-      generateRanksReport(snapshot, config),
-      generateBottomReport(snapshot, config),
-      generateStatsReport(snapshot, config),
-      generateMembersReport(snapshot, config),
-      generateTierReport(snapshot, config),
+      generateDailyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateWeeklyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateMonthlyReport(snapshot, config, computeMembers(snapshot, config)),
+      generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
+      generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
+      generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
+      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
 
     for (const r of reports) {
@@ -97,16 +97,16 @@ describe('cross-report validation', () => {
 
 describe('E2E: Cross-report consistency', () => {
   it('daily and monthly show same member count', () => {
-    const daily = generateDailyReport(snapshot, config, 0);
-    const monthly = generateMonthlyReport(snapshot, config, 0);
+    const daily = generateDailyReport(snapshot, config, computeMembers(snapshot, config), 0);
+    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
     const dailyMatch = daily.match(/kontribusi dari (\d+) anggota/);
     const monthlyMatch = monthly.match(/(\d+) kontribusi dari \d+ anggota/);
     expect(dailyMatch?.[1]).toBe(monthlyMatch?.[1]);
   });
 
   it('ranks and monthly use same gain values for top member', () => {
-    const ranks = generateRanksReport(snapshot, config);
-    const monthly = generateMonthlyReport(snapshot, config, 0);
+    const ranks = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
+    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
     // Both should reference the same top member
     const ranksTop = ranks.match(/🥇 \*(.+?)\* —/);
     const monthlyTop = monthly.match(/1\. \*(.+?)\* —/);
@@ -114,16 +114,16 @@ describe('E2E: Cross-report consistency', () => {
   });
 
   it('stats projection matches monthly projection', () => {
-    const stats = generateStatsReport(snapshot, config);
-    const monthly = generateMonthlyReport(snapshot, config, 0);
+    const stats = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
+    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
     const statsProj = stats.match(/Proyeksi akhir bulan: ~([\d.,]+[KMB])/);
     const monthlyProj = monthly.match(/Proyeksi akhir bulan: ~([\d.,]+[KMB])/);
     expect(statsProj?.[1]).toBe(monthlyProj?.[1]);
   });
 
   it('bottom report shows members that monthly marks as below requirement', () => {
-    const monthly = generateMonthlyReport(snapshot, config, 0);
-    const bottom = generateBottomReport(snapshot, config);
+    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
+    const bottom = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
     // Monthly shows "❌ N kurang", bottom shows those members
     const failMatch = monthly.match(/❌ (\d+) kurang/);
     expect(failMatch).toBeTruthy();
@@ -161,14 +161,14 @@ describe('E2E: Data integrity', () => {
 
   it('no report exceeds WhatsApp message limit (4096 chars)', () => {
     const reports = [
-      generateDailyReport(snapshot, config, 0),
-      generateWeeklyReport(snapshot, config, 0),
-      generateMonthlyReport(snapshot, config, 0),
-      generateRanksReport(snapshot, config),
-      generateBottomReport(snapshot, config),
-      generateStatsReport(snapshot, config),
-      generateMembersReport(snapshot, config),
-      generateTierReport(snapshot, config),
+      generateDailyReport(snapshot, config, computeMembers(snapshot, config), 0),
+      generateWeeklyReport(snapshot, config, computeMembers(snapshot, config), 0),
+      generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0),
+      generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
+      generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
+      generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
+      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
     for (const report of reports) {
       expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);

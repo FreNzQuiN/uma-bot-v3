@@ -6,6 +6,7 @@
  */
 
 import { generateDailyReport } from '../../../src/reports/daily';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
 import {
@@ -25,10 +26,12 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -41,8 +44,8 @@ describe('Output structure', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateDailyReport(snapshot, config, 0);
-    reportOffset1 = generateDailyReport(snapshot, config, 1);
+    report = generateDailyReport(snapshot, config, computedMembers, 0);
+    reportOffset1 = generateDailyReport(snapshot, config, computedMembers, 1);
     lines = report.split('\n');
   });
 
@@ -117,7 +120,7 @@ describe('WhatsApp formatting compliance', () => {
   let report: string;
 
   beforeAll(() => {
-    report = generateDailyReport(snapshot, config, 0);
+    report = generateDailyReport(snapshot, config, computedMembers, 0);
   });
 
   it('uses *bold* (WhatsApp) not **bold** (Markdown)', () => {
@@ -183,14 +186,14 @@ describe('Ghost member awareness (members.length vs member_count)', () => {
   });
 
   it('report active count matches circle.member_count, not members.length', () => {
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const gainLine = report.split('\n').find((l) => l.includes('anggota'));
     expect(gainLine).toContain('30 anggota');
     expect(gainLine).not.toContain('34 anggota');
   });
 
   it('ghost members not shown in daily report (left only in /members)', () => {
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const staleNames = [...STALE_NAMES];
     // Left section removed from daily report
     expect(report).not.toContain('🚪 Keluar dari klub:');
@@ -219,7 +222,7 @@ describe('Single member snapshot', () => {
       yesterday_fans_to_lower_tier: 20621702,
     };
 
-    const report = generateDailyReport(singleSnapshot, config, 0);
+    const report = generateDailyReport(singleSnapshot, config, computeMembers(singleSnapshot, config), 0);
 
     expect(report).toContain('📊 *Daily Report — 11 Juni 2026*');
     expect(report).toContain('1 kontribusi dari 1 anggota');
@@ -245,7 +248,7 @@ describe('Single member snapshot', () => {
       yesterday_fans_to_lower_tier: 20621702,
     };
 
-    const report = generateDailyReport(singleSnapshot, config, 0);
+    const report = generateDailyReport(singleSnapshot, config, computeMembers(singleSnapshot, config), 0);
     expect(report).toContain('0 kontribusi dari 1 anggota');
     expect(report).toContain('⚠️ Belum aktif hari ini');
     expect(report).toContain('• Ryu');
@@ -266,7 +269,7 @@ describe('Single member snapshot', () => {
       yesterday_fans_to_lower_tier: 20621702,
     };
 
-    const report = generateDailyReport(mixedSnapshot, config, 0);
+    const report = generateDailyReport(mixedSnapshot, config, computeMembers(mixedSnapshot, config), 0);
 
     expect(report).toContain('1 kontribusi dari 2 anggota');
     expect(report).toContain('⚠️ Belum aktif');

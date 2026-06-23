@@ -10,7 +10,7 @@
  */
 
 import { loadConfig } from './config';
-import type { BotConfig, Snapshot } from './types';
+import type { BotConfig, Snapshot, ComputedMember } from './types';
 import { Database } from './db/database';
 import { UmaMoeClient } from './api/uma-moe';
 import { ApiServer } from './api/server';
@@ -24,6 +24,8 @@ import { getDataDate, getDataDateComponents } from './utils/timezone';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
 import { recordConfigReload, recordSchedulerRestart, getRuntimeStats } from './runtime';
+
+import { computeMembers } from './reports/compute';
 
 import { generateDailyReport } from './reports/daily';
 import { generateWeeklyReport } from './reports/weekly';
@@ -291,18 +293,19 @@ async function main() {
     type: string,
     snapshot: Snapshot,
     currentConfig: BotConfig,
+    computedMembers: ComputedMember[],
     options?: { offset?: number; isCatchUp?: boolean }
   ): string | undefined {
     let report: string;
     switch (type) {
-      case 'daily': report = generateDailyReport(snapshot, currentConfig, options?.offset, db); break;
-      case 'weekly': report = generateWeeklyReport(snapshot, currentConfig, options?.offset, db); break;
-      case 'monthly': report = generateMonthlyReport(snapshot, currentConfig, options?.offset, db); break;
-      case 'ranks': report = generateRanksReport(snapshot, currentConfig); break;
-      case 'bottom': report = generateBottomReport(snapshot, currentConfig, db); break;
-      case 'stats': report = generateStatsReport(snapshot, currentConfig, db); break;
-      case 'members': report = generateMembersReport(snapshot, currentConfig, db); break;
-      case 'tier': report = generateTierReport(snapshot, currentConfig, db); break;
+      case 'daily': report = generateDailyReport(snapshot, currentConfig, computedMembers, options?.offset, db); break;
+      case 'weekly': report = generateWeeklyReport(snapshot, currentConfig, computedMembers, options?.offset, db); break;
+      case 'monthly': report = generateMonthlyReport(snapshot, currentConfig, computedMembers, options?.offset, db); break;
+      case 'ranks': report = generateRanksReport(snapshot, currentConfig, computedMembers); break;
+      case 'bottom': report = generateBottomReport(snapshot, currentConfig, computedMembers, db); break;
+      case 'stats': report = generateStatsReport(snapshot, currentConfig, computedMembers, db); break;
+      case 'members': report = generateMembersReport(snapshot, currentConfig, computedMembers, db); break;
+      case 'tier': report = generateTierReport(snapshot, currentConfig, computedMembers, db); break;
       default: log.error('Report', `Unknown report type: ${type}`); return undefined;
     }
 
@@ -319,12 +322,13 @@ async function main() {
     type: string,
     snapshot: Snapshot,
     currentConfig: BotConfig,
+    computedMembers: ComputedMember[],
     options?: { isCatchUp?: boolean; collectAlerts?: boolean }
   ): Promise<import('./alerts/alerts').Alert[]> {
     // Detect and record alerts (non-critical — wrapped in try-catch)
     let alerts: import('./alerts/alerts').Alert[] = [];
     try {
-      alerts = detectAlerts(snapshot, currentConfig, db);
+      alerts = detectAlerts(computedMembers, snapshot, currentConfig, db);
       if (alerts.length > 0) {
         log.info('Alert', `${alerts.length} alerts detected for ${type} report`);
         const alertIds: number[] = [];
@@ -403,7 +407,8 @@ async function main() {
     }
 
     // Generate report string
-    const report = generateReportString(type, snapshot, currentConfig, options);
+    const computedMembers = computeMembers(snapshot, currentConfig);
+    const report = generateReportString(type, snapshot, currentConfig, computedMembers, options);
     if (report === undefined) return [];
     log.info('Report', `${type} report generated (${report.length} chars)`);
 
@@ -411,7 +416,7 @@ async function main() {
     await deliverReport(report, type);
 
     // Detect, record, and deliver alerts
-    return processAlertsForReport(type, snapshot, currentConfig, options);
+    return processAlertsForReport(type, snapshot, currentConfig, computedMembers, options);
   }
 
   // ── 5. Fetch fresh data if latest snapshot is stale ──
@@ -527,7 +532,8 @@ async function main() {
       }
     }
 
-    const combined = generateCombinedReport(types, snapshot, currentConfig, db);
+    const computedMembers = computeMembers(snapshot, currentConfig);
+    const combined = generateCombinedReport(types, snapshot, currentConfig, computedMembers, db);
     await deliverReport(combined, types.join('+'));
   }, onDataFetch);
   scheduler.start();
@@ -560,7 +566,8 @@ async function main() {
           const snapshot = getSnapshot();
           if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
           const currentConfig = getConfig();
-          const combined = generateCombinedReport(types, snapshot, currentConfig, db);
+          const computedMembers = computeMembers(snapshot, currentConfig);
+          const combined = generateCombinedReport(types, snapshot, currentConfig, computedMembers, db);
           await deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
         });
         log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);

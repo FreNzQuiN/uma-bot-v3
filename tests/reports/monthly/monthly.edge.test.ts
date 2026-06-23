@@ -6,6 +6,7 @@
  */
 
 import { generateMonthlyReport } from '../../../src/reports/monthly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
@@ -18,11 +19,13 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 let loadMonthSnapshotsSpy: jest.SpyInstance;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
   loadMonthSnapshotsSpy = jest.spyOn(
     require('../../../src/data/snapshot'), 'loadMonthSnapshots'
   ).mockReturnValue([]);
@@ -41,25 +44,25 @@ describe('Offset handling', () => {
   // so historical month data won't be loaded from disk
 
   it('offset=0 uses current snapshot', () => {
-    const report0 = generateMonthlyReport(snapshot, config, 0);
+    const report0 = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report0).toContain('📅 *Monthly Report — Juni 2026*');
     expect(report0).toContain('11 Juni 2026');
   });
 
   it('offset=1 falls back to current month when no previous month snapshot exists', () => {
-    const report1 = generateMonthlyReport(snapshot, config, 1);
+    const report1 = generateMonthlyReport(snapshot, config, computedMembers, 1);
     // Falls back to current (June) snapshot
     expect(report1).toContain('📅 *Monthly Report — Juni 2026*');
   });
 
   it('offset=-1 produces same output as offset=1', () => {
-    const reportNeg = generateMonthlyReport(snapshot, config, -1);
-    const reportPos = generateMonthlyReport(snapshot, config, 1);
+    const reportNeg = generateMonthlyReport(snapshot, config, computedMembers, -1);
+    const reportPos = generateMonthlyReport(snapshot, config, computedMembers, 1);
     expect(reportNeg).toBe(reportPos);
   });
 
   it('offset=2 also falls back to current month', () => {
-    const report2 = generateMonthlyReport(snapshot, config, 2);
+    const report2 = generateMonthlyReport(snapshot, config, computedMembers, 2);
     // Falls back to current (June) snapshot
     expect(report2).toContain('📅 *Monthly Report — Juni 2026*');
   });
@@ -95,7 +98,7 @@ describe('Calendar-month offset calculation', () => {
       return [];
     });
 
-    const report = generateMonthlyReport(snapshot, config, -1);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, -1);
     // offset=-1 with curMonth=7 → targetMonth=6 → mock returns our snapshot
     expect(report).toContain('📅 *Monthly Report — Juni 2026*');
     expect(report).toContain('11 Juni 2026');
@@ -108,7 +111,7 @@ describe('Calendar-month offset calculation', () => {
     ).mockReturnValue({ year: 2027, month: 1, day: 1 });
     // Global loadMonthSnapshots already returns [], so Dec 2026 is empty.
     // Falls back to current (June 2026)
-    const report = generateMonthlyReport(snapshot, config, -1);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, -1);
     expect(report).toContain('📅 *Monthly Report — Juni 2026*');
   });
 
@@ -117,7 +120,7 @@ describe('Calendar-month offset calculation', () => {
       require('../../../src/utils/timezone'), 'getDataDateComponents'
     ).mockReturnValue({ year: 2026, month: 7, day: 1 });
 
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     // offset=0 means absOffset=0, skip offset block entirely
     expect(report).toContain('📅 *Monthly Report — Juni 2026*');
   });
@@ -138,7 +141,7 @@ describe('Empty snapshot guard', () => {
       yesterday_fans_to_next_tier: 305715171,
       yesterday_fans_to_lower_tier: 20621702,
     };
-    const result = generateMonthlyReport(emptySnapshot, config, 0);
+    const result = generateMonthlyReport(emptySnapshot, config, computeMembers(emptySnapshot, config), 0);
     expect(result).toBe('ℹ️ *Monthly Report*\nData bulan ini belum tersedia.');
   });
 
@@ -152,7 +155,7 @@ describe('Empty snapshot guard', () => {
       yesterday_fans_to_next_tier: 305715171,
       yesterday_fans_to_lower_tier: 20621702,
     };
-    const result = generateMonthlyReport(emptySnapshot, config, 0);
+    const result = generateMonthlyReport(emptySnapshot, config, computeMembers(emptySnapshot, config), 0);
     expect(result).not.toContain('Total');
     expect(result).not.toContain('Proyeksi');
   });

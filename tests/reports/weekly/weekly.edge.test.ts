@@ -7,6 +7,7 @@
  */
 
 import { generateWeeklyReport } from '../../../src/reports/weekly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
@@ -19,10 +20,12 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -49,14 +52,14 @@ function makeConfig(overrides: { weeklyFans?: number } = {}): BotConfig {
 
 describe('Negative offset equivalence', () => {
   it('/weekly -1 produces same output as /weekly 1', () => {
-    const reportNeg = generateWeeklyReport(snapshot, config, -1);
-    const reportPos = generateWeeklyReport(snapshot, config, 1);
+    const reportNeg = generateWeeklyReport(snapshot, config, computedMembers, -1);
+    const reportPos = generateWeeklyReport(snapshot, config, computedMembers, 1);
     expect(reportNeg).toBe(reportPos);
   });
 
   it('/weekly -2 produces same output as /weekly 2', () => {
-    const reportNeg = generateWeeklyReport(snapshot, config, -2);
-    const reportPos = generateWeeklyReport(snapshot, config, 2);
+    const reportNeg = generateWeeklyReport(snapshot, config, computedMembers, -2);
+    const reportPos = generateWeeklyReport(snapshot, config, computedMembers, 2);
     expect(reportNeg).toBe(reportPos);
   });
 });
@@ -68,20 +71,20 @@ describe('Negative offset equivalence', () => {
 describe('Offset clamping (targetWeek clamped to 1)', () => {
   it('offset=2 → W1 (2-1=1, which is valid)', () => {
     // currentWeek=2, offset=2, targetWeek = max(1, 2-2) = max(1, 0) = 1
-    const report = generateWeeklyReport(snapshot, config, 2);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 2);
     expect(report).toContain('📈 *Weekly Report — Minggu 1');
     expect(report).toContain('Periode: Hari 1-7');
   });
 
   it('offset=100 → W1 (clamped from 2-100 = -98)', () => {
     // currentWeek=2, offset=100, targetWeek = max(1, 2-100) = 1
-    const report = generateWeeklyReport(snapshot, config, 100);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 100);
     expect(report).toContain('📈 *Weekly Report — Minggu 1');
     expect(report).toContain('Periode: Hari 1-7');
   });
 
   it('offset=0 → W2 (current week)', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('📈 *Weekly Report — Minggu 2');
     expect(report).toContain('Periode: Hari 8-14');
   });
@@ -93,13 +96,13 @@ describe('Offset clamping (targetWeek clamped to 1)', () => {
 
 describe('Below-requirement section', () => {
   it('does NOT appear when weeklyFans = 0 (default config)', () => {
-    const report = generateWeeklyReport(snapshot, config, 0);
+    const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report).not.toContain('⚠️ Di bawah target');
   });
 
   it('shows members below 5M/week when weeklyFans = 5,000,000', () => {
     const cfg = makeConfig({ weeklyFans: 5_000_000 });
-    const report = generateWeeklyReport(snapshot, cfg, 0);
+    const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
 
     expect(report).toContain('⚠️ Di bawah target 5.0M/minggu:');
 
@@ -128,7 +131,7 @@ describe('Below-requirement section', () => {
 
   it('includes members with gain = 0 in below-requirement (0 < weeklyFans)', () => {
     const cfg = makeConfig({ weeklyFans: 5_000_000 });
-    const report = generateWeeklyReport(snapshot, cfg, 0);
+    const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     const belowSection = report.substring(report.indexOf('⚠️ Di bawah target'));
     // Stale members have 0 gain → now included (0 < 5M)
     expect(belowSection).toContain('• DOA IBU');
@@ -139,7 +142,7 @@ describe('Below-requirement section', () => {
 
   it('members with gain >= weeklyFans are NOT in below-requirement', () => {
     const cfg = makeConfig({ weeklyFans: 5_000_000 });
-    const report = generateWeeklyReport(snapshot, cfg, 0);
+    const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     const belowSection = report.substring(report.indexOf('⚠️ Di bawah target'));
     // These members have W2 gain >= 5M → not listed
     expect(belowSection).not.toContain('• Sairen');
@@ -156,7 +159,7 @@ describe('Below-requirement section', () => {
 
   it('shows member names without gain values in below-requirement section', () => {
     const cfg = makeConfig({ weeklyFans: 5_000_000 });
-    const report = generateWeeklyReport(snapshot, cfg, 0);
+    const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report).toContain('• Dyy\u201D');
     expect(report).toContain('• ursa');
   });
@@ -177,7 +180,7 @@ describe('Empty snapshot guard', () => {
       yesterday_fans_to_next_tier: 305715171,
       yesterday_fans_to_lower_tier: 20621702,
     };
-    const result = generateWeeklyReport(emptySnapshot, config, 0);
+    const result = generateWeeklyReport(emptySnapshot, config, computeMembers(emptySnapshot, config), 0);
     expect(result).toBe('ℹ️ *Weekly Report*\nData minggu ini belum tersedia.');
   });
 
@@ -191,7 +194,7 @@ describe('Empty snapshot guard', () => {
       yesterday_fans_to_next_tier: 305715171,
       yesterday_fans_to_lower_tier: 20621702,
     };
-    const result = generateWeeklyReport(emptySnapshot, config, 0);
+    const result = generateWeeklyReport(emptySnapshot, config, computeMembers(emptySnapshot, config), 0);
     expect(result).not.toContain('Minggu');
     expect(result).not.toContain('Periode');
     expect(result).not.toContain('gain mingguan');
@@ -206,8 +209,8 @@ describe('Cross-week consistency', () => {
   it('W1 total + W2 total ≠ monthly total (different baselines)', () => {
     // W1 and W2 gains are computed against different baselines,
     // so they should NOT sum to the monthly gain.
-    const w1Report = generateWeeklyReport(snapshot, config, 1);
-    const w2Report = generateWeeklyReport(snapshot, config, 0);
+    const w1Report = generateWeeklyReport(snapshot, config, computedMembers, 1);
+    const w2Report = generateWeeklyReport(snapshot, config, computedMembers, 0);
 
     const w1TotalMatch = w1Report.split('\n')[8].match(/Total: ([\d.]+)([KMB])/);
     const w2TotalMatch = w2Report.split('\n')[8].match(/Total: ([\d.]+)([KMB])/);
@@ -218,8 +221,8 @@ describe('Cross-week consistency', () => {
   });
 
   it('W2 report and W1 report have different member rankings', () => {
-    const w1Report = generateWeeklyReport(snapshot, config, 1);
-    const w2Report = generateWeeklyReport(snapshot, config, 0);
+    const w1Report = generateWeeklyReport(snapshot, config, computedMembers, 1);
+    const w2Report = generateWeeklyReport(snapshot, config, computedMembers, 0);
 
     const w1First = w1Report.split('\n').find((l) => /^1\.\s/.test(l));
     const w2First = w2Report.split('\n').find((l) => /^1\.\s/.test(l));

@@ -7,6 +7,7 @@
  */
 
 import { generateDailyReport } from '../../../src/reports/daily';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
 import {
@@ -37,10 +38,12 @@ const OTHER_GROUP = 'group-other@g.us';
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -109,7 +112,7 @@ describe('Empty snapshot', () => {
       yesterday_fans_to_next_tier: 305715171,
       yesterday_fans_to_lower_tier: 20621702,
     };
-    const result = generateDailyReport(emptySnapshot, config, 0);
+    const result = generateDailyReport(emptySnapshot, config, computeMembers(emptySnapshot, config), 0);
     expect(result).toBe('ℹ️ *Daily Report*\nTidak ada data anggota untuk hari ini. Mungkin sync belum berjalan.');
   });
 });
@@ -120,7 +123,7 @@ describe('Empty snapshot', () => {
 
 describe('Left members section', () => {
   it('shows NO left members section (left only in /members)', () => {
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
 
     // Left section removed from daily report
     expect(report).not.toContain('🚪 Keluar dari klub:');
@@ -143,8 +146,8 @@ describe('Left members section', () => {
       ]),
     };
 
-    const reportNoDb = generateDailyReport(snapshot, config, 0);
-    const reportWithDb = generateDailyReport(snapshot, config, 0, mockDbWithLeft);
+    const reportNoDb = generateDailyReport(snapshot, config, computedMembers, 0);
+    const reportWithDb = generateDailyReport(snapshot, config, computedMembers, 0, mockDbWithLeft);
 
     // Both should show same output (no left section)
     expect(reportNoDb).not.toContain('🚪 Keluar dari klub:');
@@ -152,7 +155,7 @@ describe('Left members section', () => {
   });
 
   it('left section does NOT exist in daily report', () => {
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const leftIdx = report.indexOf('🚪 Keluar dari klub:');
     expect(leftIdx).toBe(-1);
   });
@@ -164,7 +167,7 @@ describe('Left members section', () => {
 
 describe('Offset clamping at report level', () => {
   it('offset=100 clamps dataDay to 1, shows day 1 data', () => {
-    const report = generateDailyReport(snapshot, config, 100);
+    const report = generateDailyReport(snapshot, config, computedMembers, 100);
     // dataDay = max(1, 11 - 100) = 1
     // Day 1 has no previous day, so all gains are 0
     expect(report).toContain('📊 *Daily Report — 1 Juni 2026*');
@@ -179,13 +182,13 @@ describe('Offset clamping at report level', () => {
 
   it('offset equal to dataDay - 1 shows day 1 data', () => {
     // dataDay=11, offset=10 -> dataDay=1
-    const report = generateDailyReport(snapshot, config, 10);
+    const report = generateDailyReport(snapshot, config, computedMembers, 10);
     expect(report).toContain('📊 *Daily Report — 1 Juni 2026*');
   });
 
   it('offset=dataDay shows day 1 (clamped from 0)', () => {
     // dataDay=11, offset=11 -> max(1, 0) = 1
-    const report = generateDailyReport(snapshot, config, 11);
+    const report = generateDailyReport(snapshot, config, computedMembers, 11);
     expect(report).toContain('📊 *Daily Report — 1 Juni 2026*');
   });
 });
@@ -199,7 +202,7 @@ describe('Offset=2 shows day 9 gains', () => {
   let memberLines: string[];
 
   beforeAll(() => {
-    report = generateDailyReport(snapshot, config, 2);
+    report = generateDailyReport(snapshot, config, computedMembers, 2);
     memberLines = report.split('\n').filter((l) => /^\d+\./.test(l));
   });
 
@@ -354,7 +357,7 @@ describe('Offset=1 complete line verification', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateDailyReport(snapshot, config, 1);
+    report = generateDailyReport(snapshot, config, computedMembers, 1);
     lines = report.split('\n');
   });
 
@@ -447,7 +450,7 @@ describe('Offset=1 complete line verification', () => {
 describe('Report section ordering', () => {
   it('stale data warning comes after member list, before footer', () => {
     mockCurrentDate(2026, 6, 13);
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const lines = report.split('\n');
 
     const lastRankedIdx = lines.reduce((acc, l, i) =>
@@ -470,7 +473,7 @@ describe('Report section ordering', () => {
 
 describe('Transfer members always appear in ranking', () => {
   it('transfer members with 0 gain appear in stale section', () => {
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const memberLines = report.split('\n').filter((l) => /^\d+\./.test(l));
     const falkrumRanked = memberLines.find((l) => l.includes('Falkrum'));
     expect(falkrumRanked).toBeUndefined();
@@ -478,7 +481,7 @@ describe('Transfer members always appear in ranking', () => {
   });
 
   it('transfer members with positive gain never in stale section', () => {
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const staleIdx = report.indexOf('⚠️ Belum aktif');
     if (staleIdx >= 0) {
       const staleSection = report.substring(staleIdx);
@@ -501,7 +504,7 @@ describe('Config edge cases for daily report', () => {
       ...config,
       requirements: { ...config.requirements, monthlyFans: 0 },
     };
-    const report = generateDailyReport(snapshot, zeroReqConfig, 0);
+    const report = generateDailyReport(snapshot, zeroReqConfig, computeMembers(snapshot, zeroReqConfig), 0);
     expect(report).toContain('📊 *Daily Report — 11 Juni 2026*');
     expect(report).toContain('kontribusi dari 30 anggota');
   });
@@ -511,7 +514,7 @@ describe('Config edge cases for daily report', () => {
       ...config,
       requirements: { ...config.requirements, weeklyFans: 1000000 },
     };
-    const report = generateDailyReport(snapshot, weeklyConfig, 0);
+    const report = generateDailyReport(snapshot, weeklyConfig, computeMembers(snapshot, weeklyConfig), 0);
     expect(report).toContain('📊 *Daily Report — 11 Juni 2026*');
     expect(report).toContain('kontribusi dari 30 anggota');
   });
@@ -530,7 +533,7 @@ describe('Config edge cases for daily report', () => {
         return m;
       }),
     };
-    const report = generateDailyReport(customSnapshot, strictConfig, 0);
+    const report = generateDailyReport(customSnapshot, strictConfig, computeMembers(customSnapshot, strictConfig), 0);
     // Nargi has gain=0 on day 11 (viewed day), firstPositiveDay=1 ≠ dataDay
     // With staleAfterDaysDaily=1, Nargi shows in stale section
     expect(report).toContain('⚠️ Belum aktif hari ini');
@@ -542,7 +545,7 @@ describe('Config edge cases for daily report', () => {
       ...config,
       memberStatus: { staleAfterDaysDaily: 0, staleAfterDaysWeekly: 3, staleAfterDaysMonthly: 7 },
     };
-    const report = generateDailyReport(snapshot, lenientConfig, 0);
+    const report = generateDailyReport(snapshot, lenientConfig, computeMembers(snapshot, lenientConfig), 0);
     // Stale section shows active members with 0 gain on the viewed day, regardless of staleAfterDaysDaily
     expect(report).toContain('⚠️ Belum aktif');
     // Ghost detection still removes 4 members → 27 positive-gain in ranking

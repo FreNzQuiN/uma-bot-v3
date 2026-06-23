@@ -25,6 +25,7 @@ import {
   isTransferMember,
   isStaleMember,
 } from '../../src/data/daily-fans';
+import { computeMembers } from '../../src/reports/compute';
 import { formatNumber } from '../../src/reports/format';
 import { CLUB_TIERS } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
@@ -175,7 +176,7 @@ describe('Report header structure', () => {
   let lines: string[];
 
   beforeAll(() => {
-    report = generateRanksReport(snapshot, config);
+    report = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
     lines = report.split('\n');
   });
 
@@ -220,7 +221,7 @@ describe('Medal positions (top 3)', () => {
   let lines: string[];
 
   beforeAll(() => {
-    lines = generateRanksReport(snapshot, config).split('\n');
+    lines = generateRanksReport(snapshot, config, computeMembers(snapshot, config)).split('\n');
   });
 
   it('line 5: medal GoldFamily - 27.7M (bold name, +prefix)', () => {
@@ -259,7 +260,7 @@ describe('Numbered positions (4-10)', () => {
   let lines: string[];
 
   beforeAll(() => {
-    lines = generateRanksReport(snapshot, config).split('\n');
+    lines = generateRanksReport(snapshot, config, computeMembers(snapshot, config)).split('\n');
   });
 
   it('4. DzFx - 18.2M', () => {
@@ -307,7 +308,7 @@ describe('Numbered positions (4-10)', () => {
 
 describe('Sorting order (monthlyGain descending)', () => {
   it('gains are strictly non-increasing from top to bottom', () => {
-    const lines = generateRanksReport(snapshot, config).split('\n');
+    const lines = generateRanksReport(snapshot, config, computeMembers(snapshot, config)).split('\n');
     const memberLines = lines.filter((l) =>
       /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l)
     );
@@ -335,14 +336,14 @@ describe('Sorting order (monthlyGain descending)', () => {
 
 describe('Transfer badge', () => {
   it('Sairen has badge in report', () => {
-    const lines = generateRanksReport(snapshot, config).split('\n');
+    const lines = generateRanksReport(snapshot, config, computeMembers(snapshot, config)).split('\n');
     const sairenLine = lines.find((l) => l.includes('Sairen'));
     expect(sairenLine).toBeDefined();
     expect(sairenLine).toContain('\uD83D\uDD04');
   });
 
   it('only Sairen and Zero from transfer members are in top 10', () => {
-    const lines = generateRanksReport(snapshot, config).split('\n');
+    const lines = generateRanksReport(snapshot, config, computeMembers(snapshot, config)).split('\n');
     const memberLines = lines.filter((l) =>
       /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l)
     );
@@ -354,7 +355,7 @@ describe('Transfer badge', () => {
   });
 
   it('Zero (rank 11) is NOT in report since report shows top 10 only', () => {
-    const lines = generateRanksReport(snapshot, config).split('\n');
+    const lines = generateRanksReport(snapshot, config, computeMembers(snapshot, config)).split('\n');
     const memberLines = lines.filter((l) =>
       /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l)
     );
@@ -369,7 +370,7 @@ describe('Transfer badge', () => {
 
 describe('Stale members excluded from report', () => {
   it('no stale member appears in report', () => {
-    const report = generateRanksReport(snapshot, config);
+    const report = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
     const staleNames = [...STALE_NAMES];
     for (const name of staleNames) {
       expect(report).not.toContain(name);
@@ -392,7 +393,7 @@ describe('Empty snapshot', () => {
       yesterday_fans_to_next_tier: 305715171,
       yesterday_fans_to_lower_tier: 20621702,
     };
-    const result = generateRanksReport(emptySnapshot, config);
+    const result = generateRanksReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
     expect(result).toBe('ℹ️ *Peringkat*\nData peringkat belum tersedia.');
   });
 });
@@ -403,12 +404,12 @@ describe('Empty snapshot', () => {
 
 describe('WhatsApp formatting compliance', () => {
   it('no Markdown bold (**...**)', () => {
-    const report = generateRanksReport(snapshot, config);
+    const report = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
     expect(report).not.toMatch(/\*\*[^*]+\*\*/);
   });
 
   it('no Markdown headers (#)', () => {
-    const report = generateRanksReport(snapshot, config);
+    const report = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
     const lines = report.split('\n');
     for (const line of lines) {
       expect(line).not.toMatch(/^#{1,6}\s/);
@@ -416,7 +417,7 @@ describe('WhatsApp formatting compliance', () => {
   });
 
   it('uses em-dash not hyphen for separator', () => {
-    const report = generateRanksReport(snapshot, config);
+    const report = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
     const memberLines = report.split('\n').filter((l) =>
       /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l)
     );
@@ -432,7 +433,7 @@ describe('WhatsApp formatting compliance', () => {
 
 describe('Complete line-by-line verification against raw data', () => {
   it('every report line matches expected raw data calculation', () => {
-    const report = generateRanksReport(snapshot, config);
+    const report = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
     const lines = report.split('\n');
 
     // Build expected top 10 from raw data

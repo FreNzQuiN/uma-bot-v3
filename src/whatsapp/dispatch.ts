@@ -355,23 +355,25 @@ async function generateReport(
   config: BotConfig,
   db?: Database
 ): Promise<string> {
+  const computedMembers = computeMembers(snapshot, config);
+
   switch (command) {
     case 'daily':
-      return generateDailyReport(snapshot, config, offset ?? 0, db);
+      return generateDailyReport(snapshot, config, computedMembers, offset ?? 0, db);
     case 'weekly':
-      return generateWeeklyReport(snapshot, config, offset ?? 0, db);
+      return generateWeeklyReport(snapshot, config, computedMembers, offset ?? 0, db);
     case 'monthly':
-      return generateMonthlyReport(snapshot, config, offset ?? 0, db);
+      return generateMonthlyReport(snapshot, config, computedMembers, offset ?? 0, db);
     case 'ranks':
-      return generateRanksReport(snapshot, config);
+      return generateRanksReport(snapshot, config, computedMembers);
     case 'bottom':
-      return generateBottomReport(snapshot, config, db);
+      return generateBottomReport(snapshot, config, computedMembers, db);
     case 'stats':
-      return generateStatsReport(snapshot, config, db);
+      return generateStatsReport(snapshot, config, computedMembers, db);
     case 'members':
-      return generateMembersReport(snapshot, config, db);
+      return generateMembersReport(snapshot, config, computedMembers, db);
     case 'tier':
-      return generateTierReport(snapshot, config, db);
+      return generateTierReport(snapshot, config, computedMembers, db);
     case 'compare': {
       const nameA = args[0] ?? '';
       const nameB = args[1] ?? '';
@@ -379,9 +381,8 @@ async function generateReport(
         return '❌ Cara pakai: /compare <AnggotaA> <AnggotaB>';
       }
       // 5-step member resolution via resolveMemberName
-      const members = computeMembers(snapshot, config);
-      const resolvedA = resolveMemberName(nameA, members);
-      const resolvedB = resolveMemberName(nameB, members);
+      const resolvedA = resolveMemberName(nameA, computedMembers);
+      const resolvedB = resolveMemberName(nameB, computedMembers);
       if (!resolvedA && !resolvedB) {
         return `❌ "${nameA}" dan "${nameB}" tidak ditemukan. Cek ejaan nama.`;
       }
@@ -391,7 +392,7 @@ async function generateReport(
       if (!resolvedB) {
         return `❌ "${nameB}" tidak ditemukan. Cek ejaan nama.`;
       }
-      return generateCompareReport(snapshot, config, resolvedA.trainerName, resolvedB.trainerName);
+      return generateCompareReport(snapshot, config, computedMembers, resolvedA.trainerName, resolvedB.trainerName);
     }
     case 'analyze': {
       const name = args.join(' ');
@@ -399,12 +400,11 @@ async function generateReport(
         return '❌ Cara pakai: /analyze <NamaAnggota>';
       }
       // 5-step member resolution via resolveMemberName
-      const members = computeMembers(snapshot, config);
-      const resolved = resolveMemberName(name, members);
+      const resolved = resolveMemberName(name, computedMembers);
       if (!resolved) {
         return `❌ "${name}" tidak ditemukan. Cek ejaan nama.`;
       }
-      return generateAnalyzeReport(snapshot, config, resolved.trainerName);
+      return generateAnalyzeReport(snapshot, config, computedMembers, resolved.trainerName);
     }
     default:
       return `❌ Perintah /${command} tidak dikenal. Cek /help.`;

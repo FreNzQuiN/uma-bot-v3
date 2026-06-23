@@ -6,6 +6,7 @@
  */
 
 import { generateMonthlyReport } from '../../../src/reports/monthly';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
@@ -20,11 +21,13 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 let loadMonthSnapshotsSpy: jest.SpyInstance;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
   loadMonthSnapshotsSpy = jest.spyOn(
     require('../../../src/data/snapshot'), 'loadMonthSnapshots'
   ).mockReturnValue([]);
@@ -45,27 +48,27 @@ describe('Stale data warning in monthly report', () => {
 
   it('shows stale warning when snapshot is stale (day 11, today June 13)', () => {
     mockCurrentDate(2026, 6, 13);
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     expect(report).toContain('update terakhir: 11 Juni 2026');
   });
 
   it('does NOT show stale warning when snapshot is fresh (day 11, today June 11)', () => {
     mockCurrentDate(2026, 6, 11);
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 
   it('does NOT show stale warning when snapshot is 1 day old (day 11, today June 12)', () => {
     mockCurrentDate(2026, 6, 12);
-    const report = generateMonthlyReport(snapshot, config, 0);
+    const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 
   it('stale warning references snapshot date, not offset date', () => {
     mockCurrentDate(2026, 6, 13);
-    const report0 = generateMonthlyReport(snapshot, config, 0);
-    const report1 = generateMonthlyReport(snapshot, config, 1);
+    const report0 = generateMonthlyReport(snapshot, config, computedMembers, 0);
+    const report1 = generateMonthlyReport(snapshot, config, computedMembers, 1);
     expect(report0).toContain('update terakhir: 11 Juni 2026');
     expect(report1).toContain('update terakhir: 11 Juni 2026');
   });
@@ -80,7 +83,7 @@ describe('Stale data warning in monthly report', () => {
         daily_fans: m.daily_fans.map((v, i) => (i < 28 ? v : 0)),
       })),
     };
-    const report = generateMonthlyReport(maySnapshot, config, 0);
+    const report = generateMonthlyReport(maySnapshot, config, computeMembers(maySnapshot, config), 0);
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 });

@@ -147,7 +147,7 @@ describe('generateMembersReport', () => {
   it('includes club name and tier in header', () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('TestClub');
     expect(report).toContain('A+'); // club_rank 8 = A+
@@ -156,7 +156,7 @@ describe('generateMembersReport', () => {
   it('lists all current members', () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('Alice');
     expect(report).toContain('Bob');
@@ -169,7 +169,7 @@ describe('generateMembersReport', () => {
       ],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('🔄');
     expect(report).toContain('OldClub');
@@ -178,7 +178,7 @@ describe('generateMembersReport', () => {
   it('does not show left members section when no db provided', () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).not.toMatch(/🚪|keluar/i);
   });
@@ -190,7 +190,7 @@ describe('generateMembersReport', () => {
   it('returns warning for empty members array', () => {
     const snapshot = makeSnapshot({ members: [] });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('Daftar Anggota');
     expect(report).toContain('Data anggota belum tersedia');
@@ -201,7 +201,7 @@ describe('generateMembersReport', () => {
       members: [makeSnapshot().members[0]],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
     const memberLines = report.split('\n').filter(l => l.startsWith('•'));
 
     expect(memberLines).toHaveLength(1);
@@ -211,7 +211,7 @@ describe('generateMembersReport', () => {
   it('handles all active members (no transfers, no stale)', () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).not.toContain('🔄');
     expect(report).not.toContain('⚠️');
@@ -221,7 +221,7 @@ describe('generateMembersReport', () => {
   it('uses plain text formatting (no Markdown bold or headers)', () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).not.toMatch(/\*\*[^*]+\*\*/);
     expect(report).not.toMatch(/^#/m);
@@ -232,7 +232,7 @@ describe('generateMembersReport', () => {
       circle: { ...makeSnapshot().circle, name: 'テストクラブ' },
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('テストクラブ');
   });
@@ -249,7 +249,7 @@ describe('generateMembersReport', () => {
       ],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('ゆうき');
   });
@@ -271,7 +271,7 @@ describe('generateMembersReport', () => {
       ],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config);
+    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('• *ZeroGain* — 0');
   });
@@ -284,7 +284,7 @@ describe('generateMembersReport', () => {
     it('active member has no badge', () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       for (const line of lines) {
@@ -300,7 +300,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       expect(report).toContain('• *T1* 🔄 — 200 (dari OriginClub)');
     });
@@ -333,7 +333,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       expect(report).toContain('• *OldMember* ⚠️');
     });
@@ -355,7 +355,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       expect(report).toContain('• *T1* 🔄');
       expect(report).not.toContain('(dari');
@@ -378,7 +378,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       // Status is 'stale' (no positive days), but with member_count gap=0,
       // stays stale. If member_count was 0, would be 'left'.
@@ -421,7 +421,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       expect(lines[0]).toContain('HighGain');
@@ -450,7 +450,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       // Both are active (transfers are active with badge), sorted by gain desc
@@ -477,7 +477,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       const transferIdx = lines.findIndex(l => l.includes('TransferMember'));
@@ -502,7 +502,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       expect(lines[0]).toContain('HighTransfer');
@@ -537,7 +537,7 @@ describe('generateMembersReport', () => {
       });
       updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, db);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).toContain('Charlie');
       expect(report).toContain('🚪');
@@ -565,7 +565,7 @@ describe('generateMembersReport', () => {
       });
       updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, db);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).toContain('Diana');
       expect(report).toContain('terakhir');
@@ -577,7 +577,7 @@ describe('generateMembersReport', () => {
 
       updateMemberHistory(snapshot, db);
 
-      const report = generateMembersReport(snapshot, config, db);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).not.toMatch(/🚪/);
     });
@@ -586,7 +586,7 @@ describe('generateMembersReport', () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
 
-      const report = generateMembersReport(snapshot, config, db);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).not.toMatch(/🚪/);
     });
@@ -613,7 +613,7 @@ describe('generateMembersReport', () => {
       });
       updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, db);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).toContain('Alice');
       expect(report).toContain('Bob');
@@ -642,7 +642,7 @@ describe('generateMembersReport', () => {
       });
       updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, db);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
       const lines = report.split('\n');
       const mainListEnd = lines.findIndex(l => l.includes('🚪'));
       const aliceIdx = lines.findIndex(l => l.includes('Alice'));
@@ -669,19 +669,19 @@ describe('generateMembersReport', () => {
     });
 
     it('generates report with 34 member lines', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const memberLines = report.split('\n').filter(l => l.startsWith('•'));
       expect(memberLines).toHaveLength(34);
     });
 
     it('first member is GoldFamily at 27.7M', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const firstMemberLine = report.split('\n').filter(l => l.startsWith('•'))[0];
       expect(firstMemberLine).toBe('• *GoldFamily* — 27.7M');
     });
 
     it('last active member is Yukil at 4.6M', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const members = computeMembers(snapshot, config);
       const activeCount = members.filter(m => m.status === 'active').length;
       const memberLines = report.split('\n').filter(l => l.startsWith('•'));
@@ -690,7 +690,7 @@ describe('generateMembersReport', () => {
     });
 
     it('all 6 transfer members have 🔄 badge and correct origin', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const transferLines = report.split('\n').filter(l => l.includes('🔄'));
 
       expect(transferLines).toHaveLength(6);
@@ -721,7 +721,7 @@ describe('generateMembersReport', () => {
     });
 
     it('all 4 left members have 🚪 badge', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const leftLines = report.split('\n').filter(l => l.includes('🚪'));
 
       expect(leftLines).toHaveLength(4);
@@ -740,7 +740,7 @@ describe('generateMembersReport', () => {
     });
 
     it('sort order: active (desc) → stale → left', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const memberLines = report.split('\n').filter(l => l.startsWith('•'));
 
       // Find boundaries
@@ -773,18 +773,18 @@ describe('generateMembersReport', () => {
     });
 
     it('header shows club name and tier', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       expect(report).toContain('Hol＿Horse');
       expect(report).toContain('A+');
     });
 
     it('report starts with 👥 Daftar Anggota', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       expect(report.substring(0, 100)).toContain('👥 *Daftar Anggota');
     });
 
     it('no Markdown bold or headers in output', () => {
-      const report = generateMembersReport(snapshot, config);
+      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       expect(report).not.toMatch(/\*\*[^*]+\*\*/);
       expect(report).not.toMatch(/^#/m);
     });

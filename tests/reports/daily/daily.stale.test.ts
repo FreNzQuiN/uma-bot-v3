@@ -6,6 +6,7 @@
  */
 
 import { generateDailyReport } from '../../../src/reports/daily';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
@@ -20,10 +21,12 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -62,24 +65,24 @@ describe('Stale data warning: snapshot freshness vs offset', () => {
     });
 
     it('shows stale warning for offset=0', () => {
-      const report = generateDailyReport(snapshot, config, 0);
+      const report = generateDailyReport(snapshot, config, computedMembers, 0);
       expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('shows stale warning for offset=1', () => {
-      const report = generateDailyReport(snapshot, config, 1);
+      const report = generateDailyReport(snapshot, config, computedMembers, 1);
       expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('shows stale warning for offset=2', () => {
-      const report = generateDailyReport(snapshot, config, 2);
+      const report = generateDailyReport(snapshot, config, computedMembers, 2);
       expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('stale warning references SNAPSHOT date (11 Juni), not offset date', () => {
-      const report0 = generateDailyReport(snapshot, config, 0);
-      const report1 = generateDailyReport(snapshot, config, 1);
-      const report2 = generateDailyReport(snapshot, config, 2);
+      const report0 = generateDailyReport(snapshot, config, computedMembers, 0);
+      const report1 = generateDailyReport(snapshot, config, computedMembers, 1);
+      const report2 = generateDailyReport(snapshot, config, computedMembers, 2);
 
       expect(report0).toContain('update terakhir: 11 Juni 2026');
       expect(report1).toContain('update terakhir: 11 Juni 2026');
@@ -99,17 +102,17 @@ describe('Stale data warning: snapshot freshness vs offset', () => {
     });
 
     it('shows NO stale warning for offset=0', () => {
-      const report = generateDailyReport(freshSnapshot, config, 0);
+      const report = generateDailyReport(freshSnapshot, config, computeMembers(freshSnapshot, config), 0);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('shows NO stale warning for offset=1', () => {
-      const report = generateDailyReport(freshSnapshot, config, 1);
+      const report = generateDailyReport(freshSnapshot, config, computeMembers(freshSnapshot, config), 1);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('shows NO stale warning for offset=2', () => {
-      const report = generateDailyReport(freshSnapshot, config, 2);
+      const report = generateDailyReport(freshSnapshot, config, computeMembers(freshSnapshot, config), 2);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
   });
@@ -123,12 +126,12 @@ describe('Stale data warning: snapshot freshness vs offset', () => {
     });
 
     it('shows NO stale warning for offset=0', () => {
-      const report = generateDailyReport(freshSnapshot, config, 0);
+      const report = generateDailyReport(freshSnapshot, config, computeMembers(freshSnapshot, config), 0);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('shows NO stale warning for offset=1', () => {
-      const report = generateDailyReport(freshSnapshot, config, 1);
+      const report = generateDailyReport(freshSnapshot, config, computeMembers(freshSnapshot, config), 1);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
   });
@@ -139,12 +142,12 @@ describe('Stale data warning: snapshot freshness vs offset', () => {
     });
 
     it('shows NO stale warning for offset=0', () => {
-      const report = generateDailyReport(snapshot, config, 0);
+      const report = generateDailyReport(snapshot, config, computedMembers, 0);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('shows NO stale warning for offset=1', () => {
-      const report = generateDailyReport(snapshot, config, 1);
+      const report = generateDailyReport(snapshot, config, computedMembers, 1);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
   });
@@ -155,12 +158,12 @@ describe('Stale data warning: snapshot freshness vs offset', () => {
     });
 
     it('shows NO stale warning for offset=0', () => {
-      const report = generateDailyReport(snapshot, config, 0);
+      const report = generateDailyReport(snapshot, config, computedMembers, 0);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
 
     it('shows NO stale warning for offset=1', () => {
-      const report = generateDailyReport(snapshot, config, 1);
+      const report = generateDailyReport(snapshot, config, computedMembers, 1);
       expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     });
   });
@@ -174,13 +177,13 @@ describe('Stale data warning: snapshot freshness vs offset', () => {
     });
 
     it('shows stale warning for offset=0 with correct date', () => {
-      const report = generateDailyReport(veryStaleSnapshot, config, 0);
+      const report = generateDailyReport(veryStaleSnapshot, config, computeMembers(veryStaleSnapshot, config), 0);
       expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
       expect(report).toContain('update terakhir: 5 Juni 2026');
     });
 
     it('shows stale warning for offset=1 referencing snapshot date, not offset date', () => {
-      const report = generateDailyReport(veryStaleSnapshot, config, 1);
+      const report = generateDailyReport(veryStaleSnapshot, config, computeMembers(veryStaleSnapshot, config), 1);
       expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
       expect(report).toContain('update terakhir: 5 Juni 2026');
       expect(report).not.toContain('update terakhir: 4 Juni 2026');
@@ -209,15 +212,15 @@ describe('Stale data warning: cross-month & offset independence', () => {
       })),
     };
 
-    const report = generateDailyReport(maySnapshot, config, 0);
+    const report = generateDailyReport(maySnapshot, config, computeMembers(maySnapshot, config), 0);
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
 
   it('offset=0 and offset=5 produce same stale warning presence', () => {
     mockCurrentDate(2026, 6, 13);
 
-    const report0 = generateDailyReport(snapshot, config, 0);
-    const report5 = generateDailyReport(snapshot, config, 5);
+    const report0 = generateDailyReport(snapshot, config, computedMembers, 0);
+    const report5 = generateDailyReport(snapshot, config, computedMembers, 5);
 
     const hasStale0 = report0.includes('⚠️ Data klub mungkin tidak terbaru');
     const hasStale5 = report5.includes('⚠️ Data klub mungkin tidak terbaru');
@@ -227,8 +230,8 @@ describe('Stale data warning: cross-month & offset independence', () => {
   it('both offset=0 and offset=5 reference the same snapshot date', () => {
     mockCurrentDate(2026, 6, 13);
 
-    const report0 = generateDailyReport(snapshot, config, 0);
-    const report5 = generateDailyReport(snapshot, config, 5);
+    const report0 = generateDailyReport(snapshot, config, computedMembers, 0);
+    const report5 = generateDailyReport(snapshot, config, computedMembers, 5);
 
     expect(report0).toContain('update terakhir: 11 Juni 2026');
     expect(report5).toContain('update terakhir: 11 Juni 2026');
@@ -247,7 +250,7 @@ describe('Stale data warning: report structure & edge cases', () => {
   it('stale warning appears after member list, before footer', () => {
     mockCurrentDate(2026, 6, 13);
 
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const lines = report.split('\n');
 
     const staleWarningIdx = lines.findIndex((l) =>
@@ -264,7 +267,7 @@ describe('Stale data warning: report structure & edge cases', () => {
   it('fresh snapshot: no stale warning line, report still has footer', () => {
     mockCurrentDate(2026, 6, 11);
 
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const lines = report.split('\n');
 
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
@@ -283,7 +286,7 @@ describe('Stale data warning: report structure & edge cases', () => {
       yesterday_fans_to_lower_tier: 20621702,
     };
 
-    const report = generateDailyReport(emptySnapshot, config, 0);
+    const report = generateDailyReport(emptySnapshot, config, computeMembers(emptySnapshot, config), 0);
     expect(report).toBe('ℹ️ *Daily Report*\nTidak ada data anggota untuk hari ini. Mungkin sync belum berjalan.');
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
   });
@@ -291,8 +294,8 @@ describe('Stale data warning: report structure & edge cases', () => {
   it('negative offset produces same stale warning as positive offset', () => {
     mockCurrentDate(2026, 6, 13);
 
-    const reportNeg = generateDailyReport(snapshot, config, -1);
-    const reportPos = generateDailyReport(snapshot, config, 1);
+    const reportNeg = generateDailyReport(snapshot, config, computedMembers, -1);
+    const reportPos = generateDailyReport(snapshot, config, computedMembers, 1);
 
     const staleNeg = reportNeg.includes('⚠️ Data klub mungkin tidak terbaru');
     const stalePos = reportPos.includes('⚠️ Data klub mungkin tidak terbaru');
@@ -302,7 +305,7 @@ describe('Stale data warning: report structure & edge cases', () => {
   it('stale warning uses Indonesian date format', () => {
     mockCurrentDate(2026, 6, 13);
 
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     expect(report).toMatch(/update terakhir: \d+ Juni 2026/);
   });
 });
@@ -324,7 +327,7 @@ describe('Stale data warning: bug fix behavioral contract', () => {
     mockCurrentDate(2026, 6, 13);
     const freshSnapshot = makeSnapshotWithLatestDay(12);
 
-    const report = generateDailyReport(freshSnapshot, config, 1);
+    const report = generateDailyReport(freshSnapshot, config, computeMembers(freshSnapshot, config), 1);
 
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
     expect(report).toContain('📊 *Daily Report — 11 Juni 2026*');
@@ -333,7 +336,7 @@ describe('Stale data warning: bug fix behavioral contract', () => {
   it('BUG FIX: /daily 0 correctly warns when snapshot is stale', () => {
     mockCurrentDate(2026, 6, 13);
 
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
 
     expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     expect(report).toContain('update terakhir: 11 Juni 2026');
@@ -342,7 +345,7 @@ describe('Stale data warning: bug fix behavioral contract', () => {
   it('BUG FIX: /daily 1 correctly warns when snapshot is stale', () => {
     mockCurrentDate(2026, 6, 13);
 
-    const report = generateDailyReport(snapshot, config, 1);
+    const report = generateDailyReport(snapshot, config, computedMembers, 1);
 
     expect(report).toContain('⚠️ Data klub mungkin tidak terbaru');
     expect(report).toContain('update terakhir: 11 Juni 2026');

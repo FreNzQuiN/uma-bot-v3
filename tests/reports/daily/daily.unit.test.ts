@@ -7,6 +7,7 @@
  */
 
 import { generateDailyReport } from '../../../src/reports/daily';
+import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
 import {
@@ -30,10 +31,12 @@ import {
 
 let snapshot: Snapshot;
 let config: BotConfig;
+let computedMembers: ReturnType<typeof computeMembers>;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
+  computedMembers = computeMembers(snapshot, config);
 });
 
 // ============================================================
@@ -206,7 +209,7 @@ describe('Individual member gains', () => {
 
 describe('Offset reports', () => {
   it('offset=1 shows day 10 data', () => {
-    const report1 = generateDailyReport(snapshot, config, 1);
+    const report1 = generateDailyReport(snapshot, config, computedMembers, 1);
     const lines1 = report1.split('\n');
     expect(lines1[0]).toBe('📊 *Daily Report — 10 Juni 2026*');
     const syncLine = lines1.find((l) => l.startsWith('Terakhir sync:'));
@@ -256,7 +259,7 @@ describe('All positive-gain member gains traced to raw data (day 11)', () => {
   let latestDataDay: number;
 
   beforeAll(() => {
-    report = generateDailyReport(snapshot, config, 0);
+    report = generateDailyReport(snapshot, config, computedMembers, 0);
     memberLines = report.split('\n').filter((l) => /^\d+\./.test(l));
     staleLines = report.split('\n').filter((l) => l.startsWith('• '));
     latestDataDay = getDataDayFromSnapshot(snapshot);
@@ -372,7 +375,7 @@ describe('Transfer members with negative daily_fans[0]', () => {
   });
 
   it('negative daily_fans[0] does not produce negative gain display', () => {
-    const report = generateDailyReport(snapshot, config, 0);
+    const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const memberLines = report.split('\n').filter((l) => /^\d+\./.test(l));
     for (const line of memberLines) {
       expect(line).not.toMatch(/— -[\d.]+/);
