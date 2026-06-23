@@ -129,7 +129,9 @@ async function dispatchMessage(
   log.debug('Dispatch', `Parsed command: /${parsed.command} args=[${parsed.args.join(', ')}] offset=${parsed.offset}`);
 
   // Determine sender and chat JIDs
-  const senderJid = msg.key.participant ?? msg.key.remoteJid;
+  // Use || not ?? — protobuf-decoded messages set participant to "" (empty string)
+  // for DMs, which ?? treats as non-nullish, leaving senderJid empty.
+  const senderJid = msg.key.participant || msg.key.remoteJid;
   const chatJid = msg.key.remoteJid;
 
   // Access control — silently ignore unauthorized sources
