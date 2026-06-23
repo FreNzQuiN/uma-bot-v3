@@ -17,6 +17,7 @@ import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFo
  *
  * @param snapshot - Raw snapshot data
  * @param config - Bot configuration
+ * @param computedMembers - Pre-computed member data (ComputedMember[])
  * @param offset - Days back from latest data day (0 = latest)
  */
 export function generateDailyReport(

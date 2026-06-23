@@ -17,6 +17,7 @@ import { isStaleForReport } from '../data/daily-fans';
  *
  * @param snapshot - Raw snapshot data
  * @param config - Bot configuration
+ * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateBottomReport(
   snapshot: Snapshot,

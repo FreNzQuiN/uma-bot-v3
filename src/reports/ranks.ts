@@ -17,6 +17,7 @@ const MEDALS = ['🥇', '🥈', '🥉'];
  *
  * @param snapshot - Raw snapshot data
  * @param config - Bot configuration
+ * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateRanksReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
   // Guard: empty members

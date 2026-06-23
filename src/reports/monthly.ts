@@ -25,6 +25,7 @@ function formatMonthYear(month: number, year: number): string {
  *
  * @param snapshot - Raw snapshot data
  * @param config - Bot configuration
+ * @param computedMembers - Pre-computed member data (ComputedMember[])
  * @param offset - Months back (0 = current month)
  */
 export function generateMonthlyReport(

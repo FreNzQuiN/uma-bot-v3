@@ -81,6 +81,7 @@ export function computeTierData(snapshot: Snapshot): TierData {
  * Generate the tier report string.
  *
  * @param snapshot - Raw snapshot data
+ * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateTierReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[], db?: Database): string {
   // Guard: empty members

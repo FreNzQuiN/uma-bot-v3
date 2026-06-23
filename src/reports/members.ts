@@ -17,6 +17,7 @@ import { getLeftMembers } from '../data/snapshot';
  *
  * @param snapshot - Raw snapshot data
  * @param config - Bot configuration
+ * @param computedMembers - Pre-computed member data (ComputedMember[])
  * @param db - Optional database for querying left members history
  */
 export function generateMembersReport(

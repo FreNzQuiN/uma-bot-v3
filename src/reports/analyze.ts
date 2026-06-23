@@ -16,6 +16,14 @@ import {
 const TREND_UP_THRESHOLD = 1.1;   // 10% above 7-day avg = upward trend
 const TREND_DOWN_THRESHOLD = 0.9; // 10% below 7-day avg = downward trend
 
+/**
+ * Generate the analyze report string.
+ *
+ * @param snapshot - Raw snapshot data
+ * @param config - Bot configuration
+ * @param computedMembers - Pre-computed member data (ComputedMember[])
+ * @param name - Member name to analyze
+ */
 export function generateAnalyzeReport(
   snapshot: Snapshot,
   config: BotConfig,
