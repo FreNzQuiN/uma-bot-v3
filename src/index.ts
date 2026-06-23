@@ -83,7 +83,7 @@ async function main() {
 
   // ── 1. Load config + init DB ──
   let config = loadConfig();
-  log.configure(config.logging);
+  log.configure({ ...config.logging, timezone: config.timezone });
 
   const db = new Database('data/bot.db');
   await db.initialize();
@@ -128,7 +128,7 @@ async function main() {
         try {
           const oldConfig = config;
           config = loadConfig();
-          log.configure(config.logging);
+          log.configure({ ...config.logging, timezone: config.timezone });
 
           const diff = configChanged(oldConfig, config);
           if (!diff.changed) {

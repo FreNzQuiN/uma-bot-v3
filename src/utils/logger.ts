@@ -36,6 +36,8 @@ export interface LoggerConfig {
   maxSizeMB: number;
   maxFiles: number;
   console: boolean;
+  /** IANA timezone for log timestamps (default: 'Asia/Jakarta'). */
+  timezone: string;
   /** Write to log file. Auto-disabled in test environment (JEST_WORKER_ID set). */
   fileOutput: boolean;
 }
@@ -46,6 +48,7 @@ const DEFAULT_CONFIG: LoggerConfig = {
   maxSizeMB: 5,
   maxFiles: 3,
   console: true,
+  timezone: 'Asia/Jakarta',
   // Jest sets JEST_WORKER_ID for each test worker. Disable file output
   // automatically so tests don't pollute the real bot.log.
   fileOutput: !process.env.JEST_WORKER_ID,
@@ -110,11 +113,23 @@ class Logger {
    * Format a log line.
    *
    * Format: [timestamp] [LEVEL] [Tag] message
+   * Timestamp uses the configured timezone (default: Asia/Jakarta).
    */
   private formatLine(level: LogLevel, tag: string, message: string): string {
-    const ts = new Date().toISOString();
+    const now = new Date();
+    const ts = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: this.config.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).format(now);
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
     const tagStr = tag ? ` [${tag}]` : '';
-    return `[${ts}] [${level.toUpperCase()}]${tagStr} ${message}`;
+    return `[${ts}.${ms}] [${level.toUpperCase()}]${tagStr} ${message}`;
   }
 
   /**
