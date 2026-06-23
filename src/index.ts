@@ -33,6 +33,7 @@ import { generateBottomReport } from './reports/bottom';
 import { generateStatsReport } from './reports/stats';
 import { generateMembersReport } from './reports/members';
 import { generateTierReport } from './reports/tier';
+import { generateCombinedReport } from './reports/combined';
 
 const PID_FILE = 'data/bot.pid';
 
@@ -526,15 +527,7 @@ async function main() {
       }
     }
 
-    const parts: string[] = [];
-    for (const type of types) {
-      switch (type) {
-        case 'daily': parts.push(generateDailyReport(snapshot, currentConfig, undefined, db)); break;
-        case 'weekly': parts.push(generateWeeklyReport(snapshot, currentConfig, undefined, db)); break;
-        case 'monthly': parts.push(generateMonthlyReport(snapshot, currentConfig, -1, db)); break;
-      }
-    }
-    const combined = parts.join('\n\n');
+    const combined = generateCombinedReport(types, snapshot, currentConfig, db);
     await deliverReport(combined, types.join('+'));
   }, onDataFetch);
   scheduler.start();
@@ -567,15 +560,7 @@ async function main() {
           const snapshot = getSnapshot();
           if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
           const currentConfig = getConfig();
-          const parts: string[] = [];
-          for (const type of types) {
-            switch (type) {
-              case 'daily': parts.push(generateDailyReport(snapshot, currentConfig, undefined, db)); break;
-              case 'weekly': parts.push(generateWeeklyReport(snapshot, currentConfig, undefined, db)); break;
-              case 'monthly': parts.push(generateMonthlyReport(snapshot, currentConfig, -1, db)); break;
-            }
-          }
-          const combined = parts.join('\n\n');
+          const combined = generateCombinedReport(types, snapshot, currentConfig, db);
           await deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
         });
         log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
