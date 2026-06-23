@@ -12,6 +12,16 @@ import { parseCommand, resolveMemberName } from './commands';
 import { canUseCommand, isAdmin, ADMIN_COMMANDS } from './access';
 import { handleSetReq, handleConfig, handleStatus, handleCatchUp, handleAlerts } from './admin';
 import { computeMembers } from '../reports/compute';
+import { generateDailyReport } from '../reports/daily';
+import { generateWeeklyReport } from '../reports/weekly';
+import { generateMonthlyReport } from '../reports/monthly';
+import { generateRanksReport } from '../reports/ranks';
+import { generateBottomReport } from '../reports/bottom';
+import { generateStatsReport } from '../reports/stats';
+import { generateMembersReport } from '../reports/members';
+import { generateTierReport } from '../reports/tier';
+import { generateCompareReport } from '../reports/compare';
+import { generateAnalyzeReport } from '../reports/analyze';
 import { log } from '../utils/logger';
 import { getRuntimeStats, getUptimeMs, recordMessageParsed, recordMessageResponded, recordMessageFailed } from '../runtime';
 
@@ -345,42 +355,24 @@ async function generateReport(
   config: BotConfig,
   db?: Database
 ): Promise<string> {
-  // Dynamic imports to avoid circular dependencies and keep bundle size small
   switch (command) {
-    case 'daily': {
-      const { generateDailyReport } = await import('../reports/daily');
+    case 'daily':
       return generateDailyReport(snapshot, config, offset ?? 0, db);
-    }
-    case 'weekly': {
-      const { generateWeeklyReport } = await import('../reports/weekly');
+    case 'weekly':
       return generateWeeklyReport(snapshot, config, offset ?? 0, db);
-    }
-    case 'monthly': {
-      const { generateMonthlyReport } = await import('../reports/monthly');
+    case 'monthly':
       return generateMonthlyReport(snapshot, config, offset ?? 0, db);
-    }
-    case 'ranks': {
-      const { generateRanksReport } = await import('../reports/ranks');
+    case 'ranks':
       return generateRanksReport(snapshot, config);
-    }
-    case 'bottom': {
-      const { generateBottomReport } = await import('../reports/bottom');
+    case 'bottom':
       return generateBottomReport(snapshot, config, db);
-    }
-    case 'stats': {
-      const { generateStatsReport } = await import('../reports/stats');
+    case 'stats':
       return generateStatsReport(snapshot, config, db);
-    }
-    case 'members': {
-      const { generateMembersReport } = await import('../reports/members');
+    case 'members':
       return generateMembersReport(snapshot, config, db);
-    }
-    case 'tier': {
-      const { generateTierReport } = await import('../reports/tier');
+    case 'tier':
       return generateTierReport(snapshot, config, db);
-    }
     case 'compare': {
-      const { generateCompareReport } = await import('../reports/compare');
       const nameA = args[0] ?? '';
       const nameB = args[1] ?? '';
       if (!nameA || !nameB) {
@@ -402,7 +394,6 @@ async function generateReport(
       return generateCompareReport(snapshot, config, resolvedA.trainerName, resolvedB.trainerName);
     }
     case 'analyze': {
-      const { generateAnalyzeReport } = await import('../reports/analyze');
       const name = args.join(' ');
       if (!name) {
         return '❌ Cara pakai: /analyze <NamaAnggota>';
