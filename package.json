@@ -24,7 +24,15 @@
     "fetch": "ts-node -e \"const{loadConfig}=require('./src/config');const{UmaMoeClient}=require('./src/api/uma-moe');const{saveSnapshot}=require('./src/data/snapshot');const config=loadConfig();const client=new UmaMoeClient();const now=new Date();client.fetchCircleData(config.circleId,now.getFullYear(),now.getMonth()+1).then(s=>{const d=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));const ds=\\\"\\\"+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');saveSnapshot(s,ds);console.log('Snapshot saved for '+ds)}).catch(e=>console.error('Fetch failed:',e.message))\"",
     "docker:build": "docker build -t uma-club-bot .",
     "docker:run": "docker run -d --name uma-bot -v \"%cd%/data:/app/data\" -v \"%cd%/config.yaml:/app/config.yaml\" --env-file .env uma-club-bot",
-    "docker:stop": "docker stop uma-bot && docker rm uma-bot"
+    "docker:stop": "docker stop uma-bot && docker rm uma-bot",
+    "pm2:install": "npm install -g pm2 && pm2 install pm2-windows-startup",
+    "pm2:start": "npm run build && pm2 start ecosystem.config.js && pm2 save",
+    "pm2:stop": "pm2 stop uma-bot",
+    "pm2:uninstall": "pm2 stop uma-bot && pm2 delete uma-bot && pm2 save --force && pm2-unstartup -y && echo Bot removed from PM2",
+    "pm2:uninstall:full": "npm run pm2:uninstall && npm uninstall -g pm2 && echo PM2 uninstalled globally",
+    "pm2:restart": "npm run build && pm2 restart uma-bot",
+    "pm2:logs": "pm2 logs uma-bot",
+    "pm2:status": "pm2 status"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc13",
