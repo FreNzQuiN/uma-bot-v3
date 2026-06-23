@@ -2,6 +2,31 @@
 
 WhatsApp bot for Uma Musume club leaders. Tracks member performance, sends automated reports, and provides tier intelligence from uma.moe data.
 
+## Documentation
+
+| Document | What it covers |
+|----------|---------------|
+| [docs/architecture.md](docs/architecture.md) | System design, data flow, component relationships |
+| [docs/configuration.md](docs/configuration.md) | Full config reference with all fields and defaults |
+| [docs/api-reference.md](docs/api-reference.md) | REST API endpoints, request/response formats |
+| [docs/message-design.md](docs/message-design.md) | Bourbon persona, emoji rules, message formatting |
+| [docs/game-context.md](docs/game-context.md) | Uma Musume game mechanics for developers |
+| [docs/uma-moe-api.md](docs/uma-moe-api.md) | uma.moe external API (reverse-engineered) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute, code conventions, gotchas |
+| [AGENTS.md](AGENTS.md) | Concise architecture overview for AI agents |
+
+## Architecture (TL;DR)
+
+Single Node.js process. No microservices, no cache layer.
+
+**Data flow:** uma.moe → Snapshot (immutable JSON) → `computeMembers()` → Report generator → WhatsApp message → Announcement group.
+
+**Key concept:** Core data is a `daily_fans` array — 32 cumulative integers, one per day. Every report (daily, weekly, monthly, ranks, bottom, stats) is different arithmetic on this same array.
+
+**Startup:** Config → DB → Fetch data → API server → Scheduler → WhatsApp → Catch-up.
+
+See [docs/architecture.md](docs/architecture.md) for the full picture.
+
 ## Prerequisites
 
 - Node.js 18+
@@ -30,6 +55,20 @@ npm start
 
 On first start, scan the QR code shown in the terminal with WhatsApp to authenticate.
 
+### Running in Background (Windows)
+
+For persistent production use, PM2 runs the bot as a background service with auto-restart and Windows boot persistence:
+
+```bash
+npm run pm2:install    # one-time: install PM2 + Windows startup plugin
+npm run pm2:start      # build + start as background service
+npm run pm2:logs       # view logs
+npm run pm2:stop       # stop the service
+npm run pm2:uninstall  # remove from PM2 + disable Windows startup
+```
+
+Logs are saved to `data/logs/pm2-error.log` and `data/logs/pm2-out.log`.
+
 ## All Scripts
 
 ### Core
@@ -46,7 +85,7 @@ On first start, scan the QR code shown in the terminal with WhatsApp to authenti
 
 | Script | Description |
 |--------|-------------|
-| `npm test` | Run all 1354 tests |
+| `npm test` | Run all 1389 tests |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with coverage report |
 | `npm run lint:check` | TypeScript type check (no emit) |
@@ -80,6 +119,19 @@ On first start, scan the QR code shown in the terminal with WhatsApp to authenti
 | `npm run docker:stop` | Stop and remove container |
 | `docker compose up -d` | Start with docker-compose |
 | `docker compose down` | Stop with docker-compose |
+
+### PM2 (Windows Production)
+
+| Script | Description |
+|--------|-------------|
+| `npm run pm2:install` | Install PM2 globally + Windows startup plugin |
+| `npm run pm2:start` | Build + start bot as PM2 background service |
+| `npm run pm2:stop` | Stop the bot |
+| `npm run pm2:restart` | Rebuild + restart the bot |
+| `npm run pm2:logs` | View bot logs |
+| `npm run pm2:status` | Check bot status |
+| `npm run pm2:uninstall` | Stop bot, remove from PM2, disable Windows startup |
+| `npm run pm2:uninstall:full` | All of above + uninstall PM2 globally |
 
 ## Configuration
 
