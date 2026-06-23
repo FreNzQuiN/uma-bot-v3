@@ -127,15 +127,6 @@ describe('/daily dispatch integration (real snapshot)', () => {
 
     const report = sentMessages[1].text;
 
-    console.log('\n======================================================');
-    console.log('SCENARIO 1: /daily in command group (non-admin)');
-    console.log('======================================================');
-    console.log('\n--- Loading ---');
-    console.log(sentMessages[0].text);
-    console.log('\n--- Full Report ---');
-    console.log(report);
-    console.log('--- END SCENARIO 1 ---\n');
-
     expect(report).toContain('📊 *Daily Report — 11 Juni 2026*');
     expect(report).toContain('Hol＿Horse');
     expect(report).toContain('A+');

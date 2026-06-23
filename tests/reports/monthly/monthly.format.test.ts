@@ -91,9 +91,6 @@ describe('Full monthly report output (offset=0)', () => {
   });
 
   it('prints the full report for visual verification', () => {
-    console.log('\n========== FULL MONTHLY REPORT (offset=0) ==========');
-    console.log(report);
-    console.log('========== END REPORT ==========');
     expect(report.length).toBeGreaterThan(0);
   });
 
@@ -284,9 +281,6 @@ describe('Requirement section', () => {
   it('when monthlyFans = 10M, more members pass', () => {
     const cfg = makeConfig({ monthlyFans: 10_000_000 });
     const report = generateMonthlyReport(snapshot, cfg, 0);
-    console.log('\n========== MONTHLY REPORT with monthlyFans=10M ==========');
-    console.log(report);
-    console.log('========== END ==========');
 
     // Members with monthlyGain >= 10M:
     // GoldFamily: 27.7M, RngF: 19.2M, Aditya: 18.6M, DzFx: 18.2M,

@@ -70,9 +70,6 @@ function makeSingleMemberSnapshot(): Snapshot {
 describe('Stats report full output', () => {
   it('prints the full report for visual inspection', () => {
     const report = generateStatsReport(snapshot, config);
-    console.log('\n========== FULL STATS REPORT ==========');
-    console.log(report);
-    console.log('========== END REPORT ==========');
     expect(report.length).toBeGreaterThan(0);
   });
 });
@@ -546,10 +543,6 @@ describe('All-zero gains edge case', () => {
     const allZero = makeAllZeroSnapshot();
     const report = generateStatsReport(allZero, config);
 
-    console.log('\n========== ALL-ZERO REPORT ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
-
     expect(report).toContain('📊 *Stats Overview*');
     expect(report).toContain('Total gain bulanan: 0');
     expect(report).toContain('Gain rata-rata bulanan: 0');
@@ -572,10 +565,6 @@ describe('Single member edge case', () => {
   it('handles single member snapshot', () => {
     const singleMember = makeSingleMemberSnapshot();
     const report = generateStatsReport(singleMember, config);
-
-    console.log('\n========== SINGLE MEMBER REPORT ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
 
     expect(report).toContain('📊 *Stats Overview*');
     expect(report).toContain('Total anggota: 1');

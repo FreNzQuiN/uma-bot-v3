@@ -62,9 +62,6 @@ describe('Full weekly report output (offset=0, W2)', () => {
   });
 
   it('prints the full report for visual verification', () => {
-    console.log('\n========== FULL WEEKLY REPORT (offset=0, W2) ==========');
-    console.log(report);
-    console.log('========== END REPORT ==========');
     expect(report.length).toBeGreaterThan(0);
   });
 
@@ -195,9 +192,6 @@ describe('Offset=1 shows W1 (days 1-7)', () => {
   });
 
   it('prints the full W1 report', () => {
-    console.log('\n========== FULL WEEKLY REPORT (offset=1, W1) ==========');
-    console.log(report);
-    console.log('========== END REPORT ==========');
     expect(report.length).toBeGreaterThan(0);
   });
 

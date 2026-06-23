@@ -570,16 +570,6 @@ describe('computeMembers', () => {
       for (const name of names) {
         const m = members.find((x) => x.trainerName === name);
         expect(m).toBeDefined();
-        // Print for visual verification (shown in test output)
-        console.log(
-          `[${m!.status.toUpperCase()}] ${m!.trainerName}: ` +
-          `monthlyGain=${m!.monthlyGain} (${(m!.monthlyGain / 1_000_000).toFixed(1)}M), ` +
-          `latestDay=${m!.latestPositiveDay}, ` +
-          `firstDay=${m!.firstPositiveDay}, ` +
-          `latestDaily=${m!.latestDailyGain}, ` +
-          `weekly=[${m!.weeklyGains.join(',')}], ` +
-          `transfer=${m!.isTransfer}`
-        );
       }
     });
   });

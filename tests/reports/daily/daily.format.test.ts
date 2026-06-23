@@ -47,14 +47,6 @@ describe('Output structure', () => {
   });
 
   it('prints the full report for verification', () => {
-    console.log('\n========== FULL DAILY REPORT (offset=0) ==========');
-    console.log(report);
-    console.log('========== END REPORT ==========');
-
-    console.log('\n========== FULL DAILY REPORT (offset=1) ==========');
-    console.log(reportOffset1);
-    console.log('========== END REPORT ==========\n');
-
     expect(report.length).toBeGreaterThan(0);
   });
 
@@ -228,9 +220,6 @@ describe('Single member snapshot', () => {
     };
 
     const report = generateDailyReport(singleSnapshot, config, 0);
-    console.log('\n========== SINGLE MEMBER REPORT ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
 
     expect(report).toContain('📊 *Daily Report — 11 Juni 2026*');
     expect(report).toContain('1 kontribusi dari 1 anggota');
@@ -278,9 +267,6 @@ describe('Single member snapshot', () => {
     };
 
     const report = generateDailyReport(mixedSnapshot, config, 0);
-    console.log('\n========== MIXED STALE+ACTIVE SNAPSHOT ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
 
     expect(report).toContain('1 kontribusi dari 2 anggota');
     expect(report).toContain('⚠️ Belum aktif');

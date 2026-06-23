@@ -50,9 +50,6 @@ describe('Bottom report: full output and basic structure', () => {
   });
 
   it('prints the full report for visual verification', () => {
-    console.log('\n========== FULL BOTTOM REPORT ==========');
-    console.log(report);
-    console.log('========== END REPORT ==========\n');
     expect(report.length).toBeGreaterThan(0);
   });
 

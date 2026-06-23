@@ -122,10 +122,6 @@ describe('Left members section', () => {
   it('shows NO left members section (left only in /members)', () => {
     const report = generateDailyReport(snapshot, config, 0);
 
-    console.log('\n========== DAILY REPORT (no left section) ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
-
     // Left section removed from daily report
     expect(report).not.toContain('🚪 Keluar dari klub:');
 
@@ -179,10 +175,6 @@ describe('Offset clamping at report level', () => {
 
     // Shows "first day" message since no one can have gain on day 1
     expect(report).toContain('Gain hari pertama: belum tersedia');
-
-    console.log('\n========== OFFSET=100 REPORT (clamped to day 1) ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
   });
 
   it('offset equal to dataDay - 1 shows day 1 data', () => {
@@ -312,9 +304,6 @@ describe('Stale warning through dispatch (date-mocked)', () => {
     );
 
     const report = sentMessages[1].text;
-    console.log('\n========== /daily 1 FRESH SNAPSHOT ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
 
     expect(report).toContain('📊 *Daily Report — 11 Juni 2026*');
     expect(report).not.toContain('⚠️ Data klub mungkin tidak terbaru');
@@ -332,9 +321,6 @@ describe('Stale warning through dispatch (date-mocked)', () => {
     );
 
     const report = sentMessages[1].text;
-    console.log('\n========== /daily 1 STALE SNAPSHOT ==========');
-    console.log(report);
-    console.log('========== END ==========\n');
 
     expect(report).toContain('📊 *Daily Report — 10 Juni 2026*');
     expect(report).toContain('⚠️ Data klub mungkin tidak terbaru (update terakhir: 11 Juni 2026)');

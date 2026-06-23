@@ -101,10 +101,6 @@ describe('Below-requirement section', () => {
     const cfg = makeConfig({ weeklyFans: 5_000_000 });
     const report = generateWeeklyReport(snapshot, cfg, 0);
 
-    console.log('\n========== WEEKLY REPORT with weeklyFans=5M ==========');
-    console.log(report);
-    console.log('========== END ==========');
-
     expect(report).toContain('⚠️ Di bawah target 5.0M/minggu:');
 
     // Members with W2 gain between 0 and 5M

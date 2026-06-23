@@ -244,8 +244,8 @@ describe('Logger file writing', () => {
     const lines = readFileLines(logFile);
     expect(lines).toHaveLength(1);
 
-    // Match: [2026-06-22T12:00:00.000Z] [INFO] [Bot] server started
-    const pattern = /^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\] \[INFO\] \[Bot\] server started$/;
+    // Match: [2026-06-23 03:51:21.653] [INFO] [Bot] server started
+    const pattern = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[INFO\] \[Bot\] server started$/;
     expect(lines[0]).toMatch(pattern);
   });
 
@@ -475,7 +475,7 @@ describe('Logger tags', () => {
 
     const lines = readFileLines(logFile);
     // Empty string is falsy → tagStr = '' → format: [ts] [INFO] no tag
-    expect(lines[0]).toMatch(/^\[\d{4}.*Z\] \[INFO\] no tag$/);
+    expect(lines[0]).toMatch(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[INFO\] no tag$/);
   });
 
   test('tag is included in brackets', () => {

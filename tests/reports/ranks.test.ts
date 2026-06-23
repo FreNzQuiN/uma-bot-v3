@@ -180,9 +180,6 @@ describe('Report header structure', () => {
   });
 
   it('prints the full report for visual inspection', () => {
-    console.log('\n========== FULL RANKS REPORT ==========');
-    console.log(report);
-    console.log('========== END REPORT ==========');
     expect(report.length).toBeGreaterThan(0);
   });
 
