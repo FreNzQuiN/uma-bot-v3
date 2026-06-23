@@ -12,7 +12,7 @@ npm run build        # tsc -> dist/
 npm start            # node dist/index.js
 npm run dev          # ts-node src/index.ts
 npm run dev:watch    # ts-node-dev with hot-reload
-npm test             # jest --forceExit --detectOpenHandles (1599 tests)
+npm test             # jest --forceExit --detectOpenHandles (1580 tests)
 npm run lint:check   # tsc --noEmit (type-check only, no build)
 npm run fetch        # manually fetch uma.moe data for current month
 ```
@@ -101,41 +101,73 @@ Config: `config.yaml` — YAML with Zod validation. Hot-reloaded every 5s via mt
 - **Coverage:** `npm run test:coverage` — thresholds: 70% branches, 80% functions/lines/statements
 - **Coverage exclusions:** `src/index.ts`, `src/types/**`, `src/api/uma-moe.ts` are excluded from coverage
 
+**Test naming convention:**
+```
+*.unit.test.ts          — pure logic, mocked deps
+*.integration.test.ts   — real I/O (HTTP, DB, filesystem)
+*.edge.test.ts          — boundary conditions, empty data, overflow
+*.regression.test.ts    — bug fix reproduction tests (lives NEXT TO the module)
+```
+
+Special files that keep their names: `e2e-output.test.ts`, `golden-inline.test.ts`, `dispatch-fuzz.test.ts`.
+
 Test structure mirrors src:
 ```
 tests/
-├── _helpers/         # Shared test utilities (snapshot loader, mock date, constants)
+├── _helpers/                    # Shared test utilities (snapshot loader, mock date, constants)
 ├── alerts/
+│   ├── alerts.unit.test.ts
+│   └── alerts-regression.test.ts
 ├── api/
-│   ├── server.test.ts       # HTTP API integration (real HTTP requests)
-│   ├── server-auth.test.ts  # Bearer token auth + rate limiting
-│   └── uma-moe.test.ts
-├── bugs/             # Regression tests for specific bugs
-├── config.test.ts
+│   ├── server.integration.test.ts      # HTTP API integration (real HTTP requests)
+│   ├── server-auth.integration.test.ts # Bearer token auth + rate limiting
+│   └── uma-moe.unit.test.ts
+├── config.unit.test.ts
 ├── data/
+│   ├── archive.unit.test.ts
+│   ├── daily-fans.unit.test.ts
+│   ├── left-members.unit.test.ts
+│   ├── snapshot.integration.test.ts
+│   └── snapshot-regression.test.ts
 ├── db/
-├── examples/         # Test fixture data (real snapshot JSON)
+│   ├── database.integration.test.ts
+│   └── database-regression.test.ts
+├── examples/                    # Test fixture data (real snapshot JSON)
 ├── orchestrator/
-│   └── report-orchestrator.test.ts  # Full pipeline: deliver, alerts, align, generate
+│   └── report-orchestrator.unit.test.ts
 ├── reports/
-│   ├── daily/        # daily.unit, daily.format, daily.dispatch, daily.stale, daily.edge
-│   ├── weekly/       # weekly.unit, weekly.format, weekly.stale, weekly.edge
-│   ├── monthly/      # monthly.unit, monthly.format, monthly.stale, monthly.edge
-│   ├── compute.test.ts, ranks.test.ts, bottom.test.ts, stats.test.ts
-│   ├── members.test.ts, compare.test.ts, analyze.test.ts
-│   ├── combined.test.ts       # Combined report unit tests
-│   ├── golden-inline.test.ts  # Golden-file snapshots for all 8 report types
-│   ├── formatters.test.ts     # format.ts utilities only
-│   ├── e2e-output.test.ts     # Cross-report consistency + data integrity
-│   └── tier.test.ts
+│   ├── daily/                   # daily.unit, daily.format, daily.dispatch, daily.stale, daily.edge
+│   ├── weekly/                  # weekly.unit, weekly.format, weekly.stale, weekly.edge
+│   ├── monthly/                 # monthly.unit, monthly.format, monthly.stale, monthly.edge
+│   ├── analyze.unit.test.ts
+│   ├── bottom.unit.test.ts
+│   ├── combined.unit.test.ts
+│   ├── compare.unit.test.ts
+│   ├── compute.unit.test.ts
+│   ├── members.unit.test.ts
+│   ├── ranks.unit.test.ts
+│   ├── stats.unit.test.ts
+│   ├── tier.unit.test.ts
+│   ├── formatters.unit.test.ts
+│   ├── formatters-regression.test.ts
+│   ├── golden-inline.test.ts           # Golden-file snapshots for all 8 report types
+│   ├── e2e-output.test.ts              # Cross-report consistency + data integrity
+│   ├── e2e-output-regression.test.ts   # Empty snapshot handling regressions
+│   └── tier-regression.test.ts
 ├── scheduler/
+│   ├── scheduler.unit.test.ts
+│   └── catchup-regression.test.ts
+├── utils/
+│   ├── logger.unit.test.ts
+│   └── timezone.unit.test.ts
 └── whatsapp/
     ├── dispatch.test.ts
-    ├── dispatch-fuzz.test.ts  # 56 adversarial inputs (injection, Unicode, etc.)
+    ├── dispatch-fuzz.test.ts     # 56 adversarial inputs (injection, Unicode, etc.)
     ├── commands.test.ts
     ├── access.test.ts
     ├── admin.test.ts
-    └── client.test.ts         # WhatsApp client logic (sendOrEdit, cache, state)
+    ├── client.test.ts
+    └── client-regression.test.ts # new Promise(async) antipattern check
 ```
 
 ---
