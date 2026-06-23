@@ -5,7 +5,7 @@
  * Shared between scheduler and catch-up to eliminate duplication.
  */
 
-import type { BotConfig, Snapshot } from '../types';
+import type { BotConfig, Snapshot, ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { generateDailyReport } from './daily';
 import { generateWeeklyReport } from './weekly';
@@ -24,20 +24,21 @@ export function generateCombinedReport(
   types: string[],
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   db: Database
 ): string {
   const parts: string[] = [];
   for (const type of types) {
     switch (type) {
       case 'daily':
-        parts.push(generateDailyReport(snapshot, config, undefined, db));
+        parts.push(generateDailyReport(snapshot, config, computedMembers, undefined, db));
         break;
       case 'weekly':
-        parts.push(generateWeeklyReport(snapshot, config, undefined, db));
+        parts.push(generateWeeklyReport(snapshot, config, computedMembers, undefined, db));
         break;
       case 'monthly':
         // Monthly in combined reports always uses offset=-1 (previous month)
-        parts.push(generateMonthlyReport(snapshot, config, -1, db));
+        parts.push(generateMonthlyReport(snapshot, config, computedMembers, -1, db));
         break;
     }
   }

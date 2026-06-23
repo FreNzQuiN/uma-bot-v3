@@ -6,9 +6,9 @@
  */
 
 import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
+import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers } from './compute';
 import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
@@ -21,6 +21,7 @@ import { isStaleForReport } from '../data/daily-fans';
 export function generateBottomReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   db?: Database
 ): string {
   // Guard: empty members
@@ -28,10 +29,8 @@ export function generateBottomReport(
     return 'ℹ️ *Perlu Perhatian*\nData anggota belum tersedia untuk analisis.';
   }
 
-  const members = computeMembers(snapshot, config);
-
   // Active members, sorted by monthly gain ascending (lowest first)
-  const contributing = members
+  const contributing = computedMembers
     .filter((m) => m.status === 'active')
     .sort((a, b) => a.monthlyGain - b.monthlyGain);
 
@@ -84,7 +83,7 @@ export function generateBottomReport(
 
   // Add stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
-  const staleMembers = members.filter((m) =>
+  const staleMembers = computedMembers.filter((m) =>
     m.status === 'active' && isStaleForReport(m.dailyFans, dataDay, staleThreshold)
   );
   if (staleMembers.length > 0) {

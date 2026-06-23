@@ -6,9 +6,9 @@
  */
 
 import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
+import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
-import { computeMembers } from './compute';
 import { formatNumber, formatDateWIB, getStaleDataWarning, INDONESIAN_MONTHS, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 import { getDataDateComponents } from '../utils/timezone';
@@ -30,6 +30,7 @@ function formatMonthYear(month: number, year: number): string {
 export function generateMonthlyReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   offset: number = 0,
   db?: Database
 ): string {
@@ -57,12 +58,10 @@ export function generateMonthlyReport(
     // If no previous month snapshot, use current (graceful fallback)
   }
 
-  const members = computeMembers(activeSnapshot, config);
-
   const { year, month } = activeSnapshot.members[0];
 
   // Build ranked members sorted by monthly gain descending
-  const ranked: RankedMember[] = members
+  const ranked: RankedMember[] = computedMembers
     .map((m) => ({
       rank: 0,
       trainerName: m.trainerName,
@@ -81,7 +80,7 @@ export function generateMonthlyReport(
 
   // Contributor count (members with monthlyGain > 0)
   const contributorCount = ranked.filter((m) => m.monthlyGain > 0).length;
-  const activeCount = members.filter((m) => m.status === 'active').length;
+  const activeCount = computedMembers.filter((m) => m.status === 'active').length;
 
   // Club info
   const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } = activeSnapshot;
@@ -143,7 +142,7 @@ export function generateMonthlyReport(
   // Requirement pass/fail
   const monthlyReq = config.requirements.monthlyFans;
   if (monthlyReq > 0) {
-    const activeMembers = members.filter((m) => m.status === 'active');
+    const activeMembers = computedMembers.filter((m) => m.status === 'active');
     const passCount = activeMembers.filter((m) => m.monthlyGain >= monthlyReq).length;
     const failCount = activeMembers.length - passCount;
     lines.push('');
@@ -161,7 +160,7 @@ export function generateMonthlyReport(
 
   // Stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
-  const staleMembers = members.filter((m) =>
+  const staleMembers = computedMembers.filter((m) =>
     m.status === 'active' && isStaleForReport(m.dailyFans, dataDay, staleThreshold)
   );
   if (staleMembers.length > 0) {

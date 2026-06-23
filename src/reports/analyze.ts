@@ -5,8 +5,7 @@
  * Uses WhatsApp formatting (*bold*, not Markdown).
  */
 
-import type { Snapshot, BotConfig } from '../types';
-import { computeMembers } from './compute';
+import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, formatDateWIB, buildDateStr, buildFooter, sanitizeName } from './format';
 import {
@@ -20,12 +19,12 @@ const TREND_DOWN_THRESHOLD = 0.9; // 10% below 7-day avg = downward trend
 export function generateAnalyzeReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   name: string
 ): string {
-  const members = computeMembers(snapshot, config);
   const latestDataDay = getDataDayFromSnapshot(snapshot);
 
-  const member = members.find((m) => m.trainerName === name) ?? null;
+  const member = computedMembers.find((m) => m.trainerName === name) ?? null;
   if (!member) {
     return `❌ "${name}" tidak ditemukan. Cek ejaan nama.`;
   }

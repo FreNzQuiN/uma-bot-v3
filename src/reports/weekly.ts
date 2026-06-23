@@ -6,9 +6,9 @@
  */
 
 import { Snapshot, BotConfig, WEEK_BLOCKS, CLUB_TIERS } from '../types';
+import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers } from './compute';
 import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
@@ -44,6 +44,7 @@ function getWeekForDay(day: number): number {
 export function generateWeeklyReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   offset: number = 0,
   db?: Database
 ): string {
@@ -58,10 +59,8 @@ export function generateWeeklyReport(
   const targetWeek = Math.max(1, currentWeek - absOffset);
   const block = WEEK_BLOCKS.find((b) => b.week === targetWeek)!;
 
-  const members = computeMembers(snapshot, config);
-
   // Build ranked members with weekly gain
-  const ranked: WeeklyRankedMember[] = members
+  const ranked: WeeklyRankedMember[] = computedMembers
     .map((m, i) => ({
       rank: 0,
       trainerName: m.trainerName,
@@ -88,7 +87,7 @@ export function generateWeeklyReport(
 
   // Contributor stats
   const contributors = ranked.filter((m) => m.weeklyGain > 0);
-  const activeCount = members.filter((m) => m.status === 'active').length;
+  const activeCount = computedMembers.filter((m) => m.status === 'active').length;
   const contributorCount = contributors.length;
 
   // Build report
@@ -146,7 +145,7 @@ export function generateWeeklyReport(
   // Stale members (rolling window: consecutive zero-gain days at end of target week)
   const viewedEndDay = Math.min(block.end, latestDataDay);
   const staleThreshold = config.memberStatus.staleAfterDaysWeekly;
-  const staleMembers = members.filter((m) =>
+  const staleMembers = computedMembers.filter((m) =>
     m.status === 'active' && isStaleForReport(m.dailyFans, viewedEndDay, staleThreshold)
   );
   if (staleMembers.length > 0) {

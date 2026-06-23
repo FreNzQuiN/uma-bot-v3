@@ -6,7 +6,7 @@
  */
 
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
-import { computeMembers } from './compute';
+import type { ComputedMember } from '../types';
 import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 
@@ -18,16 +18,14 @@ const MEDALS = ['🥇', '🥈', '🥉'];
  * @param snapshot - Raw snapshot data
  * @param config - Bot configuration
  */
-export function generateRanksReport(snapshot: Snapshot, config: BotConfig): string {
+export function generateRanksReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
   // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Peringkat*\nData peringkat belum tersedia.';
   }
 
-  const members = computeMembers(snapshot, config);
-
   // Sort by monthly gain descending, top 10 only
-  const sorted = [...members]
+  const sorted = [...computedMembers]
     .filter((m) => m.status === 'active')
     .sort((a, b) => b.monthlyGain - a.monthlyGain)
     .slice(0, 10);

@@ -6,9 +6,9 @@
  */
 
 import { Snapshot, BotConfig, TierData, CLUB_TIERS } from '../types';
+import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers } from './compute';
 import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
 
 /**
@@ -82,7 +82,7 @@ export function computeTierData(snapshot: Snapshot): TierData {
  *
  * @param snapshot - Raw snapshot data
  */
-export function generateTierReport(snapshot: Snapshot, config: BotConfig, db?: Database): string {
+export function generateTierReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[], db?: Database): string {
   // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Tier Intelligence*\nData tier belum tersedia.';

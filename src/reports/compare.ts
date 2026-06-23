@@ -7,7 +7,6 @@
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { WEEK_BLOCKS } from '../types';
-import { computeMembers } from './compute';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, formatDateWIB, buildDateStr, buildFooter, sanitizeName } from './format';
 import { computeRollingAverage } from '../data/daily-fans';
@@ -15,14 +14,14 @@ import { computeRollingAverage } from '../data/daily-fans';
 export function generateCompareReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   nameA: string,
   nameB: string
 ): string {
-  const members = computeMembers(snapshot, config);
   const latestDataDay = getDataDayFromSnapshot(snapshot);
 
-  const memberA = members.find((m) => m.trainerName === nameA) ?? null;
-  const memberB = members.find((m) => m.trainerName === nameB) ?? null;
+  const memberA = computedMembers.find((m) => m.trainerName === nameA) ?? null;
+  const memberB = computedMembers.find((m) => m.trainerName === nameB) ?? null;
 
   if (!memberA && !memberB) {
     return `❌ "${nameA}" dan "${nameB}" tidak ditemukan. Cek ejaan nama.`;

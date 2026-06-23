@@ -7,8 +7,8 @@
  */
 
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
+import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
-import { computeMembers } from './compute';
 import { formatNumber, formatDateWIB, sanitizeName, buildFooter, buildDateStr } from './format';
 import { getLeftMembers } from '../data/snapshot';
 
@@ -22,6 +22,7 @@ import { getLeftMembers } from '../data/snapshot';
 export function generateMembersReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   db?: Database
 ): string {
   // Guard: empty members
@@ -29,15 +30,13 @@ export function generateMembersReport(
     return 'ℹ️ *Daftar Anggota*\nData anggota belum tersedia.';
   }
 
-  const members = computeMembers(snapshot, config);
-
   // Club info
   const { circle, club_rank } = snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
   // Sort: active first (by monthly gain desc), then stale, then left
   const statusOrder = { active: 0, stale: 1, left: 2 };
-  const sorted = [...members].sort((a, b) => {
+  const sorted = [...computedMembers].sort((a, b) => {
     const sa = statusOrder[a.status] ?? 3;
     const sb = statusOrder[b.status] ?? 3;
     if (sa !== sb) return sa - sb;

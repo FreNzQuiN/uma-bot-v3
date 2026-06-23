@@ -6,9 +6,9 @@
  */
 
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
+import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers } from './compute';
 import { computeRollingAverage, countActiveDays } from '../data/daily-fans';
 import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
 
@@ -21,6 +21,7 @@ import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFo
 export function generateStatsReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   db?: Database
 ): string {
   // Guard: empty members
@@ -28,10 +29,9 @@ export function generateStatsReport(
     return 'ℹ️ *Stats*\nData statistik belum tersedia.';
   }
 
-  const members = computeMembers(snapshot, config);
   const dataDay = getDataDayFromSnapshot(snapshot);
 
-  const contributing = members.filter(
+  const contributing = computedMembers.filter(
     (m) => m.status === 'active'
   );
 
@@ -97,12 +97,12 @@ export function generateStatsReport(
   lines.push(`${circle.name} | ${tierName} (#${circle.monthly_rank})`);
   lines.push(buildDataLine(formattedDate));
   lines.push('');
-  const activeCount = members.filter((m) => m.status === 'active').length;
-  const leftCount = members.filter((m) => m.status === 'left').length;
-  const staleCount = members.filter((m) => m.status === 'stale').length;
+  const activeCount = computedMembers.filter((m) => m.status === 'active').length;
+  const leftCount = computedMembers.filter((m) => m.status === 'left').length;
+  const staleCount = computedMembers.filter((m) => m.status === 'stale').length;
 
-  lines.push(`Total anggota: ${members.length}`);
-  lines.push(`Aktif: ${activeCount} | Keluar: ${leftCount} | Transfer: ${members.filter((m) => m.isTransfer).length}`);
+  lines.push(`Total anggota: ${computedMembers.length}`);
+  lines.push(`Aktif: ${activeCount} | Keluar: ${leftCount} | Transfer: ${computedMembers.filter((m) => m.isTransfer).length}`);
   lines.push('');
   lines.push(`📈 Gain rata-rata bulanan: ${formatNumber(avgMonthlyGain)}`);
   lines.push(`📈 Gain median bulanan: ${formatNumber(medianMonthlyGain)}`);

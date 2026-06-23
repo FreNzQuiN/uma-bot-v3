@@ -6,9 +6,9 @@
  */
 
 import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
+import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers } from './compute';
 import { getDailyGain } from '../data/daily-fans';
 import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
 
@@ -22,6 +22,7 @@ import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFo
 export function generateDailyReport(
   snapshot: Snapshot,
   config: BotConfig,
+  computedMembers: ComputedMember[],
   offset: number = 0,
   db?: Database
 ): string {
@@ -34,10 +35,8 @@ export function generateDailyReport(
   const absOffset = Math.abs(offset);
   const dataDay = Math.max(1, latestDataDay - absOffset);
 
-  const members = computeMembers(snapshot, config);
-
   // Compute gains for the SPECIFIC offset day, not the latest
-  const memberGains = members.map((m) => ({
+  const memberGains = computedMembers.map((m) => ({
     ...m,
     dailyGain: getDailyGain(m.dailyFans, dataDay, config.requirements.includeTransferDataInCalculation),
   }));

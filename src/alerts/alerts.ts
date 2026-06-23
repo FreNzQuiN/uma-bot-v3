@@ -8,7 +8,6 @@
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers } from '../reports/compute';
 import { computeTierData } from '../reports/tier';
 import { formatNumber } from '../reports/format';
 import {
@@ -42,6 +41,7 @@ export interface Alert {
 // ============================================================
 
 export function detectAlerts(
+  computedMembers: ComputedMember[],
   snapshot: Snapshot,
   config: BotConfig,
   db: Database
@@ -51,7 +51,6 @@ export function detectAlerts(
   log.debug('Alert', `Running alert detection (performanceDrop=${config.alerts.performanceDrop.enabled}, demotionRisk=${config.alerts.demotionRisk.enabled}, streakBreak=${config.alerts.streakBreak.enabled}, newTransfer=${config.alerts.newTransfer.enabled}, rankDrop=${config.alerts.rankDrop.enabled})`);
 
   const alerts: Alert[] = [];
-  const members = computeMembers(snapshot, config);
   const latestDataDay = getDataDayFromSnapshot(snapshot);
   const reportDate = snapshot.circle.last_updated
     ? snapshot.circle.last_updated.split('T')[0]
@@ -62,7 +61,7 @@ export function detectAlerts(
     const minHistory = config.alerts.performanceDrop.minHistoryDays;
     const threshold = config.alerts.performanceDrop.thresholdPercent / 100;
 
-    for (const member of members) {
+    for (const member of computedMembers) {
       if (member.status !== 'active') continue;
       if (member.isTransfer) continue; // transfer baseline inflates avg
       const avg7d = computeRollingAverage(
@@ -108,7 +107,7 @@ export function detectAlerts(
 
   // --- Streak break ---
   if (config.alerts.streakBreak.enabled) {
-    for (const member of members) {
+    for (const member of computedMembers) {
       if (member.status !== 'active') continue;
       if (member.isTransfer) continue; // transfer baselines not a real streak
       if (member.latestDailyGain > 0) continue; // still gaining
@@ -132,7 +131,7 @@ export function detectAlerts(
 
   // --- New transfer ---
   if (config.alerts.newTransfer.enabled) {
-    for (const member of members) {
+    for (const member of computedMembers) {
       if (!member.isTransfer) continue;
       const eventKey = `new_transfer:${reportDate}:${member.viewerId}`;
       if (!db.isAlertAlreadySent(eventKey)) {
