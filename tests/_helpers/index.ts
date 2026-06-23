@@ -17,6 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot, BotConfig } from '../../src/types';
+import type { IncomingMessage } from '../../src/whatsapp/client';
 
 // ============================================================
 // Constants
@@ -46,13 +47,86 @@ export function loadRealSnapshot(): Snapshot {
 }
 
 /**
- * Build a BotConfig with optional overrides (shallow merge).
+ * Build a BotConfig with optional overrides.
  *
- * For specialized configs (e.g. deep-merge of schedule, requirements),
- * build on top of this or keep a local helper in your test file.
+ * Deep-merges nested objects (schedule, groups, requirements, catchUp,
+ * alerts, memberStatus, commands) so partial overrides don't clobber
+ * sibling fields. Example:
+ *
+ *   makeConfig({ schedule: { daily: { enabled: false } } })
+ *   // weekly and monthly schedule preserved from defaults
  */
-export function makeConfig(overrides: Partial<BotConfig> = {}): BotConfig {
-  return { ...getDefaultConfig(), ...overrides };
+export function makeConfig(overrides: Record<string, any> = {}): BotConfig {
+  const base = getDefaultConfig();
+  return {
+    ...base,
+    ...overrides,
+    schedule: {
+      ...base.schedule,
+      ...(overrides.schedule ?? {}),
+      daily: {
+        ...base.schedule.daily,
+        ...(overrides.schedule?.daily ?? {}),
+      },
+      weekly: {
+        ...base.schedule.weekly,
+        ...(overrides.schedule?.weekly ?? {}),
+        days: overrides.schedule?.weekly?.days ?? base.schedule.weekly.days,
+      },
+      monthly: {
+        ...base.schedule.monthly,
+        ...(overrides.schedule?.monthly ?? {}),
+      },
+    },
+    groups: {
+      ...base.groups,
+      ...(overrides.groups ?? {}),
+    },
+    requirements: {
+      ...base.requirements,
+      ...(overrides.requirements ?? {}),
+    },
+    catchUp: {
+      ...base.catchUp,
+      ...(overrides.catchUp ?? {}),
+    },
+    alerts: {
+      ...base.alerts,
+      ...(overrides.alerts ?? {}),
+      performanceDrop: {
+        ...base.alerts.performanceDrop,
+        ...(overrides.alerts?.performanceDrop ?? {}),
+      },
+      demotionRisk: {
+        ...base.alerts.demotionRisk,
+        ...(overrides.alerts?.demotionRisk ?? {}),
+      },
+      streakBreak: {
+        ...base.alerts.streakBreak,
+        ...(overrides.alerts?.streakBreak ?? {}),
+      },
+      newTransfer: {
+        ...base.alerts.newTransfer,
+        ...(overrides.alerts?.newTransfer ?? {}),
+      },
+      rankDrop: {
+        ...base.alerts.rankDrop,
+        ...(overrides.alerts?.rankDrop ?? {}),
+      },
+      quietHours: {
+        ...base.alerts.quietHours,
+        ...(overrides.alerts?.quietHours ?? {}),
+      },
+    },
+    memberStatus: {
+      ...base.memberStatus,
+      ...(overrides.memberStatus ?? {}),
+    },
+    commands: {
+      ...base.commands,
+      ...(overrides.commands ?? {}),
+    },
+  };
 }
 
 // ============================================================
@@ -132,5 +206,29 @@ export function makeMockDb() {
     getLastSuccessfulRun: jest.fn().mockReturnValue(null),
     recordRun: jest.fn(),
     updateRunStatus: jest.fn(),
+  };
+}
+
+// ============================================================
+// Message Builders
+// ============================================================
+
+/**
+ * Build a mock IncomingMessage with sensible defaults.
+ * Override any field via the overrides parameter.
+ */
+export function makeMessage(overrides: Record<string, any> = {}): IncomingMessage {
+  return {
+    key: {
+      remoteJid: 'group-cmd@g.us',
+      id: 'msg-001',
+      ...overrides.key,
+    },
+    message: {
+      conversation: '/daily',
+      ...overrides.message,
+    },
+    pushName: 'TestUser',
+    ...overrides,
   };
 }

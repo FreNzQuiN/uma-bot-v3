@@ -3,7 +3,7 @@ import { detectAlerts, deduplicateAlerts, formatAlerts, aggregateAlerts } from '
 import { Database } from '../../src/db/database';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot, BotConfig } from '../../src/types';
-import { loadRealSnapshot } from '../_helpers';
+import { loadRealSnapshot, makeConfig } from '../_helpers';
 
 const SNAPSHOT: Snapshot = loadRealSnapshot();
 
@@ -17,14 +17,6 @@ beforeEach(async () => {
 afterEach(() => {
   db.close();
 });
-
-function makeConfig(overrides?: Partial<BotConfig>): BotConfig {
-  const base = getDefaultConfig();
-  if (overrides) {
-    return { ...base, ...overrides } as BotConfig;
-  }
-  return base;
-}
 
 describe('detectAlerts', () => {
   it('returns empty when alerts disabled', () => {
@@ -64,27 +56,17 @@ describe('detectAlerts', () => {
   it('deduplicates alerts via DB', () => {
     const config = makeConfig();
     const alerts1 = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
-    // Record all alerts as sent
+    // Record each alert once, then mark as sent
     for (const alert of alerts1) {
-      db.recordAlert({
+      const id = db.recordAlert({
         alert_type: alert.type,
         event_key: alert.eventKey,
         member_viewer_id: alert.memberViewerId,
         report_date: alert.reportDate,
         created_at: new Date().toISOString(),
-        status: 'sent',
         message: alert.message,
       });
-      db.markAlertSent(
-        db.recordAlert({
-          alert_type: alert.type,
-          event_key: alert.eventKey,
-          member_viewer_id: alert.memberViewerId,
-          report_date: alert.reportDate,
-          created_at: new Date().toISOString(),
-          message: alert.message,
-        })
-      );
+      db.markAlertSent(id);
     }
 
     // Second detection should return fewer (all deduped)

@@ -12,6 +12,7 @@ import { getDefaultConfig } from '../../../src/config';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
   loadRealSnapshot,
+  makeConfig,
 } from '../../_helpers';
 
 // ============================================================
@@ -27,24 +28,6 @@ beforeAll(() => {
   config = getDefaultConfig();
   computedMembers = computeMembers(snapshot, config);
 });
-
-// ============================================================
-// Test Helpers
-// ============================================================
-
-function makeConfig(overrides: { weeklyFans?: number } = {}): BotConfig {
-  const base = getDefaultConfig();
-  if (overrides.weeklyFans !== undefined) {
-    return {
-      ...base,
-      requirements: {
-        ...base.requirements,
-        weeklyFans: overrides.weeklyFans,
-      },
-    };
-  }
-  return base;
-}
 
 // ============================================================
 // Section 6: Offset Equivalence (negative offset)
@@ -101,7 +84,7 @@ describe('Below-requirement section', () => {
   });
 
   it('shows members below 5M/week when weeklyFans = 5,000,000', () => {
-    const cfg = makeConfig({ weeklyFans: 5_000_000 });
+    const cfg = makeConfig({ requirements: { weeklyFans: 5_000_000 } });
     const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
 
     expect(report).toContain('⚠️ Di bawah target 5.0M/minggu:');
@@ -130,7 +113,7 @@ describe('Below-requirement section', () => {
   });
 
   it('includes members with gain = 0 in below-requirement (0 < weeklyFans)', () => {
-    const cfg = makeConfig({ weeklyFans: 5_000_000 });
+    const cfg = makeConfig({ requirements: { weeklyFans: 5_000_000 } });
     const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     const belowSection = report.substring(report.indexOf('⚠️ Di bawah target'));
     // Stale members have 0 gain → now included (0 < 5M)
@@ -141,7 +124,7 @@ describe('Below-requirement section', () => {
   });
 
   it('members with gain >= weeklyFans are NOT in below-requirement', () => {
-    const cfg = makeConfig({ weeklyFans: 5_000_000 });
+    const cfg = makeConfig({ requirements: { weeklyFans: 5_000_000 } });
     const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     const belowSection = report.substring(report.indexOf('⚠️ Di bawah target'));
     // These members have W2 gain >= 5M → not listed
@@ -158,7 +141,7 @@ describe('Below-requirement section', () => {
   });
 
   it('shows member names without gain values in below-requirement section', () => {
-    const cfg = makeConfig({ weeklyFans: 5_000_000 });
+    const cfg = makeConfig({ requirements: { weeklyFans: 5_000_000 } });
     const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report).toContain('• Dyy\u201D');
     expect(report).toContain('• ursa');

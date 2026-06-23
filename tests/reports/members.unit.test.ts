@@ -664,10 +664,6 @@ describe('generateMembersReport', () => {
     );
     const config = getDefaultConfig();
 
-    it('has 34 members in snapshot', () => {
-      expect(snapshot.members).toHaveLength(34);
-    });
-
     it('generates report with 34 member lines', () => {
       const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const memberLines = report.split('\n').filter(l => l.startsWith('•'));

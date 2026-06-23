@@ -6,8 +6,6 @@
  * Uses loadConfig() to match real config.yaml values.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { generateBottomReport } from '../../src/reports/bottom';
 import { loadConfig } from '../../src/config';
 import { getDataDayFromSnapshot } from '../../src/data/snapshot';
@@ -83,10 +81,6 @@ describe('Bottom report: full output and basic structure', () => {
 // ============================================================
 
 describe('Bottom report: member classification', () => {
-  it('34 members in snapshot', () => {
-    expect(snapshot.members.length).toBe(34);
-  });
-
   it('4 left members (ghosts detected via member_count)', () => {
     const members = computeMembers(snapshot, config);
     const leftNames = members
@@ -293,30 +287,6 @@ describe('Bottom report: transfer badges', () => {
         expect(line).not.toContain('\ud83d\udd04');
       }
     }
-  });
-});
-
-// ============================================================
-// Section 6: DRY Violations
-// ============================================================
-
-describe('Bottom report: no DRY violations', () => {
-  it('no inline stale warning logic in source', () => {
-    const src = fs.readFileSync(
-      path.join(__dirname, '../../src/reports/bottom.ts'),
-      'utf-8'
-    );
-    expect(src).not.toContain('getStaleDataWarning');
-    expect(src).not.toContain('toLocaleDateString');
-    expect(src).not.toContain('Data mungkin tidak terbaru');
-  });
-
-  it('left members use computeMembers status, not inline logic', () => {
-    const src = fs.readFileSync(
-      path.join(__dirname, '../../src/reports/bottom.ts'),
-      'utf-8'
-    );
-    expect(src).toContain("m.status === 'active'");
   });
 });
 

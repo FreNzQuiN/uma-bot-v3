@@ -1,0 +1,109 @@
+{
+  "feature": "Test quality audit fixes (14 findings)",
+  "framework": "Jest + ts-jest",
+  "baseline": {
+    "suites": 53,
+    "tests": 1580,
+    "passed": 1580,
+    "timestamp": "2026-06-24"
+  },
+  "final": {
+    "suites": 64,
+    "tests": 1571,
+    "passed": 1571,
+    "timestamp": "2026-06-24"
+  },
+  "slices": [
+    {
+      "id": 1,
+      "name": "Delete source-reading tests (HIGH #1 + #2)",
+      "status": "done",
+      "changes": [
+        "Removed DRY violation tests from bottom.unit.test.ts (2 tests)",
+        "Deleted client-regression.test.ts entirely (1 test)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Fix restoreDateMocks placement (MEDIUM #6)",
+      "status": "done",
+      "changes": [
+        "Moved restoreDateMocks() from test body to afterEach in daily.edge.test.ts"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Simplify double recordAlert (MEDIUM #8)",
+      "status": "done",
+      "changes": [
+        "Simplified alerts.unit.test.ts: record once, mark as sent, verify dedup"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Remove redundant fixture assertions (MEDIUM #7)",
+      "status": "done",
+      "changes": [
+        "Removed 'has 34 members' from stats, ranks, bottom, members test files",
+        "Removed 'latest data day is 11' from ranks test file"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Deduplicate makeConfig (MEDIUM #4)",
+      "status": "done",
+      "changes": [
+        "Updated _helpers/index.ts with deep-merge makeConfig",
+        "Migrated alerts, scheduler, catchup-regression, access to use shared makeConfig",
+        "Migrated monthly.format, weekly.edge, weekly.format to use shared makeConfig",
+        "Updated dispatch, daily.dispatch, daily.edge with thin wrappers over shared makeConfig"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Deduplicate makeMessage (MEDIUM #5)",
+      "status": "done",
+      "changes": [
+        "Added makeMessage to _helpers/index.ts",
+        "Removed local makeMessage from dispatch.test.ts, daily.dispatch.test.ts, daily.edge.test.ts"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Split daily-fans.unit.test.ts (MEDIUM #9)",
+      "status": "done",
+      "changes": [
+        "Split 970-line file into 13 test files + 1 fixtures file",
+        "Created daily-fans.fixtures.ts with shared test data constants"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Fix LOW findings (#10-14)",
+      "status": "done",
+      "changes": [
+        "Replaced Math.random() with counter in compare.unit.test.ts and analyze.unit.test.ts",
+        "Added named constants and comments for cache eviction magic numbers in client.test.ts",
+        "Removed redundant negative assertion (34 anggota) in daily.edge.test.ts",
+        "Skipped: repeated left section assertions (LOW #12) — each in different test context",
+        "Skipped: formatters English month assertion (LOW #14) — assertion doesn't exist in current file"
+      ]
+    }
+  ],
+  "completed": [
+    "HIGH #1: Delete source-reading tests in bottom.unit.test.ts",
+    "HIGH #2: Delete source-reading test in client-regression.test.ts",
+    "HIGH #3: Skipped (user chose to skip)",
+    "MEDIUM #4: Deduplicate makeConfig into _helpers/index.ts",
+    "MEDIUM #5: Deduplicate makeMessage into _helpers/index.ts",
+    "MEDIUM #6: Fix restoreDateMocks placement in daily.edge.test.ts",
+    "MEDIUM #7: Remove redundant fixture assertions",
+    "MEDIUM #8: Fix double recordAlert in alerts.unit.test.ts",
+    "MEDIUM #9: Split daily-fans.unit.test.ts into per-function files",
+    "LOW #10: Replace Math.random() with deterministic values",
+    "LOW #11: Fix cache eviction magic numbers with named constants",
+    "LOW #12: Skipped (redundant assertions in different test contexts)",
+    "LOW #13: Remove redundant negative assertion (34 anggota)",
+    "LOW #14: Skipped (assertion doesn't exist in current file)"
+  ]
+}

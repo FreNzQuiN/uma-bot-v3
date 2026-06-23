@@ -2,46 +2,8 @@ import { Scheduler } from '../../src/scheduler/scheduler';
 import { CatchUpManager } from '../../src/scheduler/catchup';
 import { getCollidingTypes } from '../../src/scheduler/helpers';
 import { Database } from '../../src/db/database';
-import type { BotConfig } from '../../src/types';
-import { getDefaultConfig } from '../../src/config';
 import { getDataDate } from '../../src/utils/timezone';
-
-// ============================================================
-// Test helpers
-// ============================================================
-
-function makeConfig(overrides: Partial<BotConfig> = {}): BotConfig {
-  const base = getDefaultConfig();
-  return {
-    ...base,
-    ...overrides,
-    schedule: {
-      ...base.schedule,
-      ...(overrides.schedule ?? {}),
-      daily: {
-        ...base.schedule.daily,
-        ...(overrides.schedule?.daily ?? {}),
-      },
-      weekly: {
-        ...base.schedule.weekly,
-        ...(overrides.schedule?.weekly ?? {}),
-        days: overrides.schedule?.weekly?.days ?? base.schedule.weekly.days,
-      },
-      monthly: {
-        ...base.schedule.monthly,
-        ...(overrides.schedule?.monthly ?? {}),
-      },
-    },
-    catchUp: {
-      ...base.catchUp,
-      ...(overrides.catchUp ?? {}),
-    },
-    groups: {
-      ...base.groups,
-      ...(overrides.groups ?? {}),
-    },
-  };
-}
+import { makeConfig } from '../_helpers';
 
 let db: Database;
 

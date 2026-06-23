@@ -13,6 +13,7 @@ import { formatNumber } from '../../../src/reports/format';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
   loadRealSnapshot,
+  makeConfig,
   TRANSFER_NAMES,
   mockCurrentDate,
   restoreDateMocks,
@@ -32,24 +33,6 @@ beforeAll(() => {
   config = getDefaultConfig();
   computedMembers = computeMembers(snapshot, config);
 });
-
-// ============================================================
-// Test Helpers
-// ============================================================
-
-function makeConfig(overrides: { weeklyFans?: number } = {}): BotConfig {
-  const base = getDefaultConfig();
-  if (overrides.weeklyFans !== undefined) {
-    return {
-      ...base,
-      requirements: {
-        ...base.requirements,
-        weeklyFans: overrides.weeklyFans,
-      },
-    };
-  }
-  return base;
-}
 
 // ============================================================
 // Section 3: Full Output — Print and Verify
@@ -325,7 +308,7 @@ describe('Report size within WhatsApp limits', () => {
   });
 
   it('weekly report with below-requirement does not exceed 4096 chars', () => {
-    const cfg = makeConfig({ weeklyFans: 5_000_000 });
+    const cfg = makeConfig({ requirements: { weeklyFans: 5_000_000 } });
     const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report.length).toBeLessThanOrEqual(4096);
   });

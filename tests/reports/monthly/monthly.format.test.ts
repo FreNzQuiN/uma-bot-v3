@@ -15,6 +15,7 @@ import { formatNumber } from '../../../src/reports/format';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
   loadRealSnapshot,
+  makeConfig,
   TRANSFER_NAMES,
   STALE_NAMES,
   WHATSAPP_MAX_LENGTH,
@@ -45,20 +46,6 @@ afterAll(() => {
 // ============================================================
 // Test Helpers
 // ============================================================
-
-function makeConfig(overrides: { monthlyFans?: number } = {}): BotConfig {
-  const base = getDefaultConfig();
-  if (overrides.monthlyFans !== undefined) {
-    return {
-      ...base,
-      requirements: {
-        ...base.requirements,
-        monthlyFans: overrides.monthlyFans,
-      },
-    };
-  }
-  return base;
-}
 
 /**
  * Build the expected gains for all members from raw snapshot data.
@@ -275,14 +262,14 @@ describe('Requirement section', () => {
   });
 
   it('when monthlyFans = 0, requirement section is not shown', () => {
-    const cfg = makeConfig({ monthlyFans: 0 });
+    const cfg = makeConfig({ requirements: { monthlyFans: 0 } });
     const report = generateMonthlyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report).not.toContain('🎯 Requirement');
     expect(report).not.toContain('pass |');
   });
 
   it('when monthlyFans = 10M, more members pass', () => {
-    const cfg = makeConfig({ monthlyFans: 10_000_000 });
+    const cfg = makeConfig({ requirements: { monthlyFans: 10_000_000 } });
     const report = generateMonthlyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
 
     // Members with monthlyGain >= 10M:
@@ -393,7 +380,7 @@ describe('Report size within WhatsApp limits', () => {
   });
 
   it('monthly report with 10M requirement does not exceed 4096 chars', () => {
-    const cfg = makeConfig({ monthlyFans: 10_000_000 });
+    const cfg = makeConfig({ requirements: { monthlyFans: 10_000_000 } });
     const report = generateMonthlyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
     expect(report.length).toBeLessThanOrEqual(4096);
   });

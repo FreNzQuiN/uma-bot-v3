@@ -79,19 +79,11 @@ describe('Stats report full output', () => {
 // ============================================================
 
 describe('Snapshot data fundamentals', () => {
-  it('has 34 total members', () => {
-    expect(snapshot.members.length).toBe(34);
-  });
-
   it('has correct club metadata', () => {
     expect(snapshot.circle.name).toBe('Hol＿Horse');
     expect(snapshot.club_rank).toBe(8);
     expect(snapshot.fans_to_next_tier).toBe(349208495);
     expect(snapshot.fans_to_lower_tier).toBe(21848493);
-  });
-
-  it('latest data day is 11', () => {
-    expect(getDataDayFromSnapshot(snapshot)).toBe(11);
   });
 
   it('has 30 active, 0 transfer, 4 left members', () => {

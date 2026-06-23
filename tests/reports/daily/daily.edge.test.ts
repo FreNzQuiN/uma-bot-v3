@@ -20,6 +20,8 @@ import { WhatsAppClient, IncomingMessage } from '../../../src/whatsapp/client';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
   loadRealSnapshot,
+  makeConfig as makeConfigBase,
+  makeMessage,
   TRANSFER_NAMES,
   STALE_NAMES,
   mockCurrentDate,
@@ -50,34 +52,12 @@ beforeAll(() => {
 // Test Helpers
 // ============================================================
 
-function makeConfig(overrides: Partial<BotConfig> = {}): BotConfig {
-  const base = getDefaultConfig();
-  return {
-    ...base,
+function makeConfig(overrides: Record<string, any> = {}): BotConfig {
+  return makeConfigBase({
+    admins: [ADMIN_JID],
+    groups: { command: [COMMAND_GROUP], announcement: [], alertAdmin: [] },
     ...overrides,
-    admins: overrides.admins ?? [ADMIN_JID],
-    groups: {
-      ...base.groups,
-      command: [COMMAND_GROUP],
-      announcement: [],
-      alertAdmin: [],
-      ...(overrides.groups ?? {}),
-    },
-  };
-}
-
-function makeMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
-  return {
-    key: {
-      remoteJid: COMMAND_GROUP,
-      id: 'msg-001',
-    },
-    message: {
-      conversation: '/daily',
-    },
-    pushName: 'TestUser',
-    ...overrides,
-  };
+  });
 }
 
 function makeSnapshotWithLatestDay(latestDay: number): Snapshot {
@@ -378,7 +358,6 @@ describe('Offset=1 complete line verification', () => {
 
   it('summary: 👥 28 kontribusi dari 30 anggota | Total: <correct sum>', () => {
     expect(report).toMatch(/👥 28 kontribusi dari 30 anggota \| Total: /);
-    expect(report).not.toContain('34 anggota');
   });
 
   it('Nargi is #1 with gain 3,349,623 -> +3.3M', () => {
@@ -448,6 +427,11 @@ describe('Offset=1 complete line verification', () => {
 // ============================================================
 
 describe('Report section ordering', () => {
+
+  afterEach(() => {
+    restoreDateMocks();
+  });
+
   it('stale data warning comes after member list, before footer', () => {
     mockCurrentDate(2026, 6, 13);
     const report = generateDailyReport(snapshot, config, computedMembers, 0);
@@ -463,7 +447,6 @@ describe('Report section ordering', () => {
     expect(staleWarningIdx).toBeGreaterThan(lastRankedIdx);
     expect(footerIdx).toBeGreaterThan(staleWarningIdx);
 
-    restoreDateMocks();
   });
 });
 

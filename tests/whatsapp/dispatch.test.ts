@@ -11,8 +11,9 @@
 
 import { setupCommandHandler } from '../../src/whatsapp/dispatch';
 import { WhatsAppClient, IncomingMessage } from '../../src/whatsapp/client';
-import type { BotConfig, Snapshot } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
+import type { BotConfig, Snapshot } from '../../src/types';
+import { makeConfig as makeConfigBase, makeMessage } from '../_helpers';
 
 // Prevent admin command tests from writing to the actual config.yaml
 jest.mock('../../src/config', () => {
@@ -30,20 +31,12 @@ const COMMAND_GROUP = 'group-cmd@g.us';
 const OTHER_GROUP = 'group-other@g.us';
 const PRIVATE_CHAT = '6281111111111@s.whatsapp.net';
 
-function makeConfig(overrides: Partial<BotConfig> = {}): BotConfig {
-  const base = getDefaultConfig();
-  return {
-    ...base,
+function makeConfig(overrides: Record<string, any> = {}): BotConfig {
+  return makeConfigBase({
+    admins: [ADMIN_JID],
+    groups: { command: [COMMAND_GROUP], announcement: [], alertAdmin: [] },
     ...overrides,
-    admins: overrides.admins ?? [ADMIN_JID],
-    groups: {
-      ...base.groups,
-      command: [COMMAND_GROUP],
-      announcement: [],
-      alertAdmin: [],
-      ...(overrides.groups ?? {}),
-    },
-  };
+  });
 }
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -100,20 +93,6 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     fans_to_lower_tier: 50000,
     yesterday_fans_to_next_tier: 600000,
     yesterday_fans_to_lower_tier: 40000,
-    ...overrides,
-  };
-}
-
-function makeMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
-  return {
-    key: {
-      remoteJid: COMMAND_GROUP,
-      id: 'msg-001',
-    },
-    message: {
-      conversation: '/daily',
-    },
-    pushName: 'TestUser',
     ...overrides,
   };
 }

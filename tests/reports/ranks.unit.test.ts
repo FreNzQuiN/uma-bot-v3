@@ -57,18 +57,10 @@ function parseFormattedGain(formatted: string): number {
 // ============================================================
 
 describe('Snapshot data fundamentals', () => {
-  it('has 34 members', () => {
-    expect(snapshot.members.length).toBe(34);
-  });
-
   it('has correct club metadata', () => {
     expect(snapshot.circle.name).toBe('\u0048\u006f\u006c\uFF3F\u0048\u006f\u0072\u0073\u0065');
     expect(snapshot.club_rank).toBe(8);
     expect(CLUB_TIERS[8]).toBe('A+');
-  });
-
-  it('latest data day is 11', () => {
-    expect(getDataDayFromSnapshot(snapshot)).toBe(11);
   });
 });
 

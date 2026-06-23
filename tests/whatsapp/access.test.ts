@@ -4,25 +4,7 @@ import {
   isCommandGroup,
   isAnnouncementGroup,
 } from '../../src/whatsapp/access';
-import type { BotConfig } from '../../src/types';
-import { getDefaultConfig } from '../../src/config';
-
-// ============================================================
-// Test helpers
-// ============================================================
-
-function makeConfig(overrides: Partial<BotConfig> = {}): BotConfig {
-  const base = getDefaultConfig();
-  return {
-    ...base,
-    ...overrides,
-    groups: {
-      ...base.groups,
-      ...(overrides.groups ?? {}),
-    },
-    admins: overrides.admins ?? base.admins,
-  };
-}
+import { makeConfig } from '../_helpers';
 
 const ADMIN_JID = '6281234567890@s.whatsapp.net';
 const NON_ADMIN_JID = '6289999999999@s.whatsapp.net';

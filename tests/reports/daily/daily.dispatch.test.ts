@@ -21,6 +21,8 @@ import { WhatsAppClient, IncomingMessage } from '../../../src/whatsapp/client';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
   loadRealSnapshot,
+  makeConfig as makeConfigBase,
+  makeMessage,
   TRANSFER_NAMES,
   STALE_NAMES,
   mockCurrentDate,
@@ -47,34 +49,12 @@ beforeAll(() => {
 // Test Helpers
 // ============================================================
 
-function makeConfig(overrides: Partial<BotConfig> = {}): BotConfig {
-  const base = getDefaultConfig();
-  return {
-    ...base,
+function makeConfig(overrides: Record<string, any> = {}): BotConfig {
+  return makeConfigBase({
+    admins: [ADMIN_JID],
+    groups: { command: [COMMAND_GROUP], announcement: [], alertAdmin: [] },
     ...overrides,
-    admins: overrides.admins ?? [ADMIN_JID],
-    groups: {
-      ...base.groups,
-      command: [COMMAND_GROUP],
-      announcement: [],
-      alertAdmin: [],
-      ...(overrides.groups ?? {}),
-    },
-  };
-}
-
-function makeMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
-  return {
-    key: {
-      remoteJid: COMMAND_GROUP,
-      id: 'msg-001',
-    },
-    message: {
-      conversation: '/daily',
-    },
-    pushName: 'TestUser',
-    ...overrides,
-  };
+  });
 }
 
 // ============================================================

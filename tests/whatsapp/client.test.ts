@@ -180,26 +180,31 @@ describe('WhatsAppClient', () => {
       const { client } = makeClient();
       const cache: Map<string, unknown> = (client as any).messageCache;
 
-      // Fill cache to exactly MESSAGE_CACHE_MAX (2000)
-      for (let i = 0; i < 2000; i++) {
+      // MESSAGE_CACHE_MAX = 2000 (source: src/whatsapp/client.ts)
+      const CACHE_MAX = 2000;
+      // MESSAGE_CACHE_EVICT = 500 (source: src/whatsapp/client.ts)
+      const CACHE_EVICT = 500;
+
+      // Fill cache to exactly MESSAGE_CACHE_MAX
+      for (let i = 0; i < CACHE_MAX; i++) {
         cache.set(`msg-${i}`, { text: `part-${i}` });
       }
-      expect(cache.size).toBe(2000);
+      expect(cache.size).toBe(CACHE_MAX);
 
-      // Adding one more triggers eviction of 500 (MESSAGE_CACHE_EVICT)
+      // Adding one more triggers eviction of MESSAGE_CACHE_EVICT entries
       (client as any).cacheSentMessage({
         key: { id: 'msg-overflow' },
         message: { text: 'overflow' },
       });
 
-      // Size should be 2000 + 1 - 500 = 1501
-      expect(cache.size).toBe(1501);
+      // Size should be CACHE_MAX + 1 - CACHE_EVICT
+      expect(cache.size).toBe(CACHE_MAX + 1 - CACHE_EVICT);
       expect(cache.has('msg-overflow')).toBe(true);
       // Oldest entries should be gone
       expect(cache.has('msg-0')).toBe(false);
-      expect(cache.has('msg-499')).toBe(false);
+      expect(cache.has(`msg-${CACHE_EVICT - 1}`)).toBe(false);
       // Later entries should remain
-      expect(cache.has('msg-500')).toBe(true);
+      expect(cache.has(`msg-${CACHE_EVICT}`)).toBe(true);
     });
   });
 

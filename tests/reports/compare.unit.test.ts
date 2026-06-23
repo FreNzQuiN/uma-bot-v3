@@ -50,15 +50,16 @@ function buildSnapshotWithMembers(members: Snapshot['members']): Snapshot {
  * Build a member entry with the given daily_fans array.
  * Uses minimal required fields — computeMembers derives the rest.
  */
+let memberIdCounter = 1;
 function buildMember(
   name: string,
   dailyFans: number[],
   overrides: Partial<Snapshot['members'][0]> = {}
 ): Snapshot['members'][0] {
   return {
-    id: Math.floor(Math.random() * 1e9),
+    id: memberIdCounter++,
     circle_id: 232229195,
-    viewer_id: Math.floor(Math.random() * 1e9),
+    viewer_id: memberIdCounter + 1000000,
     trainer_name: name,
     shame_score: null,
     year: 2026,
