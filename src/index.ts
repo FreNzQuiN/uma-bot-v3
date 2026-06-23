@@ -324,6 +324,12 @@ async function main() {
           const computedMembers = computeMembers(snapshot, currentConfig);
           const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
           await orchestrator.deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
+
+          // Detect alerts for combined report types (so they aren't silently lost)
+          for (const type of types) {
+            const alerts = await orchestrator.processAlertsForReport(type, snapshot, currentConfig, computedMembers, { isCatchUp: true, collectAlerts: true });
+            allCatchUpAlerts.push(...alerts);
+          }
         });
         log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
 
