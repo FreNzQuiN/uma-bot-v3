@@ -10,8 +10,10 @@ import { Snapshot, BotConfig } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 import {
   formatNumber,
-  formatDateWIB,
   splitMessage,
+} from '../../src/utils/format';
+import {
+  formatDateWIB,
   getStaleDataWarning,
 } from '../../src/reports/format';
 import { loadRealSnapshot } from '../_helpers';

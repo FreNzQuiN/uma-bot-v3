@@ -9,7 +9,7 @@
 import { generateWeeklyReport } from '../../../src/reports/weekly';
 import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
-import { formatNumber } from '../../../src/reports/format';
+import { formatNumber } from '../../../src/utils/format';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
   loadRealSnapshot,

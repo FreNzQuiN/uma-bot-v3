@@ -8,7 +8,8 @@
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { WEEK_BLOCKS } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { formatNumber, formatDateWIB, buildDateStr, buildFooter, sanitizeName } from './format';
+import { formatNumber, sanitizeName } from '../utils/format';
+import { formatDateWIB, buildDateStr, buildFooter } from './format';
 import { computeRollingAverage } from '../data/daily-fans';
 
 /**

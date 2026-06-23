@@ -229,6 +229,39 @@ export class ReportOrchestrator {
     return [];
   }
 
+  /**
+   * Generate a combined catch-up report, deliver it, and collect alerts per type.
+   * Returns collected alerts for deferred delivery.
+   */
+  async sendCombinedCatchUp(types: string[]): Promise<Alert[]> {
+    const snapshot = this.getSnapshot();
+    if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
+    const config = this.getConfig();
+
+    // Pre-fetch monthly data if monthly report is in the combined set
+    if (types.includes('monthly')) {
+      const { year: curYear, month: curMonth } = getDataDateComponents();
+      const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, 1);
+      try {
+        await ensureMonthSnapshot(this.umaMoe, config.circleId, targetYear, targetMonth);
+      } catch (err) {
+        log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for combined catch-up report`, err);
+      }
+    }
+
+    const computedMembers = computeMembers(snapshot, config);
+    const combined = this.generateCombinedReportString(types, snapshot, config, computedMembers);
+    await this.deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
+
+    // Detect alerts for each combined report type
+    const allAlerts: Alert[] = [];
+    for (const type of types) {
+      const alerts = await this.processAlertsForReport(type, snapshot, config, computedMembers, { isCatchUp: true, collectAlerts: true });
+      allAlerts.push(...alerts);
+    }
+    return allAlerts;
+  }
+
   // ── Full send pipeline ────────────────────────────────────
 
   /**

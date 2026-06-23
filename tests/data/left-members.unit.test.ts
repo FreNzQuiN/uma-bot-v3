@@ -5,7 +5,7 @@
  * Tests updateMemberHistory and getLeftMembers.
  */
 
-import { updateMemberHistory, getLeftMembers } from '../../src/data/snapshot';
+import { updateMemberHistory, getLeftMembers } from '../../src/data/member-history';
 import { Database } from '../../src/db/database';
 import type { Snapshot, MemberData } from '../../src/types';
 

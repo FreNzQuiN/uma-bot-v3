@@ -7,7 +7,7 @@
 
 import type { BotConfig } from '../types';
 import { getDefaultConfig, saveConfig } from '../config';
-import { formatNumber } from '../reports/format';
+import { formatNumber } from '../utils/format';
 
 // ============================================================
 // /setreq — Set member requirements

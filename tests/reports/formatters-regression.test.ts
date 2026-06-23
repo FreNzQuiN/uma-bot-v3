@@ -1,4 +1,4 @@
-import { splitMessage } from '../../src/reports/format';
+import { splitMessage } from '../../src/utils/format';
 
 describe('Bug 1: splitMessage Part marker overhead', () => {
   const MAX_LENGTH = 4096;

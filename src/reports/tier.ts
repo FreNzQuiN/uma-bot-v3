@@ -9,7 +9,8 @@ import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatNumber } from '../utils/format';
+import { formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
 import { computeTierData } from './compute';
 
 export { computeTierData, CLUB_TIERS };

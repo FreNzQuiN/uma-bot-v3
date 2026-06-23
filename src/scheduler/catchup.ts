@@ -144,11 +144,11 @@ export class CatchUpManager {
    * Records each attempt in the database.
    */
   async executeCatchUp(
-    sendReport: (type: string, options?: { isCatchUp: boolean }) => Promise<unknown>,
+    sendReport: (type: string, options?: { isCatchUp: boolean; offset?: number }) => Promise<unknown>,
     onCombinedReport?: (types: string[]) => Promise<unknown>
-  ): Promise<{ sent: number; skipped: number; failed: number }> {
+  ): Promise<{ sent: number; skipped: number; failed: number; alerts: unknown[] }> {
     if (!this.config.catchUp.enabled) {
-      return { sent: 0, skipped: 0, failed: 0 };
+      return { sent: 0, skipped: 0, failed: 0, alerts: [] };
     }
 
     const missed = this.detectMissedReports();
@@ -159,7 +159,7 @@ export class CatchUpManager {
 
     if (!targetJid) {
       log.warn('CatchUp', 'No announcement groups configured, skipping catch-up');
-      return { sent: 0, skipped: missed.length, failed: 0 };
+      return { sent: 0, skipped: missed.length, failed: 0, alerts: [] };
     }
 
     // Group missed reports by collision (same time → combine)
@@ -168,6 +168,7 @@ export class CatchUpManager {
     let sent = 0;
     let skipped = 0;
     let failed = 0;
+    const alerts: unknown[] = [];
 
     for (const group of groups) {
       if (sent >= maxReports) {
@@ -188,7 +189,8 @@ export class CatchUpManager {
         });
 
         try {
-          await sendReport(reportType, { isCatchUp: true });
+          const result = await sendReport(reportType, { isCatchUp: true });
+          if (Array.isArray(result)) alerts.push(...result);
           this.db.updateRunStatus(runId, 'sent');
           this.db.save(); // Persist immediately for crash recovery
           sent++;
@@ -213,7 +215,8 @@ export class CatchUpManager {
               is_catch_up: true,
               target_jid: targetJid,
             });
-            await onCombinedReport(group);
+            const result = await onCombinedReport(group);
+            if (Array.isArray(result)) alerts.push(...result);
             this.db.updateRunStatus(runId, 'sent');
             this.db.save(); // Persist immediately for crash recovery
             // Record individual runs so scheduled reports don't duplicate
@@ -249,7 +252,8 @@ export class CatchUpManager {
               target_jid: targetJid,
             });
             try {
-              await sendReport(reportType, { isCatchUp: true });
+              const result = await sendReport(reportType, { isCatchUp: true });
+              if (Array.isArray(result)) alerts.push(...result);
               this.db.updateRunStatus(runId, 'sent');
               this.db.save(); // Persist immediately for crash recovery
               sent++;
@@ -264,7 +268,7 @@ export class CatchUpManager {
       }
     }
 
-    return { sent, skipped, failed };
+    return { sent, skipped, failed, alerts };
   }
 
   // ============================================================

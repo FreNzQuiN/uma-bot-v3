@@ -10,7 +10,8 @@ import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { getDailyGain } from '../data/daily-fans';
-import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
+import { formatNumber, sanitizeName } from '../utils/format';
+import { formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
 
 /**
  * Generate the daily report string.

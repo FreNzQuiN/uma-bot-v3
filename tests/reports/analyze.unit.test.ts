@@ -449,7 +449,7 @@ describe('generateAnalyzeReport — numerical accuracy', () => {
     const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
 
     // Assert
-    const { formatNumber } = require('../../src/reports/format');
+    const { formatNumber } = require('../../src/utils/format');
     expect(report).toContain(formatNumber(ryu!.monthlyGain));
   });
 

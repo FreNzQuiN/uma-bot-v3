@@ -9,7 +9,7 @@
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeTierData } from '../reports/compute';
-import { formatNumber } from '../reports/format';
+import { formatNumber } from '../utils/format';
 import {
   computeRollingAverage,
   getDailyGain,

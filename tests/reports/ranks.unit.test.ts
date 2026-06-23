@@ -26,7 +26,7 @@ import {
   isStaleMember,
 } from '../../src/data/daily-fans';
 import { computeMembers } from '../../src/reports/compute';
-import { formatNumber } from '../../src/reports/format';
+import { formatNumber } from '../../src/utils/format';
 import { CLUB_TIERS } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot } from '../../src/types';

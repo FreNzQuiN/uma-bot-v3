@@ -15,7 +15,7 @@ import {
   isTransferMember,
   isStaleMember,
 } from '../../../src/data/daily-fans';
-import { formatNumber } from '../../../src/reports/format';
+import { formatNumber } from '../../../src/utils/format';
 import { setupCommandHandler } from '../../../src/whatsapp/dispatch';
 import { WhatsAppClient, IncomingMessage } from '../../../src/whatsapp/client';
 import type { Snapshot, BotConfig } from '../../../src/types';

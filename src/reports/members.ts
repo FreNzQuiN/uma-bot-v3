@@ -9,8 +9,9 @@
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
-import { formatNumber, formatDateWIB, sanitizeName, buildFooter, buildDateStr } from './format';
-import { getLeftMembers } from '../data/snapshot';
+import { formatNumber, sanitizeName } from '../utils/format';
+import { formatDateWIB, buildFooter, buildDateStr } from './format';
+import { getLeftMembers } from '../data/member-history';
 
 /**
  * Generate the members report string.

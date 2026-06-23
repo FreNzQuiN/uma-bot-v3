@@ -352,7 +352,7 @@ describe('generateCompareReport — numerical accuracy', () => {
 
     // Assert — monthly gain values from computeMembers should appear in report
     // The formatNumber function converts to K/M/B, so we check the formatted version
-    const { formatNumber } = require('../../src/reports/format');
+    const { formatNumber } = require('../../src/utils/format');
     expect(report).toContain(formatNumber(ryu!.monthlyGain));
     expect(report).toContain(formatNumber(gold!.monthlyGain));
   });

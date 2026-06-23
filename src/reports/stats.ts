@@ -10,7 +10,8 @@ import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeRollingAverage, countActiveDays } from '../data/daily-fans';
-import { formatNumber, formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatNumber } from '../utils/format';
+import { formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
 
 /**
  * Generate the stats report string.

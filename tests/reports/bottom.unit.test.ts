@@ -13,7 +13,7 @@ import {
   getMonthlyGain,
   isTransferMember,
 } from '../../src/data/daily-fans';
-import { formatNumber } from '../../src/reports/format';
+import { formatNumber } from '../../src/utils/format';
 import { computeMembers } from '../../src/reports/compute';
 import type { Snapshot, BotConfig } from '../../src/types';
 import { loadRealSnapshot, STALE_NAMES, WHATSAPP_MAX_LENGTH } from '../_helpers';

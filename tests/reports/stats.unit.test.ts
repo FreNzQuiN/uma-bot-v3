@@ -18,7 +18,8 @@ import {
   isTransferMember,
   isStaleMember,
 } from '../../src/data/daily-fans';
-import { formatNumber, formatDateWIB } from '../../src/reports/format';
+import { formatNumber } from '../../src/utils/format';
+import { formatDateWIB } from '../../src/reports/format';
 import type { Snapshot, BotConfig } from '../../src/types';
 import {
   loadRealSnapshot,

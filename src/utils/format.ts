@@ -2,8 +2,49 @@
  * Pure string formatting utilities.
  *
  * No domain logic — only string manipulation.
- * Used by both reports/format and whatsapp/client.
+ * Used by reports, alerts, and whatsapp modules.
  */
+
+// ============================================================
+// Number formatting
+// ============================================================
+
+/**
+ * Format a number for compact display in reports.
+ *
+ * - >= 1B → "1.5B"
+ * - >= 1M → "349.1M"
+ * - >= 1K → "50.0K"
+ * - < 1K  → raw integer string
+ */
+export function formatNumber(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000_000) {
+    return (n / 1_000_000_000).toFixed(1) + 'B';
+  }
+  if (abs >= 1_000_000) {
+    return (n / 1_000_000).toFixed(1) + 'M';
+  }
+  if (abs >= 1_000) {
+    return (n / 1_000).toFixed(1) + 'K';
+  }
+  return String(n);
+}
+
+// ============================================================
+// Name sanitization
+// ============================================================
+
+/**
+ * Sanitize a trainer name for safe embedding in WhatsApp formatted messages.
+ * Escapes WhatsApp formatting characters (*, _, ~) to prevent injection.
+ */
+export function sanitizeName(name: string): string {
+  return name
+    .replace(/\*/g, '')
+    .replace(/_/g, ' ')
+    .replace(/~/g, '-');
+}
 
 // ============================================================
 // Message splitting

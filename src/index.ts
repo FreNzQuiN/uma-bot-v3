@@ -19,7 +19,8 @@ import { CatchUpManager } from './scheduler/catchup';
 import { WhatsAppClient } from './whatsapp/client';
 import { setupCommandHandler } from './whatsapp/dispatch';
 
-import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, updateMemberHistory, ensureMonthSnapshot, getDataDayFromSnapshot } from './data/snapshot';
+import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, ensureMonthSnapshot, getDataDayFromSnapshot } from './data/snapshot';
+import { updateMemberHistory } from './data/member-history';
 import { getDataDate, getDataDateComponents, getTargetMonth } from './utils/timezone';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
@@ -39,26 +40,34 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
+function arraysEqual(a: unknown[], b: unknown[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function configChanged(oldCfg: BotConfig, newCfg: BotConfig): { changed: boolean; scheduleChanged: boolean } {
   const scheduleChanged = (
     oldCfg.schedule.daily.time !== newCfg.schedule.daily.time ||
     oldCfg.schedule.daily.enabled !== newCfg.schedule.daily.enabled ||
     oldCfg.schedule.weekly.time !== newCfg.schedule.weekly.time ||
     oldCfg.schedule.weekly.enabled !== newCfg.schedule.weekly.enabled ||
-    JSON.stringify(oldCfg.schedule.weekly.days) !== JSON.stringify(newCfg.schedule.weekly.days) ||
+    !arraysEqual(oldCfg.schedule.weekly.days, newCfg.schedule.weekly.days) ||
     oldCfg.schedule.monthly.time !== newCfg.schedule.monthly.time ||
     oldCfg.schedule.monthly.enabled !== newCfg.schedule.monthly.enabled ||
     oldCfg.schedule.monthly.day !== newCfg.schedule.monthly.day
   );
   const anyChanged = scheduleChanged ||
-    JSON.stringify(oldCfg.groups) !== JSON.stringify(newCfg.groups) ||
-    JSON.stringify(oldCfg.admins) !== JSON.stringify(newCfg.admins) ||
-    JSON.stringify(oldCfg.alerts) !== JSON.stringify(newCfg.alerts) ||
-    JSON.stringify(oldCfg.requirements) !== JSON.stringify(newCfg.requirements) ||
-    JSON.stringify(oldCfg.catchUp) !== JSON.stringify(newCfg.catchUp) ||
-    JSON.stringify(oldCfg.message) !== JSON.stringify(newCfg.message) ||
-    JSON.stringify(oldCfg.memberStatus) !== JSON.stringify(newCfg.memberStatus) ||
-    JSON.stringify(oldCfg.commands) !== JSON.stringify(newCfg.commands) ||
+    !deepEqual(oldCfg.groups, newCfg.groups) ||
+    !deepEqual(oldCfg.admins, newCfg.admins) ||
+    !deepEqual(oldCfg.alerts, newCfg.alerts) ||
+    !deepEqual(oldCfg.requirements, newCfg.requirements) ||
+    !deepEqual(oldCfg.catchUp, newCfg.catchUp) ||
+    !deepEqual(oldCfg.message, newCfg.message) ||
+    !deepEqual(oldCfg.memberStatus, newCfg.memberStatus) ||
+    !deepEqual(oldCfg.commands, newCfg.commands) ||
     oldCfg.timezone !== newCfg.timezone ||
     oldCfg.circleId !== newCfg.circleId;
   return { changed: anyChanged, scheduleChanged };
@@ -304,36 +313,15 @@ async function main() {
       if (missed.length > 0) {
         log.info('CatchUp', `Detected ${missed.length} missed reports: ${missed.join(', ')}`);
 
-        // Collect alerts from all catch-up reports
-        const allCatchUpAlerts: import('./alerts/alerts').Alert[] = [];
-        const sendReportCollectingAlerts = async (type: string, options?: { isCatchUp?: boolean }) => {
-          const reportOptions: { isCatchUp?: boolean; collectAlerts?: boolean; offset?: number } = { ...options, collectAlerts: true };
-          if (type === 'monthly') {
-            reportOptions.offset = -1;
-          }
-          const alerts = await orchestrator.sendReport(type, reportOptions);
-          allCatchUpAlerts.push(...alerts);
+        const sendReportCollectingAlerts = async (type: string, options?: { isCatchUp?: boolean; offset?: number }) => {
+          return orchestrator.sendReport(type, { ...options, collectAlerts: true });
         };
 
-        const result = await catchUp.executeCatchUp(sendReportCollectingAlerts, async (types) => {
-          const snapshot = getSnapshot();
-          if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
-          const currentConfig = getConfig();
-          const computedMembers = computeMembers(snapshot, currentConfig);
-          const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
-          await orchestrator.deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
-
-          // Detect alerts for combined report types (so they aren't silently lost)
-          for (const type of types) {
-            const alerts = await orchestrator.processAlertsForReport(type, snapshot, currentConfig, computedMembers, { isCatchUp: true, collectAlerts: true });
-            allCatchUpAlerts.push(...alerts);
-          }
-        });
+        const result = await catchUp.executeCatchUp(sendReportCollectingAlerts, (types) => orchestrator.sendCombinedCatchUp(types));
         log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
 
-        // Send catch-up alerts via orchestrator
-        if (allCatchUpAlerts.length > 0) {
-          await orchestrator.deliverAlerts(allCatchUpAlerts, true);
+        if (result.alerts.length > 0) {
+          await orchestrator.deliverAlerts(result.alerts as import('./alerts/alerts').Alert[], true);
         }
       } else {
         log.debug('CatchUp', 'No missed reports detected');

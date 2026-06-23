@@ -11,7 +11,7 @@ import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getMonthlyGain } from '../../../src/data/daily-fans';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
-import { formatNumber } from '../../../src/reports/format';
+import { formatNumber } from '../../../src/utils/format';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
   loadRealSnapshot,

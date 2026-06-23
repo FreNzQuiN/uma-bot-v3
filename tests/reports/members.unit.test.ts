@@ -11,9 +11,9 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { generateMembersReport } from '../../src/reports/members';
 import { computeMembers } from '../../src/reports/compute';
-import { formatNumber } from '../../src/reports/format';
+import { formatNumber } from '../../src/utils/format';
 import { Database } from '../../src/db/database';
-import { updateMemberHistory } from '../../src/data/snapshot';
+import { updateMemberHistory } from '../../src/data/member-history';
 import type { Snapshot, BotConfig, MemberData } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 

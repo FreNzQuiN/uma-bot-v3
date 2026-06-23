@@ -9,7 +9,8 @@ import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { formatNumber, formatDateWIB, buildDateStr, buildFooter, buildDataLine, sanitizeName } from './format';
+import { formatNumber, sanitizeName } from '../utils/format';
+import { formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
 /**

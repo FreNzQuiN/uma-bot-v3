@@ -10,7 +10,7 @@ import { computeMembers } from '../../../src/reports/compute';
 import { getDefaultConfig } from '../../../src/config';
 import { getWeeklyGain } from '../../../src/data/daily-fans';
 import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
-import { formatNumber } from '../../../src/reports/format';
+import { formatNumber } from '../../../src/utils/format';
 import { WEEK_BLOCKS } from '../../../src/types';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
