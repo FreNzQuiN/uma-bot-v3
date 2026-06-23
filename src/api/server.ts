@@ -40,6 +40,12 @@ export function createResponse(
 // API Server
 // ============================================================
 
+export interface WhatsAppCapabilities {
+  isConnected: () => boolean;
+  getGroups: () => Promise<Array<{ id: string; name: string; participants: number }>>;
+  getChats: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }>;
+}
+
 export class ApiServer {
   private port: number;
   private snapshotLoader: () => Snapshot | null;
@@ -53,23 +59,17 @@ export class ApiServer {
   constructor(
     port: number,
     snapshotLoader: () => Snapshot | null,
-    config: BotConfig | (() => BotConfig)
+    config: BotConfig | (() => BotConfig),
+    whatsapp?: WhatsAppCapabilities
   ) {
     this.port = port;
     this.snapshotLoader = snapshotLoader;
     this.configLoader = typeof config === 'function' ? config : () => config;
-  }
-
-  setWhatsAppConnected(check: () => boolean): void {
-    this.waConnected = check;
-  }
-
-  setWhatsAppGroups(fetch: () => Promise<Array<{ id: string; name: string; participants: number }>>): void {
-    this.waGroups = fetch;
-  }
-
-  setWhatsAppChats(fetch: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }>): void {
-    this.waChats = fetch;
+    if (whatsapp) {
+      this.waConnected = whatsapp.isConnected;
+      this.waGroups = whatsapp.getGroups;
+      this.waChats = whatsapp.getChats;
+    }
   }
 
   private get config(): BotConfig {

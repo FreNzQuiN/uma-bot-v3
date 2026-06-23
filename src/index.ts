@@ -248,10 +248,11 @@ async function main() {
   // ── 6. Start API server ──
   const apiPortRaw = parseInt(process.env.API_PORT ?? '3000', 10);
   const apiPort = (apiPortRaw >= 1 && apiPortRaw <= 65535) ? apiPortRaw : 3000;
-  const api = new ApiServer(apiPort, getSnapshot, getConfig);
-  api.setWhatsAppConnected(() => waClient.isConnected());
-  api.setWhatsAppGroups(() => waClient.getGroups());
-  api.setWhatsAppChats(() => waClient.getChats());
+  const api = new ApiServer(apiPort, getSnapshot, getConfig, {
+    isConnected: () => waClient.isConnected(),
+    getGroups: () => waClient.getGroups(),
+    getChats: () => waClient.getChats(),
+  });
   await api.start();
 
   // ── 7. Start scheduler + Connect WhatsApp ──
