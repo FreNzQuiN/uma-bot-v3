@@ -57,13 +57,13 @@ uma.moe API → UmaMoeClient → Snapshot (JSON) → data/snapshots/YYYY/MM/DD.j
 ### Outbound: Report Delivery
 
 ```
-Snapshot → computeMembers() → generateReport() → formatReport() → WhatsApp → Announcement Group
+Snapshot → computeMembers() → ReportOrchestrator → generateReport() → deliverReport() → WhatsApp → Announcement Group
 ```
 
-1. **computeMembers** (in `reports/compute.ts`) transforms raw `daily_fans` arrays into `ComputedMember` objects with monthlyGain, latestDailyGain, weeklyGains, status, etc.
-2. **generateReport** (e.g., `reports/daily.ts`) computes report-specific data from computed members.
-3. **formatReport** (in `reports/format.ts`) formats the data as a WhatsApp message string, respecting the 4096-char limit and splitting at newline boundaries.
-4. **deliverReport** sends the message to all configured announcement groups via Baileys.
+1. **computeMembers** (in `reports/compute.ts`) is called once per report pipeline by the orchestrator or dispatch layer. It transforms raw `daily_fans` arrays into `ComputedMember` objects with monthlyGain, latestDailyGain, weeklyGains, status, etc.
+2. **ReportOrchestrator** (in `orchestrator/report-orchestrator.ts`) orchestrates the full pipeline: snapshot alignment, month pre-fetch, report generation, delivery, and alert processing.
+3. **generateReport** (e.g., `reports/daily.ts`) receives pre-computed members and generates report-specific data.
+4. **deliverReport** sends the message to all configured announcement groups via Baileys, splitting at newline boundaries (configurable).
 5. If delivery fails, the scheduler marks the run as `failed` in the database.
 
 ### Alerts
@@ -179,6 +179,8 @@ Snapshot → detectAlerts() → recordAlert() → formatAlerts() → WhatsApp �
 
 **Flow:** Message → Parse command → Access control → Generate report → Send
 
+Uses static imports for all report generators (no dynamic `import()` — no circular dependencies exist).
+
 **Access control** (`whatsapp/access.ts`):
 - Report commands → allowed in `command` groups or by admins.
 - Admin commands → only admins, only in `command` groups or private chats.
@@ -200,7 +202,7 @@ See `docs/api-reference.md` for endpoint details.
 
 **What:** Generates report strings from snapshot data.
 
-**Core function:** `computeMembers()` in `reports/compute.ts` transforms raw `daily_fans` arrays into rich `ComputedMember` objects. Every report type calls this first, then applies its own logic.
+**Core function:** `computeMembers()` in `reports/compute.ts` transforms raw `daily_fans` arrays into rich `ComputedMember` objects. This is called once per pipeline by the orchestrator/dispatch layer and injected into each report generator — never called internally by generators.
 
 **Report types:**
 | Type | File | What it computes |
@@ -215,6 +217,21 @@ See `docs/api-reference.md` for endpoint details.
 | Tier | `tier.ts` | Tier promotion/demotion analysis |
 | Compare | `compare.ts` | Side-by-side member comparison |
 | Analyze | `analyze.ts` | Deep single-member analysis |
+| Combined | `combined.ts` | Multi-type combined report (for collision days) |
+
+### Report Orchestrator (`orchestrator/report-orchestrator.ts`)
+
+**What:** Encapsulates the full report pipeline — generation, delivery, and alert processing.
+
+**Why:** Extracted from `index.ts` to separate business logic from the composition root. The orchestrator owns: snapshot alignment (month-boundary and stale-data handling), month pre-fetch, report generation dispatch, message delivery to WhatsApp groups, and alert detection/recording/delivery.
+
+**Dependencies:** `getConfig`, `getSnapshot`, `UmaMoeClient`, `Database`, `WhatsAppClient` — all injected via constructor.
+
+### String Utilities (`utils/format.ts`)
+
+**What:** Pure string formatting utilities with no domain logic.
+
+**Key function:** `splitMessage()` — splits WhatsApp messages at newline boundaries with "Part X/Y" markers. Used by both `reports/format.ts` (re-exported for backward compatibility) and `whatsapp/client.ts` (static import).
 
 ---
 

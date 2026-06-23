@@ -33,13 +33,15 @@ Single Node.js process. No microservices, no cache layer — one process handles
 
 ```
 src/
-├── index.ts          # Entry point — startup orchestration, report delivery
+├── index.ts          # Entry point — composition root (wires modules together)
 ├── config.ts         # YAML config loading + Zod validation + hot-reload watcher
 ├── runtime.ts        # Runtime stats (uptime, reconnects, message counts)
-├── types/index.ts    # Shared TypeScript types (BotConfig, Snapshot, etc.)
+├── types/index.ts    # Shared TypeScript types (BotConfig, Snapshot, ComputedMember, etc.)
+├── orchestrator/
+│   └── report-orchestrator.ts  # Report pipeline: generation + delivery + alerts
 ├── api/
 │   ├── uma-moe.ts    # HTTP client for uma.moe circle data API
-│   └── server.ts     # Express HTTP API (reports, members, tier endpoints)
+│   └── server.ts     # HTTP API (reports, members, tier endpoints)
 ├── data/
 │   ├── snapshot.ts   # Snapshot save/load/path management (data/snapshots/YYYY/MM/DD.json)
 │   └── daily-fans.ts # Daily fan array arithmetic
@@ -47,8 +49,8 @@ src/
 │   └── database.ts   # SQLite via sql.js (member history, rank history, alerts)
 ├── reports/
 │   ├── daily.ts, weekly.ts, monthly.ts, ranks.ts, bottom.ts, stats.ts, members.ts, tier.ts
-│   ├── compare.ts, analyze.ts
-│   ├── compute.ts    # Shared report computation helpers
+│   ├── compare.ts, analyze.ts, combined.ts
+│   ├── compute.ts    # Shared report computation (computeMembers)
 │   └── format.ts     # WhatsApp message formatting + splitting
 ├── alerts/
 │   └── alerts.ts     # Alert detection + formatting (performance drop, demotion risk, etc.)
@@ -63,6 +65,7 @@ src/
 │   ├── admin.ts      # Admin-only command handlers
 │   └── access.ts     # Access control (admin vs command group)
 └── utils/
+    ├── format.ts     # Pure string utilities (splitMessage)
     ├── logger.ts     # Pino-based logger with file rotation
     ├── timezone.ts   # WIB (Asia/Jakarta) timezone helpers
     └── index.ts      # General utilities
