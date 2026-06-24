@@ -216,6 +216,9 @@ export function isTransferMember(member: {
  * Determine if a member is stale (hasn't contributed recently).
  * Returns true if latestPositiveDay <= latestDataDay - staleAfterDays.
  * Default staleAfterDays = 3.
+ * 
+ * @deprecated Use isStaleForReport for production stale detection.
+ *   This function is kept for test compatibility only.
  */
 export function isStaleMember(
   latestPositiveDay: number,

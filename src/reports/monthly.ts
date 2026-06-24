@@ -57,6 +57,10 @@ export function generateMonthlyReport(
     }
   }
 
+  if (activeSnapshot.members.length === 0) {
+    return 'ℹ️ *Monthly Report*\nData bulan ini belum tersedia.';
+  }
+
   const { year, month } = activeSnapshot.members[0];
 
   // Build ranked members sorted by monthly gain descending
