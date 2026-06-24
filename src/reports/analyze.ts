@@ -8,7 +8,8 @@
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB, buildDateStr, buildFooter } from './format';
+import { formatDateWIB } from '../utils/timezone';
+import { buildDateStr, buildFooter } from './format';
 import {
   computeRollingAverage,
   countActiveDays,

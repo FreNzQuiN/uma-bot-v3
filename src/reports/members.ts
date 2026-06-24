@@ -10,7 +10,8 @@ import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
 import type { Database } from '../db/database';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB, buildFooter, buildDateStr } from './format';
+import { formatDateWIB } from '../utils/timezone';
+import { buildFooter, buildDateStr } from './format';
 import { getLeftMembers } from '../data/member-history';
 
 /**

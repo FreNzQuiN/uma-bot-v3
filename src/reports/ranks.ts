@@ -8,7 +8,8 @@
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatDateWIB } from '../utils/timezone';
+import { buildDateStr, buildFooter, buildDataLine } from './format';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
