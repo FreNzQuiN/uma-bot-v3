@@ -16,6 +16,7 @@ export class Database {
   private dbPath: string;
   private saveTimer: ReturnType<typeof setInterval> | null = null;
   private autoSaveMs: number;
+  private dirty = false;
 
   constructor(dbPath?: string, autoSaveMs?: number) {
     this.dbPath = dbPath ?? 'data/bot.db';
@@ -60,7 +61,9 @@ export class Database {
 
   private execSql(sql: string, params?: unknown[]): QueryExecResult[] {
     try {
-      return this.ensureDb().exec(sql, params);
+      const result = this.ensureDb().exec(sql, params);
+      this.dirty = true;
+      return result;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error('DB', `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
@@ -71,6 +74,7 @@ export class Database {
   private runSql(sql: string, params?: unknown[]): void {
     try {
       this.ensureDb().run(sql, params);
+      this.dirty = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error('DB', `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
@@ -383,10 +387,12 @@ export class Database {
   // ============================================================
 
   save(): void {
+    if (!this.dirty) return;
     const db = this.ensureDb();
     const data = db.export();
     const buffer = Buffer.from(data);
     writeFileSync(this.dbPath, buffer);
+    this.dirty = false;
   }
 
   close(): void {
