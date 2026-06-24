@@ -43,8 +43,8 @@ const ConfigSchema = z.object({
   }).default({}),
 
   requirements: z.object({
-    monthlyFans: z.number().min(0).default(20_000_000),
-    weeklyFans: z.number().min(0).default(0),
+    monthlyFans: z.number().min(0).max(10_000_000_000).default(20_000_000),
+    weeklyFans: z.number().min(0).max(10_000_000_000).default(0),
     weeksInMonthEquivalent: z.number().min(1).default(30/7),
     includeTransferDataInCalculation: z.boolean().default(false),
   }).default({}),

@@ -8,7 +8,7 @@
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeTierData } from '../reports/compute';
+import { computeTierData } from '../data/daily-fans';
 import { formatNumber } from '../utils/format';
 import {
   computeRollingAverage,

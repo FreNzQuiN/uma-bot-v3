@@ -11,7 +11,7 @@ import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber } from '../utils/format';
 import { formatDateWIB } from '../utils/timezone';
 import { buildDateStr, buildFooter, buildDataLine } from './format';
-import { computeTierData } from './compute';
+import { computeTierData } from '../data/daily-fans';
 
 export { computeTierData, CLUB_TIERS };
 

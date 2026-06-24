@@ -5,7 +5,7 @@
  * pre-calculated gains, status classifications, and weekly breakdowns.
  */
 
-import { Snapshot, ComputedMember, MemberStatus, BotConfig, WEEK_BLOCKS, TierData, CLUB_TIERS } from '../types';
+import { Snapshot, ComputedMember, MemberStatus, BotConfig, WEEK_BLOCKS } from '../types';
 import {
   getLatestDataDay,
   getFirstPositiveDay,
@@ -15,6 +15,8 @@ import {
   isTransferMember,
 } from '../data/daily-fans';
 import { getDataDayFromSnapshot } from '../data/snapshot';
+
+export { computeTierData } from '../data/daily-fans';
 
 /**
  * Compute derived data for every member in the snapshot.
@@ -104,70 +106,4 @@ export function computeMembers(
   }
 
   return membersWithGain;
-}
-
-/**
- * Compute tier intelligence data from a snapshot.
- */
-export function computeTierData(snapshot: Snapshot): TierData {
-  const { club_rank, fans_to_next_tier, fans_to_lower_tier } = snapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
-
-  const dataDay = getDataDayFromSnapshot(snapshot);
-  const daysInMonth = snapshot.members.length > 0
-    ? new Date(snapshot.members[0].year, snapshot.members[0].month, 0).getDate()
-    : 30;
-  const daysLeft = Math.max(0, daysInMonth - dataDay);
-
-  // Current pace: total fans accumulated / days elapsed
-  const totalFans = snapshot.circle.monthly_point;
-  const currentPace = dataDay > 0 ? Math.round(totalFans / dataDay) : 0;
-
-  // Required pace: promotion gap / days left
-  const requiredPace =
-    daysLeft > 0 ? Math.round(fans_to_next_tier / daysLeft) : 0;
-
-  // Risk assessment per spec:
-  // LOW = buffer >= 7 days of current pace
-  // MEDIUM = buffer >= 3 and < 7 days of current pace
-  // HIGH = buffer < 3 days of current pace
-  let riskLevel: TierData['riskLevel'] = 'LOW';
-  let projectedOutcome: TierData['projectedOutcome'] = 'unknown';
-
-  if (fans_to_lower_tier > 0 && currentPace > 0) {
-    // Buffer in days of current pace
-    const bufferDays = fans_to_lower_tier / currentPace;
-    if (bufferDays < 3) {
-      riskLevel = 'HIGH';
-      projectedOutcome = 'demotion_risk';
-    } else if (bufferDays < 7) {
-      riskLevel = 'MEDIUM';
-      projectedOutcome = 'stay';
-    } else {
-      riskLevel = 'LOW';
-    }
-  }
-
-  // Projection
-  if (fans_to_next_tier > 0 && daysLeft > 0) {
-    if (currentPace >= requiredPace) {
-      projectedOutcome = 'promote';
-    } else if (projectedOutcome !== 'demotion_risk') {
-      projectedOutcome = 'stay';
-    }
-  } else if (fans_to_next_tier === 0 && projectedOutcome !== 'demotion_risk') {
-    projectedOutcome = 'stay'; // already at top tier
-  }
-
-  return {
-    clubRank: club_rank,
-    tierName,
-    promotionGap: fans_to_next_tier,
-    demotionBuffer: fans_to_lower_tier,
-    requiredPace,
-    currentPace,
-    daysLeft,
-    riskLevel,
-    projectedOutcome,
-  };
 }
