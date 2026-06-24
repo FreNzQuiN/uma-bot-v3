@@ -128,7 +128,7 @@ Snapshot → detectAlerts() → recordAlert() → formatAlerts() → WhatsApp �
 - `rank_history` — daily rank snapshots for trend analysis
 - `settings` — key-value store for runtime settings
 
-**Auto-save:** DB is written to disk every 30 seconds, plus on critical events (catch-up completion).
+**Auto-save:** DB is written to disk every 30 seconds (only when dirty — changes have occurred), plus on critical events (catch-up completion).
 
 ### Config (`config.ts`)
 

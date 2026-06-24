@@ -51,7 +51,7 @@ src/
 ├── reports/
 │   ├── daily.ts, weekly.ts, monthly.ts, ranks.ts, bottom.ts, stats.ts, members.ts, tier.ts
 │   ├── compare.ts, analyze.ts, combined.ts
-│   ├── compute.ts    # Shared report computation (computeMembers, computeTierData)
+│   ├── compute.ts    # Shared report computation (computeMembers)
 │   ├── registry.ts   # Report type → generator mapping (single source of truth)
 │   └── format.ts     # WhatsApp message formatting + splitting
 ├── alerts/

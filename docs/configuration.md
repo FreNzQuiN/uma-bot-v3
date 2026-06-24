@@ -136,8 +136,8 @@ requirements:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `monthlyFans` | `number` | `20000000` | Monthly fan requirement per member |
-| `weeklyFans` | `number` | `0` | Weekly fan requirement per member |
+| `monthlyFans` | `number` | `20000000` | Monthly fan requirement per member (max: 10B) |
+| `weeklyFans` | `number` | `0` | Weekly fan requirement per member (max: 10B) |
 | `weeksInMonthEquivalent` | `number` | `4` | Weeks per month for weekly→monthly derivation |
 | `includeTransferDataInCalculation` | `boolean` | `false` | Whether to include transfer data in gain calculations |
 
