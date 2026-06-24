@@ -24,6 +24,17 @@ export const ADMIN_COMMANDS = new Set([
   'admin',
 ]);
 
+export const ADMIN_COMMAND_HELP: Record<string, string> = {
+  setreq: '`/setreq` — Lihat/atur requirement',
+  config: '`/config` — Lihat konfigurasi',
+  status: '`/status` — Status bot',
+  catchup: '`/catchup on|off` — Toggle catch-up',
+  alerts: '`/alerts on|off` — Toggle alerts',
+  schedule: '`/schedule` — Pengaturan jadwal',
+  debug: '`/debug` — Info debug bot',
+  admin: '`/admin` — Info perintah admin',
+};
+
 // ============================================================
 // Helpers
 // ============================================================

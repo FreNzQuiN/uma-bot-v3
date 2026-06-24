@@ -16,6 +16,7 @@ import { computeMembers } from '../reports/compute';
 import { generateCombinedReport } from '../reports/combined';
 import { generateReportString } from '../reports/registry';
 import { log } from '../utils/logger';
+import { preFetchMonthlySnapshot } from '../scheduler/helpers';
 
 export interface ReportOrchestratorDeps {
   getConfig: () => BotConfig;
@@ -240,13 +241,11 @@ export class ReportOrchestrator {
 
     // Pre-fetch monthly data if monthly report is in the combined set
     if (types.includes('monthly')) {
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, 1);
-      try {
-        await ensureMonthSnapshot(this.umaMoe, config.circleId, targetYear, targetMonth);
-      } catch (err) {
-        log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for combined catch-up report`, err);
-      }
+      await preFetchMonthlySnapshot(
+        (y, m) => ensureMonthSnapshot(this.umaMoe, config.circleId, y, m),
+        1,
+        'combined catch-up report'
+      );
     }
 
     const computedMembers = computeMembers(snapshot, config);
@@ -292,11 +291,11 @@ export class ReportOrchestrator {
       const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, options!.offset!);
       const { year: snapYear, month: snapMonth } = snapshot.members[0];
       if (targetYear !== snapYear || targetMonth !== snapMonth) {
-        try {
-          await ensureMonthSnapshot(this.umaMoe, config.circleId, targetYear, targetMonth);
-        } catch (err) {
-          log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for offset report: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        await preFetchMonthlySnapshot(
+          (y, m) => ensureMonthSnapshot(this.umaMoe, config.circleId, y, m),
+          options!.offset!,
+          'offset report'
+        );
       }
     }
 

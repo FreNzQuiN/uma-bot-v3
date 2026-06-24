@@ -27,6 +27,7 @@ import { log } from './utils/logger';
 import { recordConfigReload, recordSchedulerRestart } from './runtime';
 import { computeMembers } from './reports/compute';
 import { ReportOrchestrator } from './orchestrator/report-orchestrator';
+import { preFetchMonthlySnapshot } from './scheduler/helpers';
 
 const PID_FILE = 'data/bot.pid';
 
@@ -285,13 +286,11 @@ async function main() {
 
     // Pre-fetch monthly data if monthly report is in the combined set
     if (types.includes('monthly')) {
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, 1);
-      try {
-        await ensureMonthSnapshot(umaMoe, currentConfig.circleId, targetYear, targetMonth);
-      } catch (err) {
-        log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for combined report`, err);
-      }
+      await preFetchMonthlySnapshot(
+        (y, m) => ensureMonthSnapshot(umaMoe, currentConfig.circleId, y, m),
+        1,
+        'combined report'
+      );
     }
 
     const computedMembers = computeMembers(snapshot, currentConfig);

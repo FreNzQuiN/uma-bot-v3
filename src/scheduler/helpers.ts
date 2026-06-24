@@ -1,5 +1,6 @@
 import type { BotConfig } from '../types';
 import { log } from '../utils/logger';
+import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
 
 export function isScheduledToday(type: string, dayOfMonth: number, config: BotConfig): boolean {
   if (type === 'daily') return true;
@@ -49,4 +50,18 @@ export function groupByCollision(types: string[], config: BotConfig): string[][]
     groups.push(grouped);
   }
   return groups;
+}
+
+export async function preFetchMonthlySnapshot(
+  fetcher: (year: number, month: number) => Promise<unknown>,
+  offset: number,
+  context: string
+): Promise<void> {
+  const { year: curYear, month: curMonth } = getDataDateComponents();
+  const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, offset);
+  try {
+    await fetcher(targetYear, targetMonth);
+  } catch (err) {
+    log.warn('Report', `Failed to pre-fetch month ${targetYear}-${targetMonth} for ${context}`, err);
+  }
 }

@@ -9,7 +9,7 @@ import type { BotConfig, Snapshot } from '../types';
 import type { Database } from '../db/database';
 import type { WhatsAppClient, IncomingMessage } from './client';
 import { parseCommand, resolveMemberName } from './commands';
-import { canUseCommand, isAdmin, ADMIN_COMMANDS } from './access';
+import { canUseCommand, isAdmin, ADMIN_COMMANDS, ADMIN_COMMAND_HELP } from './access';
 import { handleSetReq, handleConfig, handleStatus, handleCatchUp, handleAlerts } from './admin';
 import { computeMembers } from '../reports/compute';
 import { generateReportString } from '../reports/registry';
@@ -18,6 +18,7 @@ import { generateAnalyzeReport } from '../reports/analyze';
 import { log } from '../utils/logger';
 import { getRuntimeStats, getUptimeMs, recordMessageParsed, recordMessageResponded, recordMessageFailed } from '../runtime';
 import { getTargetMonth, getDataDateComponents } from '../utils/timezone';
+import { preFetchMonthlySnapshot } from '../scheduler/helpers';
 
 // ============================================================
 // Command sets
@@ -189,14 +190,10 @@ async function handleHelpCommand(
 
   if (senderIsAdmin) {
     lines.push('', '*Admin Only:*');
-    lines.push('`/setreq` — Lihat/atur requirement');
-    lines.push('`/config` — Lihat konfigurasi');
-    lines.push('`/status` — Status bot');
-    lines.push('`/catchup on|off` — Toggle catch-up');
-    lines.push('`/alerts on|off` — Toggle alerts');
-    lines.push('`/schedule` — Pengaturan jadwal');
-    lines.push('`/debug` — Info debug bot');
-    lines.push('`/admin` — Info perintah admin');
+    for (const cmd of ADMIN_COMMANDS) {
+      const help = ADMIN_COMMAND_HELP[cmd];
+      if (help) lines.push(help);
+    }
   }
 
   const helpText = lines.join('\n');
@@ -210,14 +207,11 @@ async function handleAdminReferenceCommand(
   const lines = [
     '⚙️ *Admin Commands*',
     '',
-    '`/setreq` — Lihat/atur requirement',
-    '`/config` — Lihat konfigurasi',
-    '`/status` — Status bot',
-    '`/catchup on|off` — Toggle catch-up',
-    '`/alerts on|off` — Toggle alerts',
-    '`/schedule` — Pengaturan jadwal',
-    '`/debug` — Info debug bot',
   ];
+  for (const cmd of ADMIN_COMMANDS) {
+    const help = ADMIN_COMMAND_HELP[cmd];
+    if (help) lines.push(help);
+  }
   await client.sendOrEdit(chatJid, null, lines.join('\n'));
 }
 
@@ -259,13 +253,7 @@ async function handleReportCommand(
 
   // Pre-fetch target month for /monthly with offset > 0
   if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && prefetchSnapshot) {
-    const { year: curYear, month: curMonth } = getDataDateComponents();
-    const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, offset);
-    try {
-      await prefetchSnapshot(targetYear, targetMonth);
-    } catch (err) {
-      log.warn('Dispatch', `Failed to pre-fetch month ${targetYear}-${targetMonth} for /monthly ${offset}: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    await preFetchMonthlySnapshot(prefetchSnapshot, offset, `/monthly ${offset}`);
   }
 
   let report: string;
