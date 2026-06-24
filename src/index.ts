@@ -296,6 +296,11 @@ async function main() {
     const computedMembers = computeMembers(snapshot, currentConfig);
     const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
     await orchestrator.deliverReport(combined, types.join('+'));
+
+    // Detect alerts for each combined report type
+    for (const type of types) {
+      await orchestrator.processAlertsForReport(type, snapshot, currentConfig, computedMembers);
+    }
   }, onDataFetch);
   scheduler.start();
   log.info('Scheduler', `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(',')}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`);
