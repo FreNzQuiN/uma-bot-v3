@@ -1,394 +1,730 @@
 # Architecture Map: Uma Club Bot v3
 
-> Generated from codebase exploration on 2026-06-23
-> Scope: `src/` directory — all TypeScript source files
+> Generated: 2026-06-24
+> Scope: Full codebase (`src/` — 40 TypeScript files, 7,883 lines)
 
 ---
 
-## 1. Entry Points
+## 1. Entry Points and How They Connect
 
 ### Primary Entry Point
-- **`src/index.ts`** (382 lines) — Composition root. Wires all modules together, starts services, handles config hot-reload, orchestrates startup sequence.
-  - Startup order: config → DB → data fetch → API server → scheduler → WhatsApp connection → catch-up → graceful shutdown.
+- **`src/index.ts`** (354 lines) — Composition root. Wires all modules together and orchestrates startup.
+  - `main()` is the only async entry function, called at the bottom of the file
+  - Writes PID to `data/bot.pid` for stop script
+  - Registers global error handlers (`unhandledRejection`, `uncaughtException`)
 
-### HTTP API Entry Point
-- **`src/api/server.ts`** (363 lines) — REST API server on `127.0.0.1:3000`. Endpoints: `/health`, `/reports/*`, `/members`, `/members/:id`, `/tier`, `/snapshots`, `/groups`, `/chats`. Binds localhost only (security).
+### Secondary Entry Points
+- **`src/whatsapp/dispatch.ts:setupCommandHandler()`** — Registers as WhatsApp message handler; all user interaction flows through here.
+- **`src/api/server.ts:ApiServer.start()`** — HTTP API on `127.0.0.1:3000`; external consumers hit this.
+- **`src/scheduler/scheduler.ts:Scheduler.start()`** — Cron-based auto-delivery; triggers report generation on schedule.
+- **`src/config.ts:loadConfig()`** — Called by entry point and config watcher; validates YAML → BotConfig.
 
-### WhatsApp Entry Point
-- **`src/whatsapp/client.ts`** (634 lines) — Baileys WebSocket connection. Handles QR auth, message receive/send, reconnection with exponential backoff, session persistence.
-
-### Cron Entry Point
-- **`src/scheduler/scheduler.ts`** (321 lines) — node-cron tasks for daily (22:05), weekly (22:05 on day 7/14/21/28), and monthly (22:12 on day 1) auto-delivery.
-
----
-
-## 2. Main Modules/Components
-
-### Entry/Composition (`src/index.ts`)
-- Path: `src/`
-- Purpose: Application bootstrap, dependency wiring, config hot-reload, startup orchestration
-- Key files: `index.ts` (382 lines), `config.ts` (229 lines), `runtime.ts` (93 lines)
-- Depends on: All modules (composition root)
-- Depended on by: Nothing (terminal entry point)
-- Risk signals: None — clean composition root pattern
-
-### Types (`src/types/`)
-- Path: `src/types/`
-- Purpose: Shared TypeScript type definitions for all domain objects
-- Key files: `index.ts` (334 lines), `sql.js.d.ts` (26 lines)
-- Depends on: Nothing
-- Depended on by: Every module
-- Risk signals: None — pure type definitions
-
-### Orchestrator (`src/orchestrator/`)
-- Path: `src/orchestrator/`
-- Purpose: Report pipeline — generation + delivery + alert processing as a unified flow
-- Key files: `report-orchestrator.ts` (304 lines)
-- Depends on: types, db, api/uma-moe, whatsapp/client, alerts, data/snapshot, utils/timezone, reports/compute, reports/combined, reports/daily, reports/weekly, reports/monthly, reports/ranks, reports/bottom, reports/stats, reports/members, reports/tier, utils/logger
-- Depended on by: src/index.ts
-- Risk signals: Central orchestrator — any bug here affects all report delivery
-
-### API (`src/api/`)
-- Path: `src/api/`
-- Purpose: HTTP API server (localhost-only) and uma.moe data fetcher (Playwright-based)
-- Key files: `server.ts` (363 lines), `uma-moe.ts` (137 lines)
-- Depends on: types, data/snapshot, reports/compute, reports/tier, utils/logger, utils/format (re-exported via reports/format), runtime
-- Depended on by: src/index.ts, orchestrator
-- Risk signals: `uma-moe.ts` uses Playwright for Cloudflare bypass — fragile if uma.moe changes Turnstile; rate limiter is in-memory (resets on restart)
-
-### Data (`src/data/`)
-- Path: `src/data/`
-- Purpose: Snapshot persistence (JSON files) and daily fan arithmetic (core data model)
-- Key files: `snapshot.ts` (426 lines), `daily-fans.ts` (313 lines)
-- Depends on: types, utils/timezone, api/uma-moe (for ensureMonthSnapshot), db/database (for updateMemberHistory), utils/logger
-- Depended on by: reports/*, orchestrator, whatsapp/dispatch, alerts, api/server
-- Risk signals: Snapshot immutability is critical — once saved, never mutated. `ensureMonthSnapshot` mixes data fetching with persistence.
-
-### Database (`src/db/`)
-- Path: `src/db/`
-- Purpose: SQLite persistence via sql.js (WASM) for operational state (schedule runs, alerts, member history, rank history)
-- Key files: `database.ts` (482 lines)
-- Depends on: types, sql.js (external)
-- Depended on by: src/index.ts, orchestrator, scheduler, alerts, reports/*, data/snapshot
-- Risk signals: sql.js is in-memory with periodic file save — data loss possible on crash between saves (30s interval). No WAL mode.
-
-### Reports (`src/reports/`)
-- Path: `src/reports/`
-- Purpose: All report generation (daily, weekly, monthly, ranks, bottom, stats, members, tier, compare, analyze, combined) and shared formatting
-- Key files: `compute.ts` (107 lines), `format.ts` (135 lines), `daily.ts` (149 lines), `weekly.ts` (172 lines), `monthly.ts` (186 lines), `ranks.ts` (64 lines), `bottom.ts` (102 lines), `stats.ts` (169 lines), `members.ts` (88 lines), `tier.ts` (141 lines), `compare.ts` (112 lines), `analyze.ts` (114 lines), `combined.ts` (47 lines)
-- Depends on: types, data/daily-fans, data/snapshot, utils/timezone, utils/format, db/database
-- Depended on by: orchestrator, whatsapp/dispatch, api/server, alerts
-- Risk signals: `compute.ts` ghost detection logic (member_count gap) is heuristic — may misclassify members. Each report function is pure (snapshot+config → string) which is good.
-
-### Alerts (`src/alerts/`)
-- Path: `src/alerts/`
-- Purpose: Alert detection (performance drop, demotion risk, streak break, new transfer, rank drop), deduplication, formatting, and aggregation
-- Key files: `alerts.ts` (333 lines)
-- Depends on: types, data/snapshot, data/daily-fans, reports/tier, reports/format, db/database, utils/timezone, utils/logger
-- Depended on by: orchestrator, src/index.ts
-- Risk signals: Quiet hours alert suppression records alerts as "sent" to prevent re-firing — behavior may surprise users. Alert event_key uniqueness is the dedup mechanism.
-
-### Scheduler (`src/scheduler/`)
-- Path: `src/scheduler/`
-- Purpose: Cron-based auto-delivery scheduling and catch-up missed report detection/execution
-- Key files: `scheduler.ts` (321 lines), `catchup.ts` (287 lines), `helpers.ts` (52 lines)
-- Depends on: types, db/database, utils/timezone, utils/logger
-- Depended on by: src/index.ts
-- Risk signals: Collision detection (daily+weekly on same day/time) is critical — sends combined message. `catchup.ts` uses `db.save()` after each report for crash recovery, but batch operations are not atomic.
-
-### WhatsApp (`src/whatsapp/`)
-- Path: `src/whatsapp/`
-- Purpose: WhatsApp connection lifecycle, command parsing, dispatch routing, access control, admin command handlers
-- Key files: `client.ts` (634 lines), `dispatch.ts` (491 lines), `commands.ts` (192 lines), `admin.ts` (234 lines), `access.ts` (96 lines)
-- Depends on: types, config, db/database, reports/*, utils/format, utils/logger, runtime
-- Depended on by: src/index.ts, orchestrator, api/server
-- Risk signals: `client.ts` is largest file (634 lines) — connection management + message handling + reconnection + cache. libsignal error suppression monkey-patches `console.error`. Message cache (2000 entries) for retry recovery.
-
-### Utils (`src/utils/`)
-- Path: `src/utils/`
-- Purpose: Shared utilities — logging, timezone conversion, string formatting
-- Key files: `logger.ts` (262 lines), `timezone.ts` (143 lines), `format.ts` (87 lines), `index.ts` (1 line)
-- Depends on: Nothing (leaf utilities)
-- Depended on by: Every module
-- Risk signals: None — pure utility functions. Logger has file rotation logic. Timezone uses `Intl.DateTimeFormat` (no hardcoded offsets).
-
----
-
-## 3. Data Flow
-
-### 3a. Data Ingestion Flow
+### Startup Sequence (verified in `src/index.ts:76-348`)
 ```
-uma.moe API → UmaMoeClient.fetchCircleData() [src/api/uma-moe.ts:77]
-  → Playwright browser → page.evaluate(fetch) → HTTP GET
-  → Snapshot JSON validated
-  → saveSnapshot() [src/data/snapshot.ts:53] → data/snapshots/YYYY/MM/DD.json
-  → updateMemberHistory() [src/data/snapshot.ts:222] → DB member_history table
-  → db.saveRankHistory() [src/index.ts:236] → DB rank_history table
-```
-
-### 3b. Report Generation Flow (Command)
-```
-WhatsApp message → WhatsAppClient.messages.upsert [src/whatsapp/client.ts:297]
-  → dispatchMessage() [src/whatsapp/dispatch.ts:108]
-  → parseCommand() [src/whatsapp/commands.ts:73]
-  → canUseCommand() [src/whatsapp/access.ts:59]
-  → handleReportCommand() [src/whatsapp/dispatch.ts:230]
-  → generateReport() [src/whatsapp/dispatch.ts:350]
-    → computeMembers(snapshot, config) [src/reports/compute.ts:33]
-    → generate*Report(snapshot, config, computedMembers, ...) [src/reports/*.ts]
-  → client.sendOrEdit() [src/whatsapp/client.ts:495]
-    → splitMessage() [src/utils/format.ts:22]
-    → sock.sendMessage() [Baileys]
-```
-
-### 3c. Report Generation Flow (Scheduled)
-```
-node-cron fires → Scheduler.recordAndSend() [src/scheduler/scheduler.ts:50]
-  → orchestrator.sendReport(type) [src/orchestrator/report-orchestrator.ts:255]
-    → alignSnapshotToMonth() [src/orchestrator/report-orchestrator.ts:113]
-    → computeMembers(snapshot, config) [src/reports/compute.ts:33]
-    → generateReportString(type, ...) [src/orchestrator/report-orchestrator.ts:160]
-    → deliverReport() [src/orchestrator/report-orchestrator.ts:58]
-      → waClient.sendMessage() [src/whatsapp/client.ts:470]
-    → processAlertsForReport() [src/orchestrator/report-orchestrator.ts:205]
-      → detectAlerts() [src/alerts/alerts.ts:43]
-      → db.recordAlert() [src/db/database.ts:234]
-      → deliverAlerts() [src/orchestrator/report-orchestrator.ts:85]
-```
-
-### 3d. Catch-Up Flow
-```
-WhatsApp connects → waClient.connect().then() [src/index.ts:299]
-  → CatchUpManager.detectMissedReports() [src/scheduler/catchup.ts:48]
-    → db.getLastSuccessfulRun() for each type
-    → Compare last run date vs scheduled date
-  → CatchUpManager.executeCatchUp() [src/scheduler/catchup.ts:146]
-    → groupByCollision() [src/scheduler/helpers.ts:33]
-    → For each group: sendReport or onCombinedReport
-    → Aggregate alerts → aggregateAlerts() [src/alerts/alerts.ts:285]
-    → Send aggregated alerts to admin/group
-```
-
-### 3e. Config Hot-Reload Flow
-```
-setInterval (5s) [src/index.ts:120]
-  → statSync(configPath) + readFileSync()
-  → If mtime or content changed:
-    → loadConfig() [src/config.ts:146]
-    → configChanged() [src/index.ts:42] — deep comparison
-    → log.configure() [src/utils/logger.ts:72]
-    → scheduler.stop() + scheduler.start() [src/scheduler/scheduler.ts:312,200]
-    → recordConfigReload() [src/runtime.ts:54]
-```
-
-### 3f. Alert Detection Flow
-```
-detectAlerts() [src/alerts/alerts.ts:43]
-  → For each ComputedMember:
-    → performance_drop: todayGain < avg7d * threshold
-    → streak_break: had streak but todayGain == 0
-    → new_transfer: member.isTransfer == true
-  → For club:
-    → demotion_risk: tierData.riskLevel == 'HIGH'
-    → rank_drop: rank diff > config threshold
-  → Quiet hours check → suppress if in range
-  → Return Alert[] → deduplicated via db.isAlertAlreadySent()
+1. Load config + init DB                    (lines 87-92)
+2. Watch config.yaml for changes            (lines 98-191)
+3. Create WhatsApp client (not connected)   (line 116)
+4. Create ReportOrchestrator                (line 119)
+5. Register command dispatch                (lines 121-124)
+6. Fetch fresh data if stale                (lines 194-226)
+7. Pre-fetch previous 2 months              (lines 228-239)
+8. Update member history + rank history     (lines 241-255)
+9. Start HTTP API server                    (lines 257-265)
+10. Start scheduler                         (lines 279-302)
+11. Connect WhatsApp (non-blocking)         (lines 306-333)
+12. After WA connects → catch-up → normal   (lines 306-329)
+13. Graceful shutdown on SIGINT/SIGTERM     (lines 336-346)
 ```
 
 ---
 
-## 4. External Dependencies
+## 2. Main Modules/Components and Their Responsibilities
 
-### APIs
-| Service | Client | Method | Purpose |
-|---------|--------|--------|---------|
-| uma.moe | `src/api/uma-moe.ts` | Playwright browser → fetch | Circle member data (daily_fans arrays) |
+### Core Infrastructure
 
-### Databases
-| Engine | File | Purpose |
-|--------|------|---------|
-| sql.js (WASM SQLite) | `data/bot.db` | Schedule runs, alert dedup, member history, rank history |
-| JSON files | `data/snapshots/YYYY/MM/DD.json` | Immutable snapshot storage |
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **Entry** | `src/index.ts` | 354 | Composition root, startup orchestration, config watcher, graceful shutdown |
+| **Config** | `src/config.ts` | 229 | YAML loading, Zod validation, immutable updates, atomic save |
+| **Types** | `src/types/index.ts` | 334 | All shared TypeScript interfaces, type definitions, constants |
+| **Runtime** | `src/runtime.ts` | 93 | Module-level mutable state for uptime, reconnects, message counts |
+| **Logger** | `src/utils/logger.ts` | 262 | Structured logging with file rotation, configurable timezone |
+| **Timezone** | `src/utils/timezone.ts` | 173 | JST data timezone + WIB display timezone via Intl API |
+| **Format** | `src/utils/format.ts` | 128 | Pure string utilities: formatNumber, sanitizeName, splitMessage |
+
+### Data Layer
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **Snapshot** | `src/data/snapshot.ts` | 278 | Immutable JSON save/load/path management (`data/snapshots/YYYY/MM/DD.json`) |
+| **Ensure Snapshot** | `src/data/ensure-snapshot.ts` | 66 | Cache-or-fetch for month snapshots (bridges data ↔ API) |
+| **Daily Fans** | `src/data/daily-fans.ts` | 313 | Core arithmetic on the 32-element `daily_fans` array |
+| **Member History** | `src/data/member-history.ts` | 103 | Track member join/leave by diffing snapshots against DB |
+| **Database** | `src/db/database.ts` | 482 | SQLite via sql.js: settings, schedule_runs, alert_events, member_history, rank_history |
+
+### API Layer
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **UmaMoe Client** | `src/api/uma-moe.ts` | 137 | Playwright-based HTTP client for uma.moe (Turnstile bypass) |
+| **API Server** | `src/api/server.ts` | 374 | REST API on localhost: reports, members, tier, snapshots, groups, chats |
+
+### Report Engine
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **Compute** | `src/reports/compute.ts` | 173 | Transform raw snapshots → ComputedMember[] with gains, status, weekly breakdowns |
+| **Registry** | `src/reports/registry.ts` | 43 | Type string → generator function mapping (single source of truth) |
+| **Format (reports)** | `src/reports/format.ts` | 86 | Shared report helpers: stale warnings, date strings, footer, data line |
+| **Daily** | `src/reports/daily.ts` | 150 | Daily performance summary |
+| **Weekly** | `src/reports/weekly.ts` | 173 | Weekly performance summary |
+| **Monthly** | `src/reports/monthly.ts` | 190 | Monthly performance summary |
+| **Ranks** | `src/reports/ranks.ts` | 65 | Top 10 leaderboard |
+| **Bottom** | `src/reports/bottom.ts` | 103 | Members needing attention |
+| **Stats** | `src/reports/stats.ts` | 170 | Club-wide statistics |
+| **Members** | `src/reports/members.ts` | 89 | Full member listing |
+| **Tier** | `src/reports/tier.ts` | 79 | Tier promotion/demotion intelligence |
+| **Compare** | `src/reports/compare.ts` | 113 | Side-by-side member comparison |
+| **Analyze** | `src/reports/analyze.ts` | 115 | Deep single-member analysis |
+| **Combined** | `src/reports/combined.ts` | 47 | Multi-type combined report (collision days) |
+
+### Orchestration
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **Report Orchestrator** | `src/orchestrator/report-orchestrator.ts` | 315 | Full report pipeline: alignment, pre-fetch, generation, delivery, alerts |
+
+### Scheduler
+
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **Scheduler** | `src/scheduler/scheduler.ts` | 321 | Cron-based auto-delivery with collision detection |
+| **CatchUp** | `src/scheduler/catchup.ts` | 291 | Detect missed reports on restart, send catch-up reports |
+| **Helpers** | `src/scheduler/helpers.ts` | 52 | `isScheduledToday`, `getCollidingTypes`, `groupByCollision` |
 
 ### WhatsApp
-| Library | Purpose |
-|---------|---------|
-| @whiskeysockets/baileys | WhatsApp Web multi-device connection |
 
-### Scheduling
-| Library | Purpose |
-|---------|---------|
-| node-cron | Cron-based scheduled tasks |
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **Client** | `src/whatsapp/client.ts` | 635 | Baileys connection lifecycle, QR auth, reconnection, message sending |
+| **Dispatch** | `src/whatsapp/dispatch.ts` | 466 | Command routing: parse → access control → generate → send |
+| **Commands** | `src/whatsapp/commands.ts` | 192 | Command parser + Levenshtein member name resolution |
+| **Admin** | `src/whatsapp/admin.ts` | 234 | Admin command handlers: /setreq, /config, /status, /catchup, /alerts |
+| **Access** | `src/whatsapp/access.ts` | 96 | Access control: admin vs command group vs announcement group |
 
-### Browser Automation
-| Library | Purpose |
-|---------|---------|
-| playwright | Chromium headless for Cloudflare Turnstile bypass on uma.moe |
+### Alerts
 
-### Configuration
-| Library | Purpose |
-|---------|---------|
-| yaml | YAML config parsing |
-| zod | Config schema validation |
+| Module | Path | Lines | Purpose |
+|--------|------|-------|---------|
+| **Alerts** | `src/alerts/alerts.ts` | 333 | Detection (5 types), dedup via DB, formatting, quiet hours, catch-up aggregation |
 
-### Logging
-| Library | Purpose |
-|---------|---------|
-| pino | Listed in package.json but NOT used in src/ — custom logger at `src/utils/logger.ts` |
+---
 
-### Other
-| Library | Purpose |
-|---------|---------|
-| qrcode-terminal | QR code display in terminal for WhatsApp auth |
+## 3. Data Flow Through the System
+
+### Inbound: Data Acquisition
+
+```
+uma.moe API
+    │
+    ▼
+UmaMoeClient.fetchCircleData()     ← src/api/uma-moe.ts:77
+    │  (Playwright → Turnstile → same-origin fetch)
+    ▼
+saveSnapshot()                     ← src/data/snapshot.ts:52
+    │
+    ▼
+data/snapshots/YYYY/MM/DD.json    (immutable after save)
+```
+
+**Triggers:**
+- On startup if snapshot is stale (`src/index.ts:194-226`)
+- On scheduled data fetch (`src/scheduler/scheduler.ts:158-169`)
+- On-demand via `npm run fetch`
+- On report request with month mismatch (`src/orchestrator/report-orchestrator.ts:104-143`)
+
+### Outbound: Report Delivery
+
+```
+Snapshot (JSON)
+    │
+    ▼
+computeMembers()                   ← src/reports/compute.ts:33
+    │  (daily_fans[] → ComputedMember[])
+    │  Called ONCE per pipeline by orchestrator or dispatch
+    ▼
+generateReportString()             ← src/reports/registry.ts:25
+    │  (registry dispatches to daily/weekly/monthly/etc.)
+    ▼
+ReportOrchestrator.deliverReport() ← src/orchestrator/report-orchestrator.ts:49
+    │
+    ▼
+WhatsAppClient.sendMessage()       ← src/whatsapp/client.ts:471
+    │  (splits at newline boundaries)
+    ▼
+Announcement Groups (WhatsApp)
+```
+
+### Alert Flow
+
+```
+ComputedMember[] + Snapshot + Config
+    │
+    ▼
+detectAlerts()                     ← src/alerts/alerts.ts:43
+    │  (5 types: performance_drop, demotion_risk, streak_break, new_transfer, rank_drop)
+    ▼
+db.recordAlert()                   ← dedup via event_key uniqueness
+    │
+    ▼
+formatAlerts() / aggregateAlerts() ← src/alerts/alerts.ts:229, 285
+    │
+    ▼
+WhatsApp → Admin JIDs or alertAdmin groups
+```
+
+### Command Flow (WhatsApp → Report)
+
+```
+WhatsApp message
+    │
+    ▼
+WhatsAppClient.onMessage()         ← src/whatsapp/client.ts:298
+    │
+    ▼
+setupCommandHandler()              ← src/whatsapp/dispatch.ts:68
+    │
+    ▼
+parseCommand()                     ← src/whatsapp/commands.ts:73
+    │
+    ▼
+canUseCommand()                    ← src/whatsapp/access.ts:59
+    │  (admin check, group check, command type check)
+    ▼
+dispatchMessage()                  ← src/whatsapp/dispatch.ts:102
+    ├─► ping/help/admin reference commands
+    ├─► handleReportCommand()       (daily/weekly/monthly/ranks/bottom/stats/members/tier/compare/analyze)
+    └─► handleAdminCommand()        (setreq/config/status/catchup/alerts/debug)
+```
+
+---
+
+## 4. External Dependencies (APIs, Databases, Services)
+
+### External APIs
+| Service | Protocol | Purpose | Client |
+|---------|----------|---------|--------|
+| **uma.moe** | HTTPS (via Playwright browser context) | Circle data, member stats, tier thresholds | `src/api/uma-moe.ts` |
+| **WhatsApp Web** | WebSocket (via Baileys library) | Message sending, group management | `src/whatsapp/client.ts` |
+
+### Data Stores
+| Store | Technology | Path | Purpose |
+|-------|-----------|------|---------|
+| **Snapshots** | JSON files | `data/snapshots/YYYY/MM/DD.json` | Immutable daily data snapshots |
+| **Database** | SQLite via sql.js (WASM) | `data/bot.db` | Schedule runs, alert dedup, member history, rank history |
+| **Config** | YAML | `config.yaml` | All bot configuration (hot-reloaded every 5s) |
+| **WA Session** | Multi-file auth state | `data/auth/` | WhatsApp connection persistence |
+| **Logs** | Rotating text files | `data/logs/bot.log` | Application logs (5MB, 3 rotated files) |
+
+### Runtime Dependencies (from `package.json`)
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@whiskeysockets/baileys` | ^7.0.0-rc13 | WhatsApp Web multi-device API |
+| `node-cron` | ^3.0.3 | Cron-based scheduling |
+| `playwright` | ^1.52.0 | Browser automation for uma.moe Turnstile bypass |
+| `sql.js` | ^1.12.0 | In-memory SQLite (WASM, no native deps) |
+| `yaml` | ^2.7.1 | YAML parsing and serialization |
+| `zod` | ^3.25.67 | Runtime schema validation for config |
+| `pino` | ^9.6.0 | Listed but NOT used in production code (custom logger instead) |
+| `qrcode-terminal` | ^0.12.0 | QR code display in terminal for WhatsApp auth |
+
+### Dev Dependencies
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `typescript` | ^5.8.3 | TypeScript compiler (ES2022 target, CommonJS) |
+| `jest` | ^29.7.0 | Test framework |
+| `ts-jest` | ^29.3.4 | TypeScript support for Jest |
+| `ts-node-dev` | ^2.0.0 | Hot-reload dev server |
 
 ---
 
 ## 5. Configuration and Environment Handling
 
-### Config File
-- **`config.yaml`** — YAML, validated with Zod at load time. Hot-reloaded every 5s via mtime polling.
-- **`config.example.yaml`** (157 lines) — Template with all fields documented.
-- **`src/config.ts`** (229 lines) — `loadConfig()`, `validateConfig()`, `updateConfig()`, `saveConfig()`, `getDefaultConfig()`.
+### Configuration Loading
+- **File:** `config.yaml` (gitignored, copied from `config.example.yaml`)
+- **Schema:** Zod validation at load time (`src/config.ts:26-122`)
+- **Hot-reload:** Polling every 5s via mtime + content hash (`src/index.ts:129-191`)
+- **Persistence:** Atomic write via temp file + rename (`src/config.ts:213-229`)
+- **Updates:** Immutable — `updateConfig()` returns new validated object (`src/config.ts:198-201`)
 
-### Environment Variables (`.env`)
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `API_PORT` | `3000` | HTTP API server port |
-| `WA_SESSION_DIR` | `data/auth` | WhatsApp session data directory |
+### Environment Variables
+| Variable | Default | Source |
+|----------|---------|--------|
+| `API_PORT` | `3000` | `.env` or shell |
+| `API_TOKEN` | *(none)* | `.env` or shell — bearer token for API auth |
+| `WA_SESSION_DIR` | `data/auth` | `.env` or shell — WhatsApp session directory |
+| `NODE_ENV` | `production` | Dockerfile, PM2 ecosystem |
 
-### Auto-Generated Files
-| File | Purpose |
-|------|---------|
-| `data/bot.pid` | PID file for stop script |
-| `data/bot.db` | SQLite database (sql.js binary blob) |
-| `data/snapshots/` | Snapshot JSON files |
-| `data/auth/` | WhatsApp session data (Baileys multi-file auth) |
-| `data/logs/bot.log` | Application logs with rotation |
-
-### Deployment Options
-- **PM2**: `ecosystem.config.js` — single instance, auto-restart, 500MB memory limit
-- **Docker**: `Dockerfile` (55 lines) — Node 22 slim + Playwright chromium + system deps
-- **Direct**: `npm run start` / `npm run dev` (ts-node) / `npm run dev:watch` (hot-reload)
+### Config Sections
+| Section | Key Fields | Hot-reload behavior |
+|---------|-----------|---------------------|
+| `circleId` | Required | In-memory update |
+| `admins` | WhatsApp JIDs | In-memory update |
+| `groups` | command, announcement, alertAdmin JIDs | In-memory update |
+| `requirements` | monthlyFans, weeklyFans | In-memory update |
+| `schedule` | daily/weekly/monthly times | **Scheduler restart** |
+| `catchUp` | enabled, maxReportsPerStartup | In-memory update |
+| `alerts` | 5 alert types, quietHours | In-memory update |
+| `memberStatus` | stale thresholds | In-memory update |
+| `message` | maxLength, splitAtNewline, language | In-memory update |
+| `logging` | level, logFile, rotation | In-memory update |
 
 ---
 
-## 6. Key File List
+## 6. Key File List with Roles and Line Counts
+
+### Source Files (7,883 lines total)
 
 | File | Lines | Role |
 |------|------:|------|
-| `src/index.ts` | 382 | Composition root, startup, config watcher, graceful shutdown |
-| `src/config.ts` | 229 | YAML loading, Zod validation, immutable updates, atomic save |
-| `src/runtime.ts` | 93 | Runtime stats (uptime, reconnects, message counts) |
-| `src/types/index.ts` | 334 | All shared TypeScript types and constants |
+| `src/index.ts` | 354 | Entry point, composition root, startup orchestration |
+| `src/config.ts` | 229 | YAML config + Zod validation + hot-reload + atomic save |
+| `src/runtime.ts` | 93 | Runtime stats singleton (uptime, reconnects, messages) |
+| `src/types/index.ts` | 334 | All shared interfaces, types, constants |
 | `src/types/sql.js.d.ts` | 26 | Type declarations for sql.js and qrcode-terminal |
-| `src/orchestrator/report-orchestrator.ts` | 304 | Report pipeline: generate → deliver → alert |
-| `src/api/uma-moe.ts` | 137 | Playwright-based uma.moe API client |
-| `src/api/server.ts` | 363 | HTTP REST API (localhost only) |
-| `src/data/snapshot.ts` | 426 | Snapshot save/load/ensure + member history updates |
-| `src/data/daily-fans.ts` | 313 | Core daily fan arithmetic (gains, averages, stale detection) |
-| `src/db/database.ts` | 482 | SQLite via sql.js — all CRUD operations |
-| `src/reports/compute.ts` | 107 | Shared member computation engine |
-| `src/reports/format.ts` | 135 | Shared formatting helpers (numbers, dates, stale warnings) |
-| `src/reports/daily.ts` | 149 | Daily report generator |
-| `src/reports/weekly.ts` | 172 | Weekly report generator |
-| `src/reports/monthly.ts` | 186 | Monthly report generator |
-| `src/reports/ranks.ts` | 64 | Top 10 leaderboard report |
-| `src/reports/bottom.ts` | 102 | Bottom performers report |
-| `src/reports/stats.ts` | 169 | Aggregate statistics report |
-| `src/reports/members.ts` | 88 | Full member listing report |
-| `src/reports/tier.ts` | 141 | Tier intelligence report |
-| `src/reports/compare.ts` | 112 | Two-member comparison report |
-| `src/reports/analyze.ts` | 114 | Single member deep-dive report |
-| `src/reports/combined.ts` | 47 | Combined multi-type report |
-| `src/alerts/alerts.ts` | 333 | Alert detection, dedup, formatting, aggregation |
-| `src/scheduler/scheduler.ts` | 321 | Cron scheduling with collision detection |
-| `src/scheduler/catchup.ts` | 287 | Missed report detection and catch-up execution |
-| `src/scheduler/helpers.ts` | 52 | Schedule helpers (collision detection, grouping) |
-| `src/whatsapp/client.ts` | 634 | Baileys connection, message send/receive, reconnection |
-| `src/whatsapp/dispatch.ts` | 491 | Command routing and report generation dispatch |
-| `src/whatsapp/commands.ts` | 192 | Command parser and member name resolution |
-| `src/whatsapp/admin.ts` | 234 | Admin command handlers (setreq, config, status, catchup, alerts) |
-| `src/whatsapp/access.ts` | 96 | Access control (admin vs command group permissions) |
+| **Data** | | |
+| `src/data/daily-fans.ts` | 313 | Core arithmetic on 32-element daily_fans array |
+| `src/data/snapshot.ts` | 278 | Snapshot save/load/path/stale-messaging |
+| `src/data/ensure-snapshot.ts` | 66 | Cache-or-fetch bridge for month snapshots |
+| `src/data/member-history.ts` | 103 | Member join/leave tracking via snapshot diffing |
+| **Database** | | |
+| `src/db/database.ts` | 482 | SQLite via sql.js: 5 tables, CRUD, auto-save |
+| **API** | | |
+| `src/api/uma-moe.ts` | 137 | Playwright-based uma.moe HTTP client |
+| `src/api/server.ts` | 374 | REST API (localhost-only, rate-limited, bearer auth) |
+| **Reports** | | |
+| `src/reports/compute.ts` | 173 | Snapshot → ComputedMember[] (ghost detection, tier data) |
+| `src/reports/registry.ts` | 43 | Type → generator mapping |
+| `src/reports/format.ts` | 86 | Report-specific formatting helpers |
+| `src/reports/daily.ts` | 150 | Daily report generator |
+| `src/reports/weekly.ts` | 173 | Weekly report generator |
+| `src/reports/monthly.ts` | 190 | Monthly report generator |
+| `src/reports/ranks.ts` | 65 | Top 10 leaderboard |
+| `src/reports/bottom.ts` | 103 | Members needing attention |
+| `src/reports/stats.ts` | 170 | Club-wide statistics |
+| `src/reports/members.ts` | 89 | Full member listing |
+| `src/reports/tier.ts` | 79 | Tier intelligence |
+| `src/reports/compare.ts` | 113 | Side-by-side member comparison |
+| `src/reports/analyze.ts` | 115 | Deep single-member analysis |
+| `src/reports/combined.ts` | 47 | Multi-type combined report |
+| **Orchestration** | | |
+| `src/orchestrator/report-orchestrator.ts` | 315 | Full report pipeline orchestration |
+| **Scheduler** | | |
+| `src/scheduler/scheduler.ts` | 321 | Cron-based auto-delivery + collision detection |
+| `src/scheduler/catchup.ts` | 291 | Missed report detection + catch-up execution |
+| `src/scheduler/helpers.ts` | 52 | Schedule utility functions |
+| **WhatsApp** | | |
+| `src/whatsapp/client.ts` | 635 | Baileys connection lifecycle, QR, reconnection, sending |
+| `src/whatsapp/dispatch.ts` | 466 | Command routing: parse → access → generate → send |
+| `src/whatsapp/commands.ts` | 192 | Command parser + Levenshtein name resolution |
+| `src/whatsapp/admin.ts` | 234 | Admin command handlers |
+| `src/whatsapp/access.ts` | 96 | Access control logic |
+| **Alerts** | | |
+| `src/alerts/alerts.ts` | 333 | 5-type alert detection, dedup, formatting, quiet hours |
+| **Utils** | | |
+| `src/utils/format.ts` | 128 | Pure string utilities (formatNumber, sanitizeName, splitMessage) |
 | `src/utils/logger.ts` | 262 | Structured logger with file rotation |
-| `src/utils/timezone.ts` | 143 | Timezone utilities (JST data, WIB display) |
-| `src/utils/format.ts` | 87 | Message splitting for WhatsApp limits |
-| `src/utils/index.ts` | 1 | Re-exports timezone utilities |
+| `src/utils/timezone.ts` | 173 | JST/WIB timezone conversion via Intl API |
+| `src/utils/index.ts` | 1 | Re-exports timezone |
 
-**Total source lines:** ~6,400 (across 35 files)
+### Configuration Files
+
+| File | Lines | Role |
+|------|------:|------|
+| `config.example.yaml` | 157 | Config template (all fields documented) |
+| `tsconfig.json` | 20 | TypeScript: ES2022, CommonJS, strict mode |
+| `package.json` | 60 | Dependencies, scripts, project metadata |
+| `jest.config.js` | 23 | Jest: ts-jest preset, coverage thresholds |
+| `ecosystem.config.js` | 21 | PM2: single instance, 500MB memory limit |
+| `Dockerfile` | 54 | node:22-slim + Playwright chromium |
+| `docker-compose.yml` | 21 | Volume mounts for config, data, auth |
+
+### Tests (62 test files)
+
+| Directory | File Count | Categories |
+|-----------|-----------|------------|
+| `tests/reports/` | 28 | unit, format, stale, edge, dispatch, regression, golden, e2e |
+| `tests/data/` | 14 | daily-fans (12 files), snapshot, left-members |
+| `tests/whatsapp/` | 7 | dispatch, commands, access, admin, client, regression, fuzz |
+| `tests/api/` | 3 | server, server-auth, uma-moe |
+| `tests/alerts/` | 2 | unit, regression |
+| `tests/db/` | 2 | integration, regression |
+| `tests/scheduler/` | 2 | unit, catchup regression |
+| `tests/orchestrator/` | 1 | unit |
+| `tests/utils/` | 2 | timezone, logger |
+| `tests/` (root) | 1 | config.unit.test.ts |
 
 ---
 
 ## 7. Module Dependency Graph
 
+### Legend
 ```
-src/types (leaf — no imports)
-    ↑
-    ├── src/utils/logger (leaf — only fs imports)
-    ├── src/utils/timezone (leaf — no internal imports)
-    ├── src/utils/format (leaf — no internal imports)
-    │
-    ├── src/data/daily-fans → types
-    │
-    ├── src/db/database → types
-    │
-    ├── src/config → types, utils/logger
-    │
-    ├── src/runtime (leaf — no internal imports)
-    │
-    ├── src/data/snapshot → types, data/daily-fans, utils/timezone, api/uma-moe, db/database, utils/logger
-    │
-    ├── src/reports/format → types, utils/timezone, data/daily-fans, data/snapshot, utils/format
-    │
-    ├── src/reports/compute → types, data/daily-fans, data/snapshot
-    │
-    ├── src/reports/daily → types, db/database, data/snapshot, data/daily-fans, reports/format
-    ├── src/reports/weekly → types, db/database, data/snapshot, data/daily-fans, reports/format
-    ├── src/reports/monthly → types, db/database, data/snapshot, data/daily-fans, reports/format, utils/timezone
-    ├── src/reports/ranks → types, data/snapshot, reports/format
-    ├── src/reports/bottom → types, db/database, data/snapshot, reports/format, data/daily-fans
-    ├── src/reports/stats → types, db/database, data/snapshot, data/daily-fans, reports/format
-    ├── src/reports/members → types, db/database, data/snapshot, reports/format
-    ├── src/reports/tier → types, db/database, data/snapshot, reports/format
-    ├── src/reports/compare → types, data/snapshot, reports/format, data/daily-fans
-    ├── src/reports/analyze → types, data/snapshot, reports/format, data/daily-fans
-    ├── src/reports/combined → types, db/database, reports/daily, reports/weekly, reports/monthly
-    │
-    ├── src/alerts/alerts → types, data/snapshot, data/daily-fans, reports/tier, reports/format, db/database, utils/timezone, utils/logger
-    │
-    ├── src/api/uma-moe → types, utils/logger (external: playwright)
-    ├── src/api/server → types, data/snapshot, reports/compute, reports/tier, utils/logger, runtime, utils/format
-    │
-    ├── src/scheduler/helpers → types, utils/logger
-    ├── src/scheduler/catchup → types, db/database, utils/timezone, utils/logger, scheduler/helpers
-    ├── src/scheduler/scheduler → types, db/database, utils/timezone, utils/logger, scheduler/helpers
-    │
-    ├── src/whatsapp/access → types
-    ├── src/whatsapp/commands → types
-    ├── src/whatsapp/admin → types, config, reports/format
-    ├── src/whatsapp/client → types, utils/format, utils/logger, runtime
-    ├── src/whatsapp/dispatch → types, db/database, whatsapp/client, whatsapp/commands, whatsapp/access, whatsapp/admin, reports/*, utils/logger, runtime
-    │
-    ├── src/orchestrator/report-orchestrator → types, db/database, api/uma-moe, whatsapp/client, alerts/alerts, data/snapshot, utils/timezone, reports/compute, reports/combined, reports/*, utils/logger
-    │
-    └── src/index → ALL modules (composition root)
+A → B  means "A imports from B"
+```
+
+### Core Dependencies
+
+```
+src/index.ts
+  → config
+  → types
+  → db/database
+  → api/uma-moe
+  → api/server
+  → scheduler/scheduler
+  → scheduler/catchup
+  → whatsapp/client
+  → whatsapp/dispatch
+  → data/snapshot
+  → data/member-history
+  → utils/timezone
+  → utils/logger
+  → runtime
+  → reports/compute
+  → orchestrator/report-orchestrator
+
+src/config.ts
+  → types
+  → utils/logger
+
+src/runtime.ts
+  (no internal imports — standalone module)
+
+src/types/index.ts
+  (no internal imports — standalone module)
+```
+
+### Data Layer Dependencies
+
+```
+src/data/snapshot.ts
+  → types
+  → data/daily-fans
+  → utils/timezone
+  → utils/logger
+
+src/data/ensure-snapshot.ts
+  → api/uma-moe (type only)
+  → types
+  → data/snapshot
+  → utils/timezone
+  → utils/logger
+
+src/data/daily-fans.ts
+  → types (WEEK_BLOCKS constant)
+
+src/data/member-history.ts
+  → types
+  → db/database
+  → utils/timezone
+  → utils/logger
+```
+
+### Report Layer Dependencies
+
+```
+src/reports/compute.ts
+  → types
+  → data/daily-fans
+  → data/snapshot
+
+src/reports/registry.ts
+  → types
+  → db/database
+  → reports/daily, weekly, monthly, ranks, bottom, stats, members, tier
+
+src/reports/format.ts
+  → utils/timezone
+  → types
+  → data/daily-fans
+  → data/snapshot
+
+src/reports/daily.ts
+  → types
+  → db/database
+  → data/snapshot
+  → data/daily-fans
+  → utils/format
+  → reports/format
+
+src/reports/weekly.ts
+  → types
+  → db/database
+  → data/snapshot
+  → data/daily-fans
+  → utils/format
+  → reports/format
+
+src/reports/monthly.ts
+  → types
+  → db/database
+  → data/snapshot
+  → data/daily-fans
+  → utils/format
+  → reports/format
+  → utils/timezone
+
+src/reports/combined.ts
+  → types
+  → db/database
+  → reports/daily, weekly, monthly
+
+src/reports/ranks.ts → types, data/snapshot, utils/format, reports/format
+src/reports/bottom.ts → types, db/database, data/snapshot, data/daily-fans, utils/format, reports/format
+src/reports/stats.ts → types, db/database, data/snapshot, data/daily-fans, utils/format, reports/format
+src/reports/members.ts → types, db/database, data/member-history, utils/format, reports/format
+src/reports/tier.ts → types, db/database, data/snapshot, utils/format, reports/format, reports/compute
+src/reports/compare.ts → types, data/snapshot, data/daily-fans, utils/format, reports/format
+src/reports/analyze.ts → types, data/snapshot, data/daily-fans, utils/format, reports/format
+```
+
+### Scheduler Dependencies
+
+```
+src/scheduler/scheduler.ts
+  → types
+  → db/database
+  → utils/timezone
+  → utils/logger
+  → scheduler/helpers
+
+src/scheduler/catchup.ts
+  → types
+  → db/database
+  → utils/timezone
+  → utils/logger
+  → scheduler/helpers
+
+src/scheduler/helpers.ts
+  → types
+  → utils/logger
+```
+
+### WhatsApp Dependencies
+
+```
+src/whatsapp/client.ts
+  → types
+  → utils/logger
+  → utils/format
+  → runtime
+
+src/whatsapp/dispatch.ts
+  → types
+  → db/database
+  → whatsapp/client
+  → whatsapp/commands
+  → whatsapp/access
+  → whatsapp/admin
+  → reports/compute
+  → reports/registry
+  → reports/compare
+  → reports/analyze
+  → utils/logger
+  → runtime
+  → utils/timezone
+
+src/whatsapp/commands.ts
+  → types
+
+src/whatsapp/admin.ts
+  → types
+  → config
+  → utils/format
+
+src/whatsapp/access.ts
+  → types
+```
+
+### Orchestrator Dependencies
+
+```
+src/orchestrator/report-orchestrator.ts
+  → types
+  → db/database
+  → api/uma-moe
+  → whatsapp/client
+  → alerts/alerts
+  → data/snapshot
+  → utils/timezone
+  → reports/compute
+  → reports/combined
+  → reports/registry
+  → utils/logger
+```
+
+### Alert Dependencies
+
+```
+src/alerts/alerts.ts
+  → types
+  → data/snapshot
+  → reports/compute
+  → utils/format
+  → data/daily-fans
+  → db/database
+  → utils/timezone
+  → utils/logger
+```
+
+### Utility Dependencies
+
+```
+src/utils/format.ts    (no internal imports)
+src/utils/logger.ts    (no internal imports)
+src/utils/timezone.ts  (no internal imports)
+src/utils/index.ts     → utils/timezone
+```
+
+### Inverted Tree (who depends on what)
+
+```
+types          ← used by: ALL modules (18 consumers)
+utils/logger   ← used by: 14 modules
+utils/format   ← used by: 9 modules
+utils/timezone ← used by: 11 modules
+data/snapshot  ← used by: 8 modules
+data/daily-fans← used by: 7 modules
+db/database    ← used by: 9 modules
+reports/compute← used by: 4 modules
+config         ← used by: 2 modules (index, admin)
+runtime        ← used by: 3 modules (index, client, dispatch)
 ```
 
 ---
 
-## 8. Observations
+## 8. Documented Design Decisions
 
-### Architecture Strengths
-- **Clean composition root** — `index.ts` wires everything, no circular dependencies
-- **Pure report functions** — each report is `(snapshot, config, computedMembers) → string`, easily testable
-- **Immutable snapshots** — write-once JSON files, never mutated after save
-- **Graceful degradation** — stale data fallback, catch-up on restart, reconnection with backoff
+These are intentional choices documented in `docs/architecture.md:390-418`. They have been reviewed and accepted. Do not flag these as issues.
 
-### Risk Signals
-1. **`whatsapp/client.ts` (634 lines)** — largest file, handles connection + messaging + reconnection + cache + heartbeat. Could benefit from splitting.
-2. **sql.js in-memory + periodic save** — 30s auto-save interval means up to 30s of data loss on crash. `catchup.ts` uses immediate `db.save()` after each report, but `scheduler.ts` does not.
-3. **Playwright dependency for uma.moe** — Cloudflare Turnstile bypass is inherently fragile. Any Turnstile update could break data fetching.
-4. **`pino` in package.json but unused** — `src/utils/logger.ts` is a custom implementation. pino is a dead dependency.
-5. **Config watcher uses polling** (5s interval with mtime + content hash) — reliable on Windows but slightly wasteful.
-6. **No rate limiting on WhatsApp message sending** — only the HTTP API has rate limiting.
-7. **`computeMembers` ghost detection** — reclassifies bottom-N members as "left" based on member_count gap. This is a heuristic that could misclassify if member_count is stale.
-8. **Combined reports use offset=-1 for monthly** — hardcoded in `combined.ts:42`, not configurable.
+### Rate limiter Map is unbounded (`api/server.ts:56`)
+`requestTimestamps` Map is never pruned. Acceptable because API binds exclusively to `127.0.0.1` — at most 2 loopback entries.
+
+### WA_SESSION_DIR is not path-sanitized (`whatsapp/client.ts:139`)
+Env var used directly as filesystem path. Acceptable because the operator controls env vars — an attacker with env access already has process-level access.
+
+### Security headers are minimal (`api/server.ts:32-34`)
+Only `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Cache-Control: no-store, no-cache`. HSTS and X-XSS-Protection omitted because API serves only JSON, binds to localhost.
+
+### Runtime stats use module-level mutable state (`runtime.ts:21-39`)
+Module-level singleton. Standard Node.js pattern for single-process apps. No reset mechanism needed.
+
+### Logger uses synchronous file I/O (`utils/logger.ts:183,189`)
+`appendFileSync` on every log line. Acceptable at current scale (~100 lines per report cycle).
+
+### Catch-up persistence has a narrow window (`scheduler/catchup.ts:217-233`)
+~10ms window between combined run save and individual record saves. Real-world risk is negligible.
+
+### computeRollingAverage excludes zero-gain days (`data/daily-fans.ts:249`)
+`gain > 0` filter is documented in JSDoc. Computes "average when active" not "average over time."
+
+### Ghost detection edge case (`reports/compute.ts:90-104`)
+Transfer members with low gain could theoretically be misclassified as "left" when `ghostCount` exceeds zero-gain + stale members. Requires `ghostCount > (zero-gain + stale)` to manifest — doesn't happen with real data.
+
+### WhatsApp client is a large file (`whatsapp/client.ts`, 635 lines)
+Connection lifecycle, QR auth, reconnection, heartbeat, message caching, and send logic are inherently coupled to Baileys' state machine. Splitting would increase cross-module coupling.
+
+### Single-process architecture (`docs/architecture.md:3`)
+No microservices, no cache layer. Data processing is arithmetic on ~34 integers. uma.moe data is static for 24h. Splitting adds operational friction without benefit.
+
+### Snapshot immutability (`docs/architecture.md:49`)
+Snapshots are never mutated after saving. Reports recompute from the `daily_fans` array each time. This ensures pure-function report generators.
+
+### sql.js over sqlite3 (`docs/architecture.md:122`)
+Pure WASM, no native compilation. Works in Docker without system deps. DB file is a binary blob loaded into memory.
+
+### node-cron for scheduling (`docs/architecture.md:147`)
+Simple, no external deps, works on all platforms. No need for a task queue in a single-process bot.
+
+### Baileys for WhatsApp (`docs/architecture.md:170`)
+Unofficial WhatsApp Web API. No official API available. Handles auth, reconnection, and message sending.
+
+### Collision handling in scheduler (`docs/architecture.md:149`)
+When daily + weekly are scheduled at the same time, only the daily handler fires. It detects the collision and sends a combined message.
+
+### Config hot-reload via mtime + content hash (`docs/architecture.md:141`)
+Avoids false triggers from editors that touch mtime without content changes.
+
+### `ensureMonthSnapshot` extracted from `snapshot.ts` (`docs/architecture.md:116`)
+Lives in `data/ensure-snapshot.ts` to avoid a data → api dependency. Bridges data layer and API layer.
+
+---
+
+## 9. Risk Signals (NOT documented as accepted)
+
+> Items below are observations from code exploration. These are NOT flagged as issues — they are factual observations about the codebase.
+
+### pino listed but unused
+`pino` (^9.6.0) is in `package.json:40` dependencies but the project uses a custom logger (`src/utils/logger.ts`). Pino is never imported in any source file.
+
+### `src/utils/index.ts` is a single re-export
+`src/utils/index.ts:1` only re-exports `./timezone`. No consumers import from `utils/index.ts` directly — all imports target specific submodules.
+
+### Baileys monkey-patching
+`src/whatsapp/client.ts:52-69` suppresses `console.error` globally for libsignal noise. This affects the entire process, not just Baileys.
+
+### No graceful shutdown for API server
+`src/index.ts:336-346` cleans up scheduler, WhatsApp client, and database, but does not call `api.stop()`. The HTTP server is not explicitly closed.
+
+### Database auto-save timer not cleaned up on error paths
+`src/db/database.ts:47-49` sets an interval for auto-save. If `initialize()` throws partway through, the timer might not be set, but the error path doesn't explicitly clear it.
+
+---
+
+## 10. Architecture Summary
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Uma Club Bot v3 (7,883 LOC)                  │
+│                    Single Node.js Process                        │
+│                                                                 │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────────┐  │
+│  │ WhatsApp   │  │  HTTP API  │  │  Scheduler  │  │  Config  │  │
+│  │ (Baileys)  │  │ (localhost)│  │ (node-cron) │  │  (YAML)  │  │
+│  │ 635 LOC    │  │  374 LOC   │  │  664 LOC    │  │ 229 LOC  │  │
+│  └─────┬──────┘  └─────┬──────┘  └──────┬──────┘  └────┬─────┘  │
+│        │               │                │              │         │
+│        └───────────────┴────────┬───────┴──────────────┘         │
+│                                 │                                │
+│                    ┌────────────▼────────────┐                   │
+│                    │   Report Orchestrator   │                   │
+│                    │        315 LOC          │                   │
+│                    └────────────┬────────────┘                   │
+│                                 │                                │
+│         ┌───────────────────────┼───────────────────────┐        │
+│         │                       │                       │        │
+│   ┌─────▼─────┐  ┌─────────────▼─────────────┐  ┌──────▼─────┐ │
+│   │  Reports   │  │       Data Layer          │  │   Alerts   │ │
+│   │  1,433 LOC │  │  snapshot (278)           │  │  333 LOC   │ │
+│   │ 12 types   │  │  daily-fans (313)         │  │ 5 types    │ │
+│   │ registry   │  │  ensure-snapshot (66)     │  │ dedup+DB   │ │
+│   │ compute    │  │  member-history (103)     │  │ quiet hrs  │ │
+│   └────────────┘  └──────────────────────────┘  └────────────┘ │
+│                                 │                                │
+│                    ┌────────────▼────────────┐                   │
+│                    │  SQLite (sql.js WASM)   │                   │
+│                    │       482 LOC           │                   │
+│                    │  5 tables, 30s auto-save│                   │
+│                    └─────────────────────────┘                   │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Shared: types (334) │ utils (564) │ config (229)         │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+
+External connections:
+  • uma.moe ──(Playwright/Turnstile)──► circle data
+  • WhatsApp Web ──(Baileys WebSocket)──► message delivery
+  • SQLite file on disk ──(sql.js WASM)──► operational state
+```

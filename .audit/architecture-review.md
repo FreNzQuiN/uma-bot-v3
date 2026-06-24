@@ -1,148 +1,132 @@
 # Architecture Audit Findings
 
 ## Summary
-15 findings: 0 CRITICAL, 3 HIGH, 7 MEDIUM, 2 LOW, 3 POSITIVE
-
----
+10 findings: 0 CRITICAL, 2 HIGH, 5 MEDIUM, 3 LOW
 
 ## Findings
 
-### [HIGH] Reversed dependency: data layer imports API layer
-- File: `src/data/snapshot.ts:13`
-- What: `data/snapshot.ts` imports `UmaMoeClient` from `api/uma-moe.ts` via the `ensureMonthSnapshot` function, creating a data → api dependency.
-- Why: The data layer (persistence) should not depend on the API layer (network fetching). This violates the Dependency Inversion Principle — high-level persistence logic depends on a low-level network client. It makes the data module untestable without mocking the API, and prevents reusing snapshot logic in contexts without network access (e.g., offline report generation, testing).
-- How: Move `ensureMonthSnapshot` to the orchestrator or a dedicated service module. The orchestrator already depends on both `data/snapshot` and `api/uma-moe`, so it's the natural home for this coordination logic. `data/snapshot.ts` should only handle file I/O and data validation.
+### [HIGH] dispatch.ts bypasses orchestrator and registry for compare/analyze
+- File: src/whatsapp/dispatch.ts:14-17
+- What: `dispatch.ts` directly imports `generateCompareReport` and `generateAnalyzeReport` instead of routing through the registry or orchestrator.
+- Why: The registry (`reports/registry.ts:25`) exists as the single source of truth for report type → generator mapping. Bypassing it means adding a new dispatch-only report type requires modifying both dispatch.ts AND the registry, creating two places to maintain the same kind of logic. It also duplicates the compute → generate pipeline that the orchestrator already provides.
+- How: Extend the registry to include `compare` and `analyze` types, or create a secondary dispatch registry for member-resolution commands. The `dispatch.ts:generateReport()` function (line 336) re-implements orchestration logic that already exists in `ReportOrchestrator.sendReport()` — consider delegating to the orchestrator with a `{ interactive: true }` option that uses `sendOrEdit` instead of `sendMessage`.
 - Confidence: HIGH
 
-### [HIGH] Duplicated report generation dispatch (3 locations)
-- File: `src/whatsapp/dispatch.ts:350-411`, `src/orchestrator/report-orchestrator.ts:160-178`
-- What: Report type → generator function routing is implemented as a switch statement in both `dispatch.ts` (lines 360-411) and `report-orchestrator.ts` (lines 168-178). A third implicit dispatch exists in `index.ts` (lines 270-293) for combined reports.
-- Why: Adding a new report type requires updating 3 separate locations with identical switch logic. This violates DRY and is a maintenance hazard — if one location is updated but not the others, reports will silently fail or return unknown type errors.
-- How: Create a report registry module (e.g., `src/reports/registry.ts`) that maps type strings to generator functions. Both `dispatch.ts` and `report-orchestrator.ts` import from the registry. This reduces the 3 locations to 1.
+### [HIGH] dispatch.ts is 466 lines mixing routing, business logic, and presentation
+- File: src/whatsapp/dispatch.ts:1-466
+- What: This file handles command routing (line 310), report generation orchestration (line 336), member name resolution (line 359), admin command processing (line 393), help text formatting (line 163), uptime formatting (line 49), and loading message rotation (line 45). It's the second-largest file in the codebase.
+- Why: High coupling makes the file hard to modify safely. A change to help text formatting risks breaking report dispatch. The file's responsibilities span 4 distinct concerns: routing, business logic, presentation, and state formatting.
+- How: Extract `generateReport()` (lines 336-387) into a report dispatch service that both `dispatch.ts` and the orchestrator can share. Extract help/admin message formatting (lines 163-222, 430-461) into `whatsapp/admin.ts` or a new `whatsapp/help.ts`. Extract `formatUptime()` and loading message helpers into `utils/`. Target: dispatch.ts under 200 lines, handling only routing decisions.
 - Confidence: HIGH
 
-### [HIGH] `whatsapp/client.ts` is a god module (634 lines, 8+ responsibilities)
-- File: `src/whatsapp/client.ts:129-634`
-- What: This file handles connection lifecycle, QR authentication, libsignal error suppression (monkey-patching `console.error`), Baileys logger adapter, message receiving/normalizing, message sending/splitting, message editing, message caching with LRU eviction, heartbeat monitoring, exponential-backoff reconnection, chat accumulation, and group fetching.
-- Why: Changes to any single responsibility risk breaking unrelated functionality. The 100+ lines of reconnection logic (lines 387-460) are interleaved with message handling, making both harder to reason about. The monkey-patch at lines 52-68 is a global side effect that silently affects all modules.
-- How: Split into focused modules: `whatsapp/connection.ts` (connect/reconnect/auth), `whatsapp/messenger.ts` (send/edit/cache), `whatsapp/events.ts` (message receive/dispatch). Move the `console.error` monkey-patch to a documented setup function called at startup, not buried inside the class.
+### [MEDIUM] Unused `db` parameter in 6 of 7 report generators creates unnecessary coupling
+- File: src/reports/daily.ts:29, weekly.ts:51, monthly.ts:38, bottom.ts:27, stats.ts:27, tier.ts:24
+- What: Six report generators accept `db?: Database` in their signature but never reference the parameter in the function body. Only `members.ts` actually uses it (for `getLeftMembers`).
+- Why: Every unused parameter widens the type signature, making callers believe the function needs database access when it doesn't. This creates a false dependency graph: a reader looking at `generateDailyReport(snapshot, config, computedMembers, offset, db)` assumes daily reports query the database. It also forces `registry.ts` and `combined.ts` to thread `Database` through every call path even when the target report doesn't need it.
+- How: Remove the `db?: Database` parameter from daily, weekly, monthly, bottom, stats, and tier generators. Only `members.ts` should accept it. Update `registry.ts:generateReportString` to pass `db` only to `generateMembersReport`. This also removes 6 unnecessary `import type { Database }` statements.
 - Confidence: HIGH
 
-### [MEDIUM] `data/snapshot.ts` mixes 3 distinct concerns (426 lines)
-- File: `src/data/snapshot.ts:1-426`
-- What: This module handles (1) snapshot file I/O (save/load/ensure paths), (2) member history database operations (`updateMemberHistory`, `getLeftMembers`), and (3) API data fetching (`ensureMonthSnapshot`).
-- Why: Three different persistence mechanisms (JSON files, SQLite DB, HTTP API) are tangled in one module. Changes to member history logic risk breaking snapshot I/O. The DB import at line 206 is a mid-file import that suggests the concern was added later.
-- How: Extract member history operations into `data/member-history.ts` (depends on `db/database` and `data/snapshot`). Extract `ensureMonthSnapshot` to the orchestrator layer. Leave `snapshot.ts` as pure file I/O for snapshot persistence.
-- Confidence: HIGH
-
-### [MEDIUM] Monthly offset calculation duplicated in 3+ locations
-- File: `src/index.ts:279-283`, `src/whatsapp/dispatch.ts:268-283`, `src/orchestrator/report-orchestrator.ts:273-290`
-- What: The pattern `let targetMonth = curMonth - absOffset; let targetYear = curYear; while (targetMonth <= 0) { targetMonth += 12; targetYear--; }` is copy-pasted in at least 3 locations.
-- Why: If the offset logic needs to change (e.g., supporting multi-month offsets), all 3 locations must be updated identically. A bug in one copy but not others would cause inconsistent behavior between command-triggered and scheduled reports.
-- How: Extract to a utility function like `getTargetMonth(currentYear, currentMonth, offsetMonths)` in `utils/timezone.ts`. All callers use the shared function.
-- Confidence: HIGH
-
-### [MEDIUM] Cross-module coupling: alerts depends on reports/tier for computation
-- File: `src/alerts/alerts.ts:11`
-- What: `alerts.ts` imports `computeTierData` from `reports/tier.ts`. Alert detection (a domain concern) depends on a report module (a presentation concern).
-- Why: The `computeTierData` function is pure computation on snapshot data, but it lives in a report module. This means alerts → reports, creating an inappropriate dependency. If `reports/tier.ts` is refactored for presentation changes, alerts could break.
-- How: Move `computeTierData` to a shared computation module (e.g., `reports/compute.ts` or a new `domain/tier.ts`). Both alerts and tier report import from the shared location.
-- Confidence: HIGH
-
-### [MEDIUM] Alert delivery duplicated between orchestrator and index.ts catch-up flow
-- File: `src/orchestrator/report-orchestrator.ts:85-104`, `src/index.ts:337-353`
-- What: Catch-up alert delivery in `index.ts` (lines 337-353) manually iterates over alert targets and sends messages, duplicating the logic in `ReportOrchestrator.deliverAlerts()` (lines 85-104).
-- Why: If alert delivery logic changes (e.g., adding retry, changing target resolution), the catch-up path will silently diverge from the normal path. This is already partially evidenced by the catch-up flow using `waClient.sendMessage()` directly while the orchestrator uses `this.waClient.sendMessage()`.
-- How: Extract the catch-up alert delivery to use `orchestrator.deliverAlerts()` directly, or create a shared `AlertDeliveryService` used by both paths.
-- Confidence: HIGH
-
-### [MEDIUM] `reports/format.ts` is a grab-bag utility module
-- File: `src/reports/format.ts:1-135`
-- What: This module mixes number formatting, date formatting (re-exports from `utils/timezone`), stale data warnings, name sanitization, date string building, footer building, and message splitting re-exports from `utils/format`. It has 12 dependents — the 4th most-imported module in the codebase.
-- Why: Changes to any concern (e.g., adding a new date format) risk breaking unrelated functionality. The re-exports at lines 39-40 and 135 create implicit dependencies — modules import from `reports/format` when they should import from `utils/timezone` or `utils/format` directly.
-- How: Split into focused modules: keep `formatNumber` and `sanitizeName` in `reports/format.ts` (report-specific formatting), move `getStaleDataWarning`/`buildDateStr`/`buildFooter`/`buildDataLine` to a new `reports/helpers.ts`, and remove re-exports so callers import directly from source modules.
+### [MEDIUM] alerts module depends on reports module for tier data computation
+- File: src/alerts/alerts.ts:11
+- What: `alerts.ts` imports `computeTierData` from `reports/compute.ts` to check demotion risk.
+- Why: This creates a cross-layer coupling: alerts → reports → data. The `computeTierData` function (defined in `reports/compute.ts:112`) is pure computation on snapshot data — it doesn't depend on any report-specific logic. Its natural home is the data layer, not the report layer. When alerts import from reports, it implies alerts are downstream of reports, when in reality they run in parallel after `computeMembers()`.
+- How: Move `computeTierData` to `data/daily-fans.ts` (alongside other pure computation on snapshot data) or create `data/tier.ts`. Both `reports/compute.ts` and `alerts/alerts.ts` would import from the data layer. This aligns with the existing pattern where `computeMembers` already lives in `reports/compute.ts` but only depends on data-layer functions.
 - Confidence: MEDIUM
 
-### [MEDIUM] `configChanged()` uses JSON.stringify for deep comparison
-- File: `src/index.ts:42-65`
-- What: Config change detection compares old and new configs using `JSON.stringify()` (lines 54-63). This works only because Zod produces consistent key ordering.
-- Why: If any code path produces a config object with different key ordering (e.g., manual construction in tests), the comparison will produce false positives. It's also semantically unclear — `JSON.stringify` treats `undefined` values differently than `null`.
-- How: Use a proper deep equality check (e.g., a small `deepEqual` utility, or structuredClone + comparison). The existing `deepMerge` in `config.ts` already handles deep objects — a matching `deepEqual` would be consistent.
+### [MEDIUM] Config getter pattern is inconsistent across modules
+- File: src/whatsapp/dispatch.ts:70, src/api/server.ts:63
+- What: Some modules accept `BotConfig | (() => BotConfig)` and resolve internally (dispatch.ts:77-81, ApiServer constructor:68), while others accept only `() => BotConfig` (Scheduler, CatchUpManager, ReportOrchestrator, WhatsAppClient).
+- Why: The dual-type pattern forces every consumer to check `typeof config === 'function'` and handle both paths. It also means the type signature doesn't communicate whether the config is reactive. If a caller passes a static `BotConfig` object, config hot-reload won't affect that module.
+- How: Standardize on the getter pattern `() => BotConfig` everywhere. The composition root (`index.ts`) already provides a `getConfig` closure. Remove the dual-type overloads from `ApiServer` and `setupCommandHandler`. This makes all modules reactive to config changes by default.
 - Confidence: MEDIUM
 
-### [LOW] `runtime.ts` uses module-level mutable state with no reset mechanism
-- File: `src/runtime.ts:21-39`
-- What: All runtime stats are stored in a module-level `stats` object. There's no `reset()` function.
-- Why: In tests, runtime state leaks between test cases. The `getRuntimeStats()` function returns a shallow copy with one deep-copied field (`lastConfigChangeFields`), but the rest are primitives — fine for now, but if any field becomes an object, it would leak.
-- How: Add a `resetRuntimeStats()` function for test isolation. Consider wrapping in a class for better encapsulation.
+### [MEDIUM] orchestrator mixes snapshot freshness management with report delivery
+- File: src/orchestrator/report-orchestrator.ts:104-143
+- What: `alignSnapshotToMonth()` performs network fetches (line 115, 133) and disk writes (line 116, 134) inline. The orchestrator imports `saveSnapshot` and `ensureMonthSnapshot` from the data layer.
+- Why: The orchestrator's stated purpose is "report pipeline: generation + delivery + alerts" (architecture.md:95). Snapshot freshness (fetching fresh data when stale) is a data acquisition concern. Mixing I/O-heavy data fetching into the report delivery pipeline makes the orchestrator harder to test and reason about — a `sendReport()` call can trigger network requests with unpredictable latency.
+- How: Extract `alignSnapshotToMonth` into a dedicated `data/freshness.ts` or fold it into `ensure-snapshot.ts`. The orchestrator would call `ensureFreshSnapshot(type, snapshot, config)` as a pre-step, keeping the orchestrator focused on the generate → deliver → alert pipeline.
 - Confidence: MEDIUM
 
-### [LOW] `logger.ts` uses synchronous file I/O on every log line
-- File: `src/utils/logger.ts:183,189`
-- What: `appendFileSync` is called for every log line. In high-throughput scenarios (e.g., processing 30+ member messages rapidly), this blocks the event loop.
-- Why: Under normal operation the impact is minimal (log lines are small, SSDs are fast). But if the log file is on a network mount or the disk is under heavy I/O, this could cause noticeable latency spikes in message processing.
-- How: This is acceptable for the current scale (~100 log lines per report cycle). If throughput increases, switch to a buffered async writer (write queue with periodic flush). No action needed now.
-- Confidence: MEDIUM
-
----
-
-## Positive Findings
-
-### [POSITIVE] Clean composition root pattern
-- File: `src/index.ts:67-382`
-- What: `index.ts` serves as a proper composition root — it instantiates all modules, wires dependencies, and starts services. No business logic is exported from it.
-- Why: This pattern makes the application's dependency graph explicit and testable. Each module receives its dependencies through constructor injection, making mocking straightforward.
+### [LOW] reports/format.ts re-exports formatDateWIB creating dual import paths
+- File: src/reports/format.ts:13
+- What: `reports/format.ts` does `export { formatDateWIB }` which re-exports the function from `utils/timezone.ts`. Consumers can import `formatDateWIB` from either `utils/timezone` or `reports/format`.
+- Why: Dual import paths create confusion about the canonical source. New contributors may import from `reports/format` when they should import from `utils/timezone`, creating an implicit dependency on the reports module for a pure utility.
+- How: Remove the re-export at `reports/format.ts:13`. Report files that need `formatDateWIB` should import it directly from `utils/timezone`. The `reports/format.ts` module should only contain report-specific formatting helpers (`getStaleDataWarning`, `buildDateStr`, `buildFooter`, `buildDataLine`).
 - Confidence: HIGH
 
-### [POSITIVE] Zero circular dependencies across 37 source files
-- File: N/A (codebase-wide)
-- What: The dependency graph is fully acyclic. The analysis confirms no circular imports exist across all 37 source files.
-- Why: Circular dependencies cause initialization order bugs, make refactoring risky, and prevent tree-shaking. An acyclic graph is a strong architectural foundation.
+### [LOW] utils/index.ts barrel file is unused dead code
+- File: src/utils/index.ts:1
+- What: The barrel file only re-exports `./timezone`. No source file imports from `utils/index.ts` — all consumers import specific submodules (`utils/timezone`, `utils/logger`, `utils/format`).
+- Why: An unused barrel file creates a maintenance obligation (must be updated when adding new utils) without providing value. It also creates a false impression that the project uses barrel imports.
+- How: Delete `src/utils/index.ts`. No callers need updating since nothing imports from it.
 - Confidence: HIGH
 
-### [POSITIVE] Pure report functions enable easy testing
-- File: `src/reports/daily.ts`, `src/reports/weekly.ts`, `src/reports/monthly.ts`, etc.
-- What: Every report generator is a pure function: `(snapshot, config, computedMembers, ...) → string`. No side effects, no I/O, no mutation.
-- Why: This makes reports trivially testable — provide inputs, assert on output string. It also means reports can be generated in any context (HTTP API, WhatsApp, tests) without setup.
+### [POSITIVE] Clean DAG dependency graph with no circular imports
+- File: Full codebase
+- What: The dependency graph is a clean directed acyclic graph. All modules flow downward: `types` and `utils/*` are leaf nodes, `data/*` depends on leaves, `reports/*` depends on data and leaves, `scheduler/whatsapp/alerts` depend on types/utils/db, and `orchestrator` sits at the top integrating everything.
+- Why: Zero circular dependencies across 40 files means the codebase can be understood, tested, and refactored module-by-module without surprise breakage. The composition root (`index.ts`) correctly wires all dependencies explicitly.
+- How: Maintain this pattern. New modules should follow the existing layering: leaves → data → reports → orchestrator.
 - Confidence: HIGH
 
----
+### [POSITIVE] Dependency injection via getter functions enables testability and hot-reload
+- File: src/orchestrator/report-orchestrator.ts:20-41, src/scheduler/scheduler.ts:21-40
+- What: Core services accept `() => BotConfig` and `() => Snapshot | null` getter functions rather than static config objects. This is applied consistently across Scheduler, CatchUpManager, ReportOrchestrator, WhatsAppClient, and ApiServer.
+- Why: Getter functions enable two critical behaviors: (1) config hot-reload works without restarting services — the getter returns the latest config each time, and (2) tests can inject mock config without instantiating the full config system. This is a well-executed pattern that supports the intermittent-runtime design constraint.
+- How: No change needed — this is a pattern to preserve and extend to new modules.
+- Confidence: HIGH
+
+### [POSITIVE] ensure-snapshot.ts cleanly bridges data and API layers
+- File: src/data/ensure-snapshot.ts:1-66
+- What: This 66-line module bridges the data layer (snapshot I/O) and API layer (uma.moe fetch) using a type-only import for `UmaMoeClient`. The file comment explicitly documents why it exists: "to avoid a data → api dependency."
+- Why: This is textbook dependency inversion. The function signature accepts an interface (`UmaMoeClient`) rather than the module depending on the concrete API client. It keeps the data layer clean while providing the cache-or-fetch pattern that multiple callers need.
+- How: No change needed — this is the correct pattern for cross-layer bridging.
+- Confidence: HIGH
 
 ## Modules Reviewed
-
-- `src/types/`: clean (pure type definitions, zero imports)
-- `src/utils/logger.ts`: 1 LOW finding
-- `src/utils/timezone.ts`: clean
-- `src/utils/format.ts`: clean
-- `src/utils/index.ts`: clean (re-export only)
-- `src/runtime.ts`: 1 LOW finding
-- `src/config.ts`: 1 MEDIUM finding (JSON.stringify comparison)
-- `src/data/daily-fans.ts`: clean (pure arithmetic)
-- `src/data/snapshot.ts`: 2 findings (HIGH reversed dep + MEDIUM mixed concerns)
-- `src/db/database.ts`: clean (focused SQLite wrapper)
-- `src/api/uma-moe.ts`: clean
-- `src/api/server.ts`: clean
-- `src/reports/compute.ts`: clean
-- `src/reports/format.ts`: 1 MEDIUM finding (grab-bag)
-- `src/reports/daily.ts` through `src/reports/analyze.ts`: clean (pure functions)
-- `src/reports/combined.ts`: clean
-- `src/reports/tier.ts`: 0 direct findings (but `computeTierData` location is flagged under alerts coupling)
-- `src/alerts/alerts.ts`: 1 MEDIUM finding (cross-module coupling to reports/tier)
-- `src/scheduler/scheduler.ts`: clean
-- `src/scheduler/catchup.ts`: clean
-- `src/scheduler/helpers.ts`: clean
-- `src/whatsapp/access.ts`: clean
-- `src/whatsapp/commands.ts`: clean
-- `src/whatsapp/admin.ts`: clean
-- `src/whatsapp/client.ts`: 1 HIGH finding (god module)
-- `src/whatsapp/dispatch.ts`: 1 HIGH finding (duplicated dispatch)
-- `src/orchestrator/report-orchestrator.ts`: 2 findings (HIGH duplicated dispatch + MEDIUM duplicated alert delivery)
-- `src/index.ts`: 3 findings (MEDIUM offset duplication, MEDIUM JSON.stringify, POSITIVE composition root)
-
----
+- `src/index.ts`: Clean composition root, inline config watcher is acceptable for startup logic
+- `src/config.ts`: Clean, well-structured with Zod validation
+- `src/runtime.ts`: Minimal singleton, no issues
+- `src/types/index.ts`: Comprehensive shared types, no issues
+- `src/db/database.ts`: Solid data access layer, `rawRun` for transactions is pragmatic
+- `src/data/snapshot.ts`: Clean immutable snapshot management
+- `src/data/daily-fans.ts`: Pure computation, well-documented
+- `src/data/ensure-snapshot.ts`: Clean bridge pattern (positive)
+- `src/data/member-history.ts`: Proper transaction handling with rollback
+- `src/api/uma-moe.ts`: Isolated Playwright client, clean interface
+- `src/api/server.ts`: Acceptable for localhost-only API, consistent response envelope
+- `src/reports/compute.ts`: Clean transformation engine (note: `computeTierData` belongs in data layer)
+- `src/reports/registry.ts`: Clean pattern, should include compare/analyze
+- `src/reports/format.ts`: Has unnecessary re-export (LOW finding)
+- `src/reports/daily.ts`: Clean, unused `db` param (MEDIUM finding)
+- `src/reports/weekly.ts`: Clean, unused `db` param (MEDIUM finding)
+- `src/reports/monthly.ts`: Clean, unused `db` param (MEDIUM finding)
+- `src/reports/ranks.ts`: Clean, no issues
+- `src/reports/bottom.ts`: Clean, unused `db` param (MEDIUM finding)
+- `src/reports/stats.ts`: Clean, unused `db` param (MEDIUM finding)
+- `src/reports/members.ts`: Only report that actually uses `db` parameter correctly
+- `src/reports/tier.ts`: Clean, unused `db` param (MEDIUM finding)
+- `src/reports/compare.ts`: Clean, but bypassed via direct import in dispatch.ts
+- `src/reports/analyze.ts`: Clean, but bypassed via direct import in dispatch.ts
+- `src/reports/combined.ts`: Clean aggregation pattern
+- `src/orchestrator/report-orchestrator.ts`: Good pipeline design, snapshot freshness logic should be extracted
+- `src/scheduler/scheduler.ts`: Clean cron management with collision detection
+- `src/scheduler/catchup.ts`: Well-structured missed report detection
+- `src/scheduler/helpers.ts`: Pure utility functions, clean
+- `src/whatsapp/client.ts`: Large but documented as accepted (architecture.md:635)
+- `src/whatsapp/dispatch.ts`: Oversized, mixes concerns (HIGH finding)
+- `src/whatsapp/commands.ts`: Clean parser with fuzzy matching
+- `src/whatsapp/access.ts`: Clean access control logic
+- `src/whatsapp/admin.ts`: Clean admin command handlers
+- `src/alerts/alerts.ts`: Clean alert detection, cross-module dependency on reports/compute (MEDIUM finding)
+- `src/utils/format.ts`: Pure string utilities, no issues
+- `src/utils/logger.ts`: Self-contained structured logger, clean
+- `src/utils/timezone.ts`: Clean timezone handling via Intl API
+- `src/utils/index.ts`: Unused barrel file (LOW finding)
 
 ## Low-Confidence Notes
 
-- [src/whatsapp/client.ts:52-68] The `console.error` monkey-patch for libsignal suppression is global and permanent. If Baileys is ever upgraded and the suppressed patterns change, this could silently mask real errors. Recommend wrapping in a flag that can be disabled at runtime.
-- [src/scheduler/scheduler.ts:236-306] The collision detection logic in the weekly/monthly handlers is complex with nested conditionals. I suspect the collision resolution could be unified into a single pre-computation step at `start()` time rather than computed inside each cron callback, but this needs more analysis.
-- [src/reports/monthly.ts:55] `loadMonthSnapshots` is called directly inside a report generator, making it do I/O. All other report generators are pure. This is a minor inconsistency — the monthly report can silently use different data than what was passed in if snapshots changed between computation and report generation.
+- [reports/compute.ts:33-107] `computeMembers` does ghost detection by sorting all members by monthlyGain and reclassifying the bottom N as 'left'. This is a heuristic that could misclassify in edge cases (documented in architecture.md:633). Not flagged as a finding because it's an accepted design choice.
+
+- [index.ts:121-123] `setupCommandHandler` receives both a config getter AND an `onConfigUpdate` callback AND a `prefetchSnapshot` function. This triple callback pattern is necessary for the composition root to wire hot-reload, but the function signature has grown to 7 parameters. Not flagged because it's the composition root's job to wire dependencies, and refactoring would require a builder pattern that adds complexity without clear benefit at this scale.
+
+- [whatsapp/client.ts:52-69] Global `console.error` monkey-patching affects the entire process. The architecture.md documents this as accepted (line 674). Not flagged because the Baileys library generates high-volume noise that cannot be intercepted through normal logging channels.
