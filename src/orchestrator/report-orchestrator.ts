@@ -163,7 +163,9 @@ export class ReportOrchestrator {
     }
 
     if (options?.isCatchUp) {
-      report = `[Mode catch-up — memulihkan laporan yang terlewat]\n${report}`;
+      const lines = report.split('\n');
+      lines.splice(1, 0, '', '*⚠️ Catch-up*');
+      report = lines.join('\n');
     }
 
     return report;
@@ -250,7 +252,9 @@ export class ReportOrchestrator {
 
     const computedMembers = computeMembers(snapshot, config);
     const combined = this.generateCombinedReportString(types, snapshot, config, computedMembers);
-    await this.deliverReport(`[Mode catch-up — memulihkan laporan yang terlewat]\n${combined}`, types.join('+'));
+    const lines = combined.split('\n');
+    lines.splice(1, 0, '', '*⚠️ Catch-up*');
+    await this.deliverReport(lines.join('\n'), types.join('+'));
 
     // Detect alerts for each combined report type
     const allAlerts: Alert[] = [];

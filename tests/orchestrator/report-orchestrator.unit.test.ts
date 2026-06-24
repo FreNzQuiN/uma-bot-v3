@@ -311,7 +311,7 @@ describe('ReportOrchestrator — generateReportString', () => {
     expect(result).toBeUndefined();
   });
 
-  it('prepends catch-up prefix when isCatchUp is true', () => {
+  it('inserts catch-up tag below title when isCatchUp is true', () => {
     const { orch } = makeOrchestrator();
     const snapshot = loadRealSnapshot();
     const config = makeConfig();
@@ -321,10 +321,14 @@ describe('ReportOrchestrator — generateReportString', () => {
     const result = orch.generateReportString('daily', snapshot, config, members, { isCatchUp: true });
 
     expect(result).toBeDefined();
-    expect(result!.startsWith('[Mode catch-up')).toBe(true);
+    expect(result).toContain('*⚠️ Catch-up*');
+    // Tag should appear after the title line (second line, after blank line)
+    const lines = result!.split('\n');
+    expect(lines[0]).toMatch(/^\📊/);
+    expect(lines[2]).toBe('*⚠️ Catch-up*');
   });
 
-  it('does not prepend catch-up prefix when isCatchUp is false', () => {
+  it('does not insert catch-up tag when isCatchUp is false', () => {
     const { orch } = makeOrchestrator();
     const snapshot = loadRealSnapshot();
     const config = makeConfig();
@@ -334,7 +338,7 @@ describe('ReportOrchestrator — generateReportString', () => {
     const result = orch.generateReportString('daily', snapshot, config, members, { isCatchUp: false });
 
     expect(result).toBeDefined();
-    expect(result!.startsWith('[Mode catch-up')).toBe(false);
+    expect(result).not.toContain('Catch-up');
   });
 });
 

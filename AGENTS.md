@@ -27,7 +27,7 @@ Single Node.js process. No microservices, no cache layer — one process handles
 
 **Why:** Data processing is arithmetic on arrays of ~34 integers. uma.moe data is static for 24h. Splitting adds friction without benefit.
 
-**Key constraint:** The bot runs intermittently (on/off at unpredictable intervals). It must detect missed reports on restart and send catch-up reports tagged `[Mode catch-up]`.
+**Key constraint:** The bot runs intermittently (on/off at unpredictable intervals). It must detect missed reports on restart and send catch-up reports tagged `*⚠️ Catch-up*` (below the report title).
 
 ### Source Layout
 

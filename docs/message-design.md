@@ -179,7 +179,7 @@ Status: {explanation}
 
 **Aggregated (catch-up):**
 ```
-[catch-up report — {date}]
+*⚠️ Catch-up*
 
 Summary: {count} events logged
 • {summary_line}
@@ -222,9 +222,9 @@ Files: All report files
 - Or: `⸻\nData retrieved: {timestamp}`
 
 ### Catch-up Tag
-File: `src/index.ts`
-- Current: `[catch-up]`
-- Could become: `[Catch-up Report — recovering {n} missed reports]`
+Files: `src/orchestrator/report-orchestrator.ts`
+- Format: `*⚠️ Catch-up*` (bold, placed below the report title line)
+- Example: `📊 *Daily Report — 24 Juni 2026*\n\n*⚠️ Catch-up*`
 
 ---
 
@@ -268,4 +268,4 @@ For every new message added to the codebase:
 | `❌ Perintah /x tidak dikenal.` | `❌ *Command not found*\n`/x` is not in my command registry. Check /help for available operations.` |
 | `⚙️ Bot Configuration:` | `⚙️ *System Config*\nCurrent operational parameters:` |
 | `⸻ Sync at:` | `⸻ Last sync:` |
-| `[catch-up]` | `[Catch-up mode — recovering missed reports]` |
+| `[catch-up]` | `*⚠️ Catch-up*` (below title) |
