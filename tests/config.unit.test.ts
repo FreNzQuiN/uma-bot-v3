@@ -1,4 +1,4 @@
-import { writeFileSync, unlinkSync, mkdirSync, rmSync, readFileSync } from 'fs';
+import { writeFileSync, unlinkSync, mkdirSync, rmSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getDefaultConfig, validateConfig, loadConfig, updateConfig, saveConfig } from '../src/config';
 
@@ -320,5 +320,31 @@ describe('saveConfig round-trip (TEST-GAP-5)', () => {
     expect(loaded.requirements.monthlyFans).toBe(original.requirements.monthlyFans);
     expect(loaded.requirements.weeklyFans).toBe(original.requirements.weeklyFans);
     expect(loaded.requirements.weeksInMonthEquivalent).toBe(original.requirements.weeksInMonthEquivalent);
+  });
+});
+
+describe('saveConfig temp file collision recovery', () => {
+  it('overwrites orphaned .tmp file and completes successfully', () => {
+    const filePath = join(TEMP_DIR, 'tmp-collision.yaml');
+    const tmpPath = filePath + '.tmp';
+
+    // Write the real config file first so saveConfig can read existing YAML
+    writeFileSync(filePath, 'circleId: 11111\n', 'utf-8');
+
+    // Create an orphaned .tmp file (simulates a previous crash)
+    writeFileSync(tmpPath, 'orphaned content that should be overwritten', 'utf-8');
+    expect(existsSync(tmpPath)).toBe(true);
+
+    const config = validateConfig({ circleId: 99999 });
+
+    // Should not throw — flag:'w' overwrites the orphaned .tmp
+    saveConfig(config, filePath);
+
+    // Verify config was saved correctly
+    const loaded = loadConfig(filePath);
+    expect(loaded.circleId).toBe(99999);
+
+    // .tmp should no longer exist after renameSync
+    expect(existsSync(tmpPath)).toBe(false);
   });
 });

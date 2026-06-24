@@ -442,6 +442,53 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
 });
 
 // ============================================================
+// Slice 5.5: sendCombinedCatchUp — combined report alert gap
+// ============================================================
+
+describe('ReportOrchestrator — sendCombinedCatchUp', () => {
+  it('calls processAlertsForReport for each type in the combined set', async () => {
+    const snapshot = loadRealSnapshot();
+    const { orch, config, waClient } = makeOrchestrator({
+      waClient: makeWaClient(),
+    });
+    (orch as any).getSnapshot = jest.fn().mockReturnValue(snapshot);
+
+    const spy = jest.spyOn(orch, 'processAlertsForReport').mockResolvedValue([]);
+
+    await orch.sendCombinedCatchUp(['daily', 'weekly']);
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenCalledWith('daily', snapshot, config, expect.any(Array), { isCatchUp: true, collectAlerts: true });
+    expect(spy).toHaveBeenCalledWith('weekly', snapshot, config, expect.any(Array), { isCatchUp: true, collectAlerts: true });
+
+    spy.mockRestore();
+  });
+
+  it('aggregates alerts from all combined types', async () => {
+    const snapshot = loadRealSnapshot();
+    const { orch, waClient } = makeOrchestrator({
+      waClient: makeWaClient(),
+    });
+    (orch as any).getSnapshot = jest.fn().mockReturnValue(snapshot);
+
+    const alertA: Alert = { type: 'performance_drop', eventKey: 'a', memberViewerId: '1', reportDate: '2025-06-12', message: 'A' };
+    const alertB: Alert = { type: 'streak_break', eventKey: 'b', memberViewerId: '2', reportDate: '2025-06-12', message: 'B' };
+
+    const spy = jest.spyOn(orch, 'processAlertsForReport')
+      .mockResolvedValueOnce([alertA])
+      .mockResolvedValueOnce([alertB]);
+
+    const result = await orch.sendCombinedCatchUp(['daily', 'weekly']);
+
+    expect(result).toHaveLength(2);
+    expect(result).toContainEqual(alertA);
+    expect(result).toContainEqual(alertB);
+
+    spy.mockRestore();
+  });
+});
+
+// ============================================================
 // Slice 6: sendReport (full pipeline)
 // ============================================================
 
