@@ -68,4 +68,19 @@ describe('generateCombinedReport', () => {
     // Unknown type is silently skipped — only daily + weekly in output
     expect(result).toBe(`${daily}\n\n${weekly}`);
   });
+
+  it('generates combined daily+monthly report when types=["daily", "monthly"]', () => {
+    const result = generateCombinedReport(['daily', 'monthly'], snapshot, config, computedMembers);
+    const daily = generateDailyReport(snapshot, config, computedMembers, undefined);
+    const monthly = generateMonthlyReport(snapshot, config, computedMembers, -1);
+    expect(result).toBe(`${daily}\n\n${monthly}`);
+  });
+
+  it('generates combined daily+weekly+monthly report when types=["daily", "weekly", "monthly"]', () => {
+    const result = generateCombinedReport(['daily', 'weekly', 'monthly'], snapshot, config, computedMembers);
+    const daily = generateDailyReport(snapshot, config, computedMembers, undefined);
+    const weekly = generateWeeklyReport(snapshot, config, computedMembers, undefined);
+    const monthly = generateMonthlyReport(snapshot, config, computedMembers, -1);
+    expect(result).toBe(`${daily}\n\n${weekly}\n\n${monthly}`);
+  });
 });
