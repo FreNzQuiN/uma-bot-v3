@@ -177,7 +177,7 @@ export class ReportOrchestrator {
     config: BotConfig,
     computedMembers: ComputedMember[]
   ): string {
-    return generateCombinedReport(types, snapshot, config, computedMembers, this.db);
+    return generateCombinedReport(types, snapshot, config, computedMembers);
   }
 
   // ── Alert processing ──────────────────────────────────────

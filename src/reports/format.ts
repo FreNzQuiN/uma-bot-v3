@@ -10,7 +10,6 @@
 // ============================================================
 
 import { formatDateWIB, getDataDateComponents, formatForDisplay } from '../utils/timezone';
-export { formatDateWIB };
 
 import type { Snapshot, BotConfig } from '../types';
 import { getLatestDataDay } from '../data/daily-fans';

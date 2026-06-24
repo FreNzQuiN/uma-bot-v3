@@ -7,11 +7,11 @@
 
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
-import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeRollingAverage, countActiveDays } from '../data/daily-fans';
 import { formatNumber } from '../utils/format';
-import { formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatDateWIB } from '../utils/timezone';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
 
 /**
  * Generate the stats report string.
@@ -23,8 +23,7 @@ import { formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDat
 export function generateStatsReport(
   snapshot: Snapshot,
   config: BotConfig,
-  computedMembers: ComputedMember[],
-  db?: Database
+  computedMembers: ComputedMember[]
 ): string {
   // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {

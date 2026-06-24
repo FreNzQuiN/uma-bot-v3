@@ -151,6 +151,38 @@ export function handleStatus(
 }
 
 // ============================================================
+// Generic toggle helper
+// ============================================================
+
+function handleToggle(
+  args: string[],
+  config: BotConfig,
+  label: string,
+  getter: (c: BotConfig) => boolean,
+  setter: (c: BotConfig, v: boolean) => BotConfig,
+  usage: string
+): { config: BotConfig; message: string } {
+  if (args.length === 0) {
+    const status = getter(config) ? 'on' : 'off';
+    return { config, message: `${label}: ${status}\n\nUsage: ${usage}` };
+  }
+
+  const arg = args[0]?.toLowerCase();
+  if (arg === 'on') {
+    const updated = setter(config, true);
+    saveConfig(updated);
+    return { config: updated, message: `${label} diaktifkan.` };
+  }
+  if (arg === 'off') {
+    const updated = setter(config, false);
+    saveConfig(updated);
+    return { config: updated, message: `${label} dinonaktifkan.` };
+  }
+
+  return { config, message: `Usage: ${usage}` };
+}
+
+// ============================================================
 // /catchup on|off — Enable/disable catch-up reports
 // ============================================================
 
@@ -169,27 +201,12 @@ export function handleCatchUp(
     return { config, message: lines.join('\n') };
   }
 
-  const arg = args[0]?.toLowerCase();
-
-  if (arg === 'on') {
-    const updated = {
-      ...config,
-      catchUp: { ...config.catchUp, enabled: true },
-    };
-    saveConfig(updated);
-    return { config: updated, message: 'Catch-up diaktifkan.' };
-  }
-
-  if (arg === 'off') {
-    const updated = {
-      ...config,
-      catchUp: { ...config.catchUp, enabled: false },
-    };
-    saveConfig(updated);
-    return { config: updated, message: 'Catch-up dinonaktifkan.' };
-  }
-
-  return { config, message: 'Usage: /catchup on atau /catchup off' };
+  return handleToggle(
+    args, config, 'Catch-up',
+    (c) => c.catchUp.enabled,
+    (c, v) => ({ ...c, catchUp: { ...c.catchUp, enabled: v } }),
+    '/catchup on atau /catchup off'
+  );
 }
 
 // ============================================================
@@ -210,25 +227,10 @@ export function handleAlerts(
     return { config, message: lines.join('\n') };
   }
 
-  const arg = args[0]?.toLowerCase();
-
-  if (arg === 'on') {
-    const updated = {
-      ...config,
-      alerts: { ...config.alerts, enabled: true },
-    };
-    saveConfig(updated);
-    return { config: updated, message: 'Alerts diaktifkan.' };
-  }
-
-  if (arg === 'off') {
-    const updated = {
-      ...config,
-      alerts: { ...config.alerts, enabled: false },
-    };
-    saveConfig(updated);
-    return { config: updated, message: 'Alerts dinonaktifkan.' };
-  }
-
-  return { config, message: 'Usage: /alerts on atau /alerts off' };
+  return handleToggle(
+    args, config, 'Alerts',
+    (c) => c.alerts.enabled,
+    (c, v) => ({ ...c, alerts: { ...c.alerts, enabled: v } }),
+    '/alerts on atau /alerts off'
+  );
 }

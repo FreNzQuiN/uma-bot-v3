@@ -127,7 +127,7 @@ describe('Left members section', () => {
     };
 
     const reportNoDb = generateDailyReport(snapshot, config, computedMembers, 0);
-    const reportWithDb = generateDailyReport(snapshot, config, computedMembers, 0, mockDbWithLeft);
+    const reportWithDb = generateDailyReport(snapshot, config, computedMembers, 0);
 
     // Both should show same output (no left section)
     expect(reportNoDb).not.toContain('🚪 Keluar dari klub:');

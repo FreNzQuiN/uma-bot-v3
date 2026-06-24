@@ -19,7 +19,7 @@ import {
   isStaleMember,
 } from '../../src/data/daily-fans';
 import { formatNumber } from '../../src/utils/format';
-import { formatDateWIB } from '../../src/reports/format';
+import { formatDateWIB } from '../../src/utils/timezone';
 import type { Snapshot, BotConfig } from '../../src/types';
 import {
   loadRealSnapshot,

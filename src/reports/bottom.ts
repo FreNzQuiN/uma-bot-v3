@@ -7,10 +7,10 @@
 
 import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
-import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatDateWIB } from '../utils/timezone';
+import { buildDateStr, buildFooter, buildDataLine } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
 /**
@@ -23,8 +23,7 @@ import { isStaleForReport } from '../data/daily-fans';
 export function generateBottomReport(
   snapshot: Snapshot,
   config: BotConfig,
-  computedMembers: ComputedMember[],
-  db?: Database
+  computedMembers: ComputedMember[]
 ): string {
   // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {

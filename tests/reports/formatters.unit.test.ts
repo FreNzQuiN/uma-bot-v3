@@ -12,10 +12,8 @@ import {
   formatNumber,
   splitMessage,
 } from '../../src/utils/format';
-import {
-  formatDateWIB,
-  getStaleDataWarning,
-} from '../../src/reports/format';
+import { formatDateWIB } from '../../src/utils/timezone';
+import { getStaleDataWarning } from '../../src/reports/format';
 import { loadRealSnapshot } from '../_helpers';
 
 // Load real snapshot

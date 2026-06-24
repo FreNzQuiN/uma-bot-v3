@@ -30,14 +30,14 @@ export function generateReportString(
   options?: { offset?: number; db?: Database }
 ): string | undefined {
   switch (type) {
-    case 'daily': return generateDailyReport(snapshot, config, computedMembers, options?.offset ?? 0, options?.db);
-    case 'weekly': return generateWeeklyReport(snapshot, config, computedMembers, options?.offset ?? 0, options?.db);
-    case 'monthly': return generateMonthlyReport(snapshot, config, computedMembers, options?.offset ?? 0, options?.db);
+    case 'daily': return generateDailyReport(snapshot, config, computedMembers, options?.offset ?? 0);
+    case 'weekly': return generateWeeklyReport(snapshot, config, computedMembers, options?.offset ?? 0);
+    case 'monthly': return generateMonthlyReport(snapshot, config, computedMembers, options?.offset ?? 0);
     case 'ranks': return generateRanksReport(snapshot, config, computedMembers);
-    case 'bottom': return generateBottomReport(snapshot, config, computedMembers, options?.db);
-    case 'stats': return generateStatsReport(snapshot, config, computedMembers, options?.db);
+    case 'bottom': return generateBottomReport(snapshot, config, computedMembers);
+    case 'stats': return generateStatsReport(snapshot, config, computedMembers);
     case 'members': return generateMembersReport(snapshot, config, computedMembers, options?.db);
-    case 'tier': return generateTierReport(snapshot, config, computedMembers, options?.db);
+    case 'tier': return generateTierReport(snapshot, config, computedMembers);
     default: return undefined;
   }
 }

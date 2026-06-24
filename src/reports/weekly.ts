@@ -7,10 +7,10 @@
 
 import { Snapshot, BotConfig, WEEK_BLOCKS, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
-import type { Database } from '../db/database';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB, getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { formatDateWIB } from '../utils/timezone';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
 interface WeeklyRankedMember {
@@ -47,8 +47,7 @@ export function generateWeeklyReport(
   snapshot: Snapshot,
   config: BotConfig,
   computedMembers: ComputedMember[],
-  offset: number = 0,
-  db?: Database
+  offset: number = 0
 ): string {
   // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
