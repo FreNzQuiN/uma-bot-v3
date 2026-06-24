@@ -90,9 +90,9 @@ export function generateMonthlyReport(
   const formattedDate = formatDateWIB(dateStr);
 
   // Projected month end (extrapolate based on current pace)
-  const dataDay = getDataDayFromSnapshot(activeSnapshot);
+  const adjustedDataDay = getDataDayFromSnapshot(activeSnapshot);
   const daysInMonth = new Date(year, month, 0).getDate();
-  const daysElapsed = dataDay;
+  const daysElapsed = adjustedDataDay;
   const projectedMonthEnd =
     daysElapsed > 0
       ? Math.round((totalMonthlyGain / daysElapsed) * daysInMonth)
@@ -166,7 +166,7 @@ export function generateMonthlyReport(
   // Stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
   const staleMembers = computedMembers.filter((m) =>
-    m.status === 'active' && isStaleForReport(m.dailyFans, dataDay, staleThreshold)
+    m.status === 'active' && isStaleForReport(m.dailyFans, adjustedDataDay, staleThreshold)
   );
   if (staleMembers.length > 0) {
     lines.push('');

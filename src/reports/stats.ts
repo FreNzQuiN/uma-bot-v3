@@ -31,7 +31,7 @@ export function generateStatsReport(
     return 'ℹ️ *Stats*\nData statistik belum tersedia.';
   }
 
-  const dataDay = getDataDayFromSnapshot(snapshot);
+  const actualDataDay = getDataDayFromSnapshot(snapshot);
 
   const contributing = computedMembers.filter(
     (m) => m.status === 'active'
@@ -90,7 +90,7 @@ export function generateStatsReport(
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
   const { year, month } = snapshot.members[0];
-  const dateStr = buildDateStr(snapshot, dataDay);
+  const dateStr = buildDateStr(snapshot, actualDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
   const lines: string[] = [];
@@ -126,7 +126,7 @@ export function generateStatsReport(
 
   // Projected month-end total
   const daysInMonth = new Date(year, month, 0).getDate();
-  const daysElapsed = dataDay;
+  const daysElapsed = actualDataDay;
   const projectedMonthEnd =
     daysElapsed > 0
       ? Math.round((totalMonthlyGain / daysElapsed) * daysInMonth)
@@ -157,7 +157,7 @@ export function generateStatsReport(
   );
 
   // Stale data warning
-  const staleWarning = getStaleDataWarning(year, month, dataDay);
+  const staleWarning = getStaleDataWarning(year, month, actualDataDay);
   if (staleWarning) {
     lines.push('');
     lines.push(staleWarning);

@@ -224,6 +224,6 @@ export function saveConfig(config: BotConfig, filePath?: string): void {
     raw = stringifyYaml(config);
   }
   const tmpPath = path + '.tmp';
-  writeFileSync(tmpPath, raw, { encoding: 'utf-8', flag: 'wx' });
+  writeFileSync(tmpPath, raw, { encoding: 'utf-8', flag: 'w' });
   renameSync(tmpPath, path);
 }

@@ -35,12 +35,12 @@ export function generateDailyReport(
 
   const latestDataDay = getDataDayFromSnapshot(snapshot);
   const absOffset = Math.abs(offset);
-  const dataDay = Math.max(1, latestDataDay - absOffset);
+  const adjustedDataDay = Math.max(1, latestDataDay - absOffset);
 
   // Compute gains for the SPECIFIC offset day, not the latest
   const memberGains = computedMembers.map((m) => ({
     ...m,
-    dailyGain: getDailyGain(m.dailyFans, dataDay, config.requirements.includeTransferDataInCalculation),
+    dailyGain: getDailyGain(m.dailyFans, adjustedDataDay, config.requirements.includeTransferDataInCalculation),
   }));
 
   // Filter active members (not stale/left)
@@ -66,7 +66,7 @@ export function generateDailyReport(
   // Stale members: active member with 0 gain on the viewed day who has been active before
   const staleMembers = memberGains.filter((m) => {
     if (m.status !== 'active') return false;
-    if (m.firstPositiveDay >= dataDay) return false;
+    if (m.firstPositiveDay >= adjustedDataDay) return false;
     return m.dailyGain === 0;
   });
 
@@ -84,7 +84,7 @@ export function generateDailyReport(
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
   // Format date
-  const dateStr = buildDateStr(snapshot, dataDay);
+  const dateStr = buildDateStr(snapshot, adjustedDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
   // Build report
@@ -117,7 +117,7 @@ export function generateDailyReport(
   // Stale section: zero-gain members shown here, not in ranked list
   if (staleMembers.length > 0) {
     lines.push('');
-    if (contributorCount === 0 && dataDay <= 1) {
+    if (contributorCount === 0 && adjustedDataDay <= 1) {
       lines.push('ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya');
     } else {
       lines.push('*⚠️ Belum aktif hari ini:*');
@@ -127,7 +127,7 @@ export function generateDailyReport(
     }
   } else if (contributorCount === 0 && activeCount > 0) {
     lines.push('');
-    if (dataDay <= 1) {
+    if (adjustedDataDay <= 1) {
       lines.push('ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya');
     } else {
       lines.push('ℹ️ Hari ini: belum ada kontribusi tercatat');
@@ -135,7 +135,7 @@ export function generateDailyReport(
   }
 
   // Stale data warning: check if the SNAPSHOT is stale, not the viewed day
-  // Use latestDataDay (snapshot's actual latest) instead of offset-adjusted dataDay
+  // Use latestDataDay (snapshot's actual latest) instead of offset-adjusted adjustedDataDay
   const { year: snapYear, month: snapMonth } = snapshot.members[0];
   const staleWarning = getStaleDataWarning(snapYear, snapMonth, latestDataDay);
   if (staleWarning) {

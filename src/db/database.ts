@@ -9,6 +9,7 @@ import type { ScheduleRunRow, MemberHistoryRow, RankHistoryRow } from '../types'
 import initSqlJs, { Database as SqlJsDatabase, QueryExecResult } from 'sql.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import * as path from 'path';
+import { log } from '../utils/logger';
 
 export class Database {
   private db: SqlJsDatabase | null = null;
@@ -62,7 +63,7 @@ export class Database {
       return this.ensureDb().exec(sql, params);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[DB] SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
+      log.error('DB', `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
       throw err;
     }
   }
@@ -72,7 +73,7 @@ export class Database {
       this.ensureDb().run(sql, params);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[DB] SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
+      log.error('DB', `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
       throw err;
     }
   }
