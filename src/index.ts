@@ -254,7 +254,8 @@ async function main() {
   const onDataFetch = async () => {
     try {
       const { year: currentYear, month: currentMonth } = getDataDateComponents();
-      const snapshot = await umaMoe.fetchCircleData(config.circleId, currentYear, currentMonth);
+      const currentConfig = getConfig();
+      const snapshot = await umaMoe.fetchCircleData(currentConfig.circleId, currentYear, currentMonth);
       saveSnapshot(snapshot, getDataDate());
       log.info('Data', 'Scheduled data fetch completed');
     } catch (error) {
