@@ -69,7 +69,7 @@ Snapshot → computeMembers() → ReportOrchestrator → generateReport() → de
 ### Alerts
 
 ```
-Snapshot → detectAlerts() → recordAlert() → formatAlerts() → WhatsApp → Admin/Group
+Snapshot → detectAlerts() → recordAlerts() → formatAlerts() → WhatsApp → Admin/Group
 ```
 
 1. **detectAlerts** (in `alerts/alerts.ts`) runs after each report delivery.
@@ -121,11 +121,11 @@ Snapshot → detectAlerts() → recordAlert() → formatAlerts() → WhatsApp �
 
 **Why pluggable:** Enables MySQL/TiDB for production deployments while keeping SQLite as the zero-config default. Consumer code depends only on the `IDatabase` interface — adapter details are invisible to callers.
 
-**Interface (`db/types.ts`):** Defines `IDatabase` with 16 async methods organized by domain:
+**Interface (`db/types.ts`):** Defines `IDatabase` with 19 async methods organized by domain:
 - Lifecycle: `initialize()`, `close()`, `save()`
-- Schedule runs: `getLastSuccessfulRun()`, `recordRun()`, `updateRunStatus()`
-- Alerts: `isAlertAlreadySent()`, `getExistingAlertKeys()`, `recordAlert()`, `markAlertSent()`
-- Members: `upsertMember()`, `getMembers()`, `getMember()`
+- Schedule runs: `getLastSuccessfulRun()`, `getLastRun()`, `recordRun()`, `updateRunStatus()`
+- Alerts: `getExistingAlertKeys()`, `recordAlert()`, `recordAlerts()`, `markAlertSent()`, `markAlertsSent()`
+- Members: `upsertMember()`, `upsertMembers()`, `getMembers()`, `getMember()`
 - Rank history: `saveRankHistory()`, `getRankHistory()`
 - Transactions: `transaction()`
 
@@ -140,11 +140,10 @@ Snapshot → detectAlerts() → recordAlert() → formatAlerts() → WhatsApp �
 - `alert_events` — dedup for alerts (event_key uniqueness, `INSERT IGNORE` for atomic dedup)
 - `member_history` — tracks member presence across months
 - `rank_history` — daily rank snapshots for trend analysis
-- `settings` — key-value store (future use, no IDatabase methods yet)
 
 **Type choices (MySQL):**
 - `BIGINT` for `viewer_id`, `circle_id`, `monthly_point`, `fans_to_*` — values exceed INT range
-- `TEXT` for `error_message` and `settings.value` — not bounded to 255 chars
+- `TEXT` for `error_message` — not bounded to 255 chars
 - `TINYINT(1)` for `is_catch_up` — MySQL boolean convention
 
 **MySQL compatibility notes:**
