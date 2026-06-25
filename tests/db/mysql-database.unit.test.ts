@@ -596,25 +596,6 @@ describe('updateRunStatus()', () => {
 // 10. Alert events
 // ============================================================
 
-describe('isAlertAlreadySent()', () => {
-  it('returns true when alert exists with sent/suppressed status', async () => {
-    mockPoolQuery.mockResolvedValue([[{ id: 1 }], undefined]);
-
-    const result = await db.isAlertAlreadySent('key-abc');
-    expect(result).toBe(true);
-
-    const lastCall = mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
-    expect(lastCall[1]).toEqual(['key-abc', 'sent', 'suppressed']);
-  });
-
-  it('returns false when no matching alert', async () => {
-    mockPoolQuery.mockResolvedValue([[], undefined]);
-
-    const result = await db.isAlertAlreadySent('key-abc');
-    expect(result).toBe(false);
-  });
-});
-
 describe('getExistingAlertKeys()', () => {
   it('returns empty set for empty input', async () => {
     const result = await db.getExistingAlertKeys([]);

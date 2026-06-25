@@ -201,7 +201,6 @@ export function makeMockDb() {
     initialize: jest.fn().mockResolvedValue(undefined),
     close: jest.fn().mockResolvedValue(undefined),
     save: jest.fn().mockResolvedValue(undefined),
-    isAlertAlreadySent: jest.fn().mockResolvedValue(false),
     getExistingAlertKeys: jest.fn().mockResolvedValue(new Set<string>()),
     recordAlert: jest.fn().mockResolvedValue(1),
     getMembers: jest.fn().mockResolvedValue([]),

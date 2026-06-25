@@ -99,7 +99,6 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 
 function makeMockDb(): any {
   return {
-    isAlertAlreadySent: jest.fn().mockReturnValue(false),
     recordAlert: jest.fn(),
     getMembers: jest.fn().mockReturnValue([]),
     getMember: jest.fn().mockReturnValue(null),

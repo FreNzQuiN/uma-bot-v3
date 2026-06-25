@@ -120,7 +120,8 @@ describe('Schedule runs', () => {
 describe('Alert events', () => {
   it('records alert and checks dedup', async () => {
     const key = 'performance_drop:2026-06-11:12345';
-    expect(await db.isAlertAlreadySent(key)).toBe(false);
+    let keys = await db.getExistingAlertKeys([key]);
+    expect(keys.has(key)).toBe(false);
 
     const id = await db.recordAlert({
       alert_type: 'performance_drop',
@@ -132,10 +133,12 @@ describe('Alert events', () => {
     });
 
     expect(id).toBeGreaterThan(0);
-    expect(await db.isAlertAlreadySent(key)).toBe(false);
+    keys = await db.getExistingAlertKeys([key]);
+    expect(keys.has(key)).toBe(false);
 
     await db.markAlertSent(id);
-    expect(await db.isAlertAlreadySent(key)).toBe(true);
+    keys = await db.getExistingAlertKeys([key]);
+    expect(keys.has(key)).toBe(true);
   });
 
   it('ignores duplicate event_key', async () => {
@@ -160,7 +163,8 @@ describe('Alert events', () => {
       message: 'Duplicate alert',
     });
 
-    expect(await db.isAlertAlreadySent(key)).toBe(false);
+    let keys = await db.getExistingAlertKeys([key]);
+    expect(keys.has(key)).toBe(false);
   });
 });
 

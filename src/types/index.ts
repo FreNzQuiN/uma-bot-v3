@@ -86,21 +86,6 @@ export interface ComputedMember {
   weeklyGains: number[];        // gains per week block
 }
 
-export interface DailyReportData {
-  snapshotDate: string;         // WIB date string e.g. "2026-06-11"
-  dataUpdateTime: string;      // "11 June 2026, 22:00 WIB"
-  clubName: string;
-  tier: string;
-  rank: number;
-  promotionGap: number;
-  demotionBuffer: number;
-  activeCount: number;
-  totalDailyGain: number;
-  members: RankedMember[];
-  staleWarnings: string[];
-  isStale: boolean;
-}
-
 export interface RankedMember {
   rank: number;
   trainerName: string;
@@ -108,30 +93,6 @@ export interface RankedMember {
   monthlyGain: number;
   isTransfer: boolean;
   previousCircleName?: string;
-}
-
-export interface WeeklyReportData {
-  snapshotDate: string;
-  clubName: string;
-  weekNumber: number;           // 1-5
-  weekStart: number;            // day number
-  weekEnd: number;              // day number
-  totalWeeklyGain: number;
-  members: RankedMember[];
-  belowRequirement: RankedMember[];
-}
-
-export interface MonthlyReportData {
-  snapshotDate: string;
-  clubName: string;
-  month: number;
-  year: number;
-  totalMonthlyGain: number;
-  activeCount: number;
-  inactiveCount: number;
-  leftCount: number;
-  members: RankedMember[];
-  projectedMonthEnd: number;
 }
 
 export interface TierData {
@@ -144,27 +105,6 @@ export interface TierData {
   daysLeft: number;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   projectedOutcome: 'promote' | 'stay' | 'demotion_risk' | 'unknown';
-}
-
-export interface MemberAnalysis {
-  trainerName: string;
-  monthlyGain: number;
-  latestDailyGain: number;
-  avg3Day: number;
-  avg7Day: number;
-  consistencyScore: number;
-  activeDays: number;
-  projectedMonthEnd: number;
-  requirementStatus: string;
-  isTransfer: boolean;
-  trendDirection: 'up' | 'down' | 'stable';
-}
-
-export interface CompareData {
-  memberA: MemberAnalysis;
-  memberB: MemberAnalysis;
-  winner: 'A' | 'B' | 'tie';
-  period: 'monthly' | 'weekly' | 'daily';
 }
 
 // ============================================================
@@ -271,12 +211,6 @@ export interface BotConfig {
 // ============================================================
 // Database models
 // ============================================================
-
-export interface SettingsRow {
-  key: string;
-  value: string;
-  updated_at: string;
-}
 
 export interface ScheduleRunRow {
   id: number;

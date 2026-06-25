@@ -84,6 +84,7 @@ describe('Bug 4: recordAlert returns correct ID', () => {
     // id2 === id1, so marking it sent marks the original
     expect(id2).toBe(id1);
     await expect(db.markAlertSent(id2)).resolves.not.toThrow();
-    expect(await db.isAlertAlreadySent('perf:2026-06-12:44444')).toBe(true);
+    const keys = await db.getExistingAlertKeys(['perf:2026-06-12:44444']);
+    expect(keys.has('perf:2026-06-12:44444')).toBe(true);
   });
 });

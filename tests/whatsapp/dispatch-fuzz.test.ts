@@ -43,7 +43,7 @@ function makeMsg(text: string): IncomingMessage {
 
 function makeMockDb(): any {
   return {
-    isAlertAlreadySent: jest.fn().mockReturnValue(false), recordAlert: jest.fn(),
+    recordAlert: jest.fn(),
     getMembers: jest.fn().mockReturnValue([]), getMember: jest.fn().mockReturnValue(null),
     upsertMember: jest.fn(), saveRankHistory: jest.fn(), getLastSuccessfulRun: jest.fn().mockReturnValue(null),
     getLastRun: jest.fn().mockReturnValue(null),

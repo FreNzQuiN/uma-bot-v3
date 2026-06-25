@@ -228,14 +228,6 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     }
   }
 
-async isAlertAlreadySent(eventKey: string): Promise<boolean> {
-    const result = this.execSql(
-      'SELECT id FROM alert_events WHERE event_key = ? AND status IN (?, ?)',
-      [eventKey, 'sent', 'suppressed']
-    );
-    return result.length > 0 && result[0].values.length > 0;
-  }
-
   async getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>> {
     if (eventKeys.length === 0) return new Set();
     const placeholders = eventKeys.map(() => '?').join(',');

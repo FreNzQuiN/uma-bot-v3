@@ -68,7 +68,6 @@ export interface IDatabase {
   updateRunStatus(id: number, status: string, errorMessage?: string): Promise<void>;
 
   // Alerts
-  isAlertAlreadySent(eventKey: string): Promise<boolean>;
   /** Check which of the given event keys already exist (batch query). */
   getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>>;
   recordAlert(alert: AlertEventInsert): Promise<number>;
