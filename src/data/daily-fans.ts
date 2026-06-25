@@ -13,10 +13,6 @@
 import { Snapshot, WEEK_BLOCKS, TierData, CLUB_TIERS } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 
-// ============================================================
-// Internal helpers
-// ============================================================
-
 /**
  * Check if a daily_fans value is positive (usable cumulative data).
  * Negative values are transfer markers, zero means no data.
@@ -33,10 +29,6 @@ function hasValue(v: number | undefined, includeTransfer: boolean): boolean {
 function effectiveValue(v: number, includeTransfer: boolean): number {
   return (includeTransfer && v < 0) ? Math.abs(v) : v;
 }
-
-// ============================================================
-// Public functions
-// ============================================================
 
 /**
  * Returns the latest 1-indexed day that has a positive cumulative value.
@@ -173,7 +165,6 @@ export function getMonthlyGain(dailyFans: number[], includeTransfer: boolean = f
     }
   }
 
-  // Find latest usable day
   let latestDay = 0;
   let latestValue = 0;
   for (let i = dailyFans.length - 1; i >= 0; i--) {

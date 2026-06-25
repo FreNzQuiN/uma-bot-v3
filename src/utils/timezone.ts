@@ -57,10 +57,6 @@ function formatDateInTimezone(date: Date, tz: string): string {
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
-// ============================================================
-// Data timezone (JST) functions — used for all internal logic
-// ============================================================
-
 /** Get the JST date string for a given Date (or now). */
 export function getDataDate(date?: Date): string {
   return formatDateInTimezone(date ?? new Date(), DATA_TIMEZONE);
@@ -92,10 +88,6 @@ export function getDataYear(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).year;
 }
 
-// ============================================================
-// Month offset calculation
-// ============================================================
-
 /**
  * Calculate a target month by applying an offset to a base year/month.
  *
@@ -121,10 +113,6 @@ export function getTargetMonth(
   }
   return { year: targetYear, month: targetMonth };
 }
-
-// ============================================================
-// Indonesian date formatting
-// ============================================================
 
 export const INDONESIAN_MONTHS = [
   'Januari',
@@ -153,10 +141,6 @@ export function formatDateWIB(dateStr: string): string {
   const year = parseInt(yearStr, 10);
   return `${day} ${INDONESIAN_MONTHS[month - 1]} ${year}`;
 }
-
-// ============================================================
-// Display timezone functions — used for user-facing output
-// ============================================================
 
 /**
  * Format a Date for display in the configured timezone as "D/M HH:MM".

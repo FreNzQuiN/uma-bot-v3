@@ -1,19 +1,19 @@
-import { Database } from '../../src/db/database';
+import { SqliteDatabase } from '../../src/db/database';
 
 describe('Bug 4: recordAlert returns correct ID', () => {
-  let db: Database;
+  let db: SqliteDatabase;
 
   beforeEach(async () => {
-    db = new Database(':memory:');
+    db = new SqliteDatabase(':memory:');
     await db.initialize();
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await db.close();
   });
 
-  it('returns correct ID when inserting a new alert', () => {
-    const id1 = db.recordAlert({
+  it('returns correct ID when inserting a new alert', async () => {
+    const id1 = await db.recordAlert({
       alert_type: 'performance_drop',
       event_key: 'perf:2026-06-12:11111',
       member_viewer_id: '11111',
@@ -22,7 +22,7 @@ describe('Bug 4: recordAlert returns correct ID', () => {
       message: 'Alert 1',
     });
 
-    const id2 = db.recordAlert({
+    const id2 = await db.recordAlert({
       alert_type: 'performance_drop',
       event_key: 'perf:2026-06-12:22222',
       member_viewer_id: '22222',
@@ -36,8 +36,8 @@ describe('Bug 4: recordAlert returns correct ID', () => {
     expect(id2).toBe(id1 + 1);
   });
 
-  it('returns existing ID when duplicate event_key inserted', () => {
-    const id1 = db.recordAlert({
+  it('returns existing ID when duplicate event_key inserted', async () => {
+    const id1 = await db.recordAlert({
       alert_type: 'performance_drop',
       event_key: 'perf:2026-06-12:33333',
       member_viewer_id: '33333',
@@ -46,7 +46,7 @@ describe('Bug 4: recordAlert returns correct ID', () => {
       message: 'First',
     });
 
-    const id2 = db.recordAlert({
+    const id2 = await db.recordAlert({
       alert_type: 'performance_drop',
       event_key: 'perf:2026-06-12:33333', // same key
       member_viewer_id: '33333',
@@ -61,8 +61,8 @@ describe('Bug 4: recordAlert returns correct ID', () => {
     expect(id2).toBe(id1);
   });
 
-  it('markAlertSent on duplicate alert marks the original as sent', () => {
-    const id1 = db.recordAlert({
+  it('markAlertSent on duplicate alert marks the original as sent', async () => {
+    const id1 = await db.recordAlert({
       alert_type: 'performance_drop',
       event_key: 'perf:2026-06-12:44444',
       member_viewer_id: '44444',
@@ -72,7 +72,7 @@ describe('Bug 4: recordAlert returns correct ID', () => {
     });
 
     // Duplicate returns same ID
-    const id2 = db.recordAlert({
+    const id2 = await db.recordAlert({
       alert_type: 'performance_drop',
       event_key: 'perf:2026-06-12:44444',
       member_viewer_id: '44444',
@@ -83,7 +83,7 @@ describe('Bug 4: recordAlert returns correct ID', () => {
 
     // id2 === id1, so marking it sent marks the original
     expect(id2).toBe(id1);
-    expect(() => db.markAlertSent(id2)).not.toThrow();
-    expect(db.isAlertAlreadySent('perf:2026-06-12:44444')).toBe(true);
+    await expect(db.markAlertSent(id2)).resolves.not.toThrow();
+    expect(await db.isAlertAlreadySent('perf:2026-06-12:44444')).toBe(true);
   });
 });

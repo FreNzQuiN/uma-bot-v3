@@ -1,33 +1,33 @@
 import { computeMembers } from '../../src/reports/compute';
-import { detectAlerts, deduplicateAlerts, formatAlerts, aggregateAlerts } from '../../src/alerts/alerts';
-import { Database } from '../../src/db/database';
+import { detectAlerts, formatAlerts, aggregateAlerts } from '../../src/alerts/alerts';
+import { SqliteDatabase } from '../../src/db/database';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot, BotConfig } from '../../src/types';
 import { loadRealSnapshot, makeConfig } from '../_helpers';
 
 const SNAPSHOT: Snapshot = loadRealSnapshot();
 
-let db: Database;
+let db: SqliteDatabase;
 
 beforeEach(async () => {
-  db = new Database(':memory:');
+  db = new SqliteDatabase(':memory:');
   await db.initialize();
 });
 
-afterEach(() => {
-  db.close();
+afterEach(async () => {
+  await db.close();
 });
 
 describe('detectAlerts', () => {
-  it('returns empty when alerts disabled', () => {
+  it('returns empty when alerts disabled', async () => {
     const config = makeConfig({ alerts: { ...getDefaultConfig().alerts, enabled: false } as BotConfig['alerts'] });
-    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     expect(alerts).toHaveLength(0);
   });
 
-  it('detects no performance drops when all members are on track', () => {
+  it('detects no performance drops when all members are on track', async () => {
     const config = makeConfig();
-    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     // With the real snapshot, some members may trigger alerts
     // Just verify it returns an array of Alert objects
     expect(Array.isArray(alerts)).toBe(true);
@@ -39,9 +39,9 @@ describe('detectAlerts', () => {
     }
   });
 
-  it('detects new transfer members', () => {
+  it('detects new transfer members', async () => {
     const config = makeConfig();
-    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
     // Snapshot has transfer members: Zero, TheTengOne, Sairen, VitoHoow, Ceciria, Falkrum
     expect(transferAlerts.length).toBeGreaterThan(0);
@@ -53,12 +53,12 @@ describe('detectAlerts', () => {
     expect(zeroAlert!.message).toContain('Advent');
   });
 
-  it('deduplicates alerts via DB', () => {
+  it('deduplicates alerts via DB', async () => {
     const config = makeConfig();
-    const alerts1 = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts1 = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     // Record each alert once, then mark as sent
     for (const alert of alerts1) {
-      const id = db.recordAlert({
+      const id = await db.recordAlert({
         alert_type: alert.type,
         event_key: alert.eventKey,
         member_viewer_id: alert.memberViewerId,
@@ -66,25 +66,25 @@ describe('detectAlerts', () => {
         created_at: new Date().toISOString(),
         message: alert.message,
       });
-      db.markAlertSent(id);
+      await db.markAlertSent(id);
     }
 
     // Second detection should return fewer (all deduped)
-    const alerts2 = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts2 = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     expect(alerts2.length).toBe(0);
   });
 
-  it('detects demotion risk when tier data shows HIGH risk', () => {
+  it('detects demotion risk when tier data shows HIGH risk', async () => {
     const config = makeConfig();
     // The snapshot may or may not be HIGH risk — just verify no crash
-    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     const demotionAlerts = alerts.filter((a) => a.type === 'demotion_risk');
     expect(Array.isArray(demotionAlerts)).toBe(true);
   });
 
-  it('does not trigger performance drop for inactive members', () => {
+  it('does not trigger performance drop for inactive members', async () => {
     const config = makeConfig();
-    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     const perfAlerts = alerts.filter((a) => a.type === 'performance_drop');
     // Verify no stale/inactive member appears in performance alerts
     for (const alert of perfAlerts) {
@@ -93,7 +93,7 @@ describe('detectAlerts', () => {
     }
   });
 
-  it('returns empty when all alert types disabled', () => {
+  it('returns empty when all alert types disabled', async () => {
     const config = makeConfig({
       alerts: {
         ...getDefaultConfig().alerts,
@@ -107,39 +107,8 @@ describe('detectAlerts', () => {
         defaultRecipients: 'admin' as const,
       },
     });
-    const alerts = detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     expect(alerts).toHaveLength(0);
-  });
-});
-
-describe('deduplicateAlerts', () => {
-  it('removes already-sent alerts', () => {
-    const alerts = [
-      {
-        type: 'performance_drop' as const,
-        eventKey: 'performance_drop:2026-06-11:123',
-        memberViewerId: '123',
-        message: 'Test',
-        reportDate: '2026-06-11',
-      },
-    ];
-
-    // Not yet sent
-    expect(deduplicateAlerts(alerts, db)).toHaveLength(1);
-
-    // Record as sent
-    db.recordAlert({
-      alert_type: 'performance_drop',
-      event_key: 'performance_drop:2026-06-11:123',
-      member_viewer_id: '123',
-      report_date: '2026-06-11',
-      created_at: new Date().toISOString(),
-      message: 'Test',
-    });
-    db.markAlertSent(1);
-
-    // Now deduped
-    expect(deduplicateAlerts(alerts, db)).toHaveLength(0);
   });
 });
 
@@ -378,97 +347,97 @@ describe('quiet hours edge cases', () => {
     };
   }
 
-  it('suppresses alerts at exactly quiet hours start (hour 22)', () => {
+  it('suppresses alerts at exactly quiet hours start (hour 22)', async () => {
     // Arrange: quiet hours 22:00-06:00, current time is 22:30
     mockSystemTime(22, 30);
     const config = makeQuietConfig('22:00', '06:00');
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: transfer alert should be suppressed
     expect(alerts).toHaveLength(0);
   });
 
-  it('does NOT suppress alerts one minute before quiet hours start', () => {
+  it('does NOT suppress alerts one minute before quiet hours start', async () => {
     // Arrange: quiet hours 22:00-06:00, current time is 21:59
     mockSystemTime(21, 59);
     const config = makeQuietConfig('22:00', '06:00');
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: alerts should NOT be suppressed
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
     expect(transferAlerts.length).toBeGreaterThan(0);
   });
 
-  it('suppresses alerts during last quiet hour (hour 05)', () => {
+  it('suppresses alerts during last quiet hour (hour 05)', async () => {
     // Arrange: quiet hours 22:00-06:00, current time is 05:30
     mockSystemTime(5, 30);
     const config = makeQuietConfig('22:00', '06:00');
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert
     expect(alerts).toHaveLength(0);
   });
 
-  it('does NOT suppress alerts at first non-quiet hour (hour 06)', () => {
+  it('does NOT suppress alerts at first non-quiet hour (hour 06)', async () => {
     // Arrange: quiet hours 22:00-06:00, current time is 06:00 (end hour, exclusive)
     mockSystemTime(6, 0);
     const config = makeQuietConfig('22:00', '06:00');
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: alerts should NOT be suppressed (hour 06 is NOT quiet, end is exclusive)
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
     expect(transferAlerts.length).toBeGreaterThan(0);
   });
 
-  it('suppresses alerts during wrap-around midnight (hour 01 with 23:00-06:00)', () => {
+  it('suppresses alerts during wrap-around midnight (hour 01 with 23:00-06:00)', async () => {
     // Arrange: quiet hours 23:00-06:00, current time is 01:00
     mockSystemTime(1, 0);
     const config = makeQuietConfig('23:00', '06:00');
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert
     expect(alerts).toHaveLength(0);
   });
 
-  it('does NOT suppress alerts before wrap-around start (hour 22 with 23:00-06:00)', () => {
+  it('does NOT suppress alerts before wrap-around start (hour 22 with 23:00-06:00)', async () => {
     // Arrange: quiet hours 23:00-06:00, current time is 22:00
     mockSystemTime(22, 0);
     const config = makeQuietConfig('23:00', '06:00');
     const snapshot = makeSnapshotWithTransfer();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: 22 is before 23, so NOT quiet
     const transferAlerts = alerts.filter((a) => a.type === 'new_transfer');
     expect(transferAlerts.length).toBeGreaterThan(0);
   });
 
-  it('does not throw when suppressing alerts during quiet hours (log is emitted)', () => {
+  it('does not throw when suppressing alerts during quiet hours (log is emitted)', async () => {
     // Arrange: quiet hours 22:00-06:00, current time is 23:00
     mockSystemTime(23, 0);
     const config = makeQuietConfig('22:00', '06:00');
     const snapshot = makeSnapshotWithTransfer();
 
     // Act & Assert: should not throw (log.info is called internally)
-    expect(() => detectAlerts(computeMembers(snapshot, config), snapshot, config, db)).not.toThrow();
+    await expect(detectAlerts(computeMembers(snapshot, config), snapshot, config, db)).resolves.not.toThrow();
     // The function returns empty during quiet hours
-    expect(detectAlerts(computeMembers(snapshot, config), snapshot, config, db)).toHaveLength(0);
+    expect(await detectAlerts(computeMembers(snapshot, config), snapshot, config, db)).toHaveLength(0);
   });
 });
 
@@ -608,25 +577,25 @@ describe('detection edge cases', () => {
     };
   }
 
-  it('returns no alerts for empty snapshot', () => {
+  it('returns no alerts for empty snapshot', async () => {
     // Arrange
     const config = makeConfig();
     const snapshot = makeEmptySnapshot();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: no members → no performance_drop, no streak_break, no transfer
     expect(alerts).toHaveLength(0);
   });
 
-  it('detects alerts correctly for single-member snapshot', () => {
+  it('detects alerts correctly for single-member snapshot', async () => {
     // Arrange
     const config = makeConfig();
     const snapshot = makeSingleMemberSnapshot();
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: should return an array (may or may not have alerts depending on data)
     expect(Array.isArray(alerts)).toBe(true);
@@ -641,7 +610,7 @@ describe('detection edge cases', () => {
     }
   });
 
-  it('detects performance_drop for all members at zero fans (threshold=1)', () => {
+  it('detects performance_drop for all members at zero fans (threshold=1)', async () => {
     // Arrange: 3 members with 10 days of steady gains, then 0 today
     // Rolling avg = 100000/day, today gain = 0, threshold = 1%
     // 0 < 100000 * 0.01 = 1000 → triggers performance_drop
@@ -661,7 +630,7 @@ describe('detection edge cases', () => {
     const snapshot = makeAllZeroFansSnapshot(3);
 
     // Act
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
 
     // Assert: each member should trigger a performance_drop
     const perfAlerts = alerts.filter((a) => a.type === 'performance_drop');

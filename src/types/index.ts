@@ -249,6 +249,23 @@ export interface BotConfig {
     maxFiles: number;
     console: boolean;
   };
+
+  database: {
+    backend: 'sqlite' | 'mysql';
+    sqlite: {
+      path: string;
+      autoSaveMs: number;
+    };
+    mysql: {
+      host: string;
+      port: number;
+      database: string;
+      user: string;
+      password: string;
+      connectionLimit: number;
+      ssl: boolean;
+    };
+  };
 }
 
 // ============================================================
@@ -267,7 +284,7 @@ export interface ScheduleRunRow {
   report_date: string;
   scheduled_at: string;
   sent_at: string | null;
-  status: 'pending' | 'sent' | 'failed';
+  status: 'pending' | 'sent' | 'failed' | 'skipped';
   is_catch_up: boolean;
   target_jid: string;
   error_message: string | null;
@@ -281,7 +298,7 @@ export interface AlertEventRow {
   report_date: string;
   created_at: string;
   sent_at: string | null;
-  status: 'pending' | 'sent' | 'deduped';
+  status: 'pending' | 'sent' | 'suppressed';
   message: string;
 }
 

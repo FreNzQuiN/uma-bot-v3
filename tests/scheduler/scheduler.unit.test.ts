@@ -1,14 +1,14 @@
 import { Scheduler } from '../../src/scheduler/scheduler';
 import { CatchUpManager } from '../../src/scheduler/catchup';
 import { getCollidingTypes } from '../../src/scheduler/helpers';
-import { Database } from '../../src/db/database';
+import { SqliteDatabase } from '../../src/db/database';
 import { getDataDate } from '../../src/utils/timezone';
 import { makeConfig } from '../_helpers';
 
-let db: Database;
+let db: SqliteDatabase;
 
 beforeEach(async () => {
-  db = new Database(':memory:');
+  db = new SqliteDatabase(':memory:');
   await db.initialize();
 });
 
@@ -320,7 +320,7 @@ describe('Scheduler', () => {
 
       // Record a successful daily run for today (use JST date like the scheduler does)
       const today = getDataDate();
-      db.recordRun({
+      await db.recordRun({
         report_type: 'daily',
         report_date: today,
         scheduled_at: `${today}T22:05:00.000Z`,
@@ -349,7 +349,7 @@ describe('Scheduler', () => {
       const todayStr = getDataDate();
       const [ty, tm, td] = todayStr.split('-').map(Number);
       const yesterday = getDataDate(new Date(Date.UTC(ty, tm - 1, td - 1, 12, 0, 0)));
-      db.recordRun({
+      await db.recordRun({
         report_type: 'daily',
         report_date: yesterday,
         scheduled_at: `${yesterday}T22:05:00.000Z`,
@@ -389,7 +389,7 @@ describe('Scheduler', () => {
 
       // Record daily as sent today (use JST date like the scheduler does)
       const today = getDataDate();
-      db.recordRun({
+      await db.recordRun({
         report_type: 'daily',
         report_date: today,
         scheduled_at: `${today}T22:05:00.000Z`,
@@ -418,15 +418,17 @@ describe('Scheduler', () => {
 
 describe('CatchUpManager', () => {
   describe('detectMissedReports', () => {
-    it('returns empty when no runs recorded and catch-up disabled', () => {
+    it('detects missed reports even when catch-up is disabled', async () => {
       const config = makeConfig({ catchUp: { enabled: false, maxReportsPerStartup: 10 } });
       const catchUp = new CatchUpManager(db, () => config);
 
-      const missed = catchUp.detectMissedReports();
-      expect(missed).toEqual([]);
+      const missed = await catchUp.detectMissedReports();
+      // Detection always runs regardless of catchUp.enabled.
+      // With no prior runs, all enabled report types are missed.
+      expect(missed).toEqual(expect.arrayContaining(['daily', 'weekly', 'monthly']));
     });
 
-    it('detects missed daily report when no previous run', () => {
+    it('detects missed daily report when no previous run', async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
         schedule: {
@@ -437,19 +439,19 @@ describe('CatchUpManager', () => {
       });
       const catchUp = new CatchUpManager(db, () => config);
 
-      const missed = catchUp.detectMissedReports();
+      const missed = await catchUp.detectMissedReports();
       // Should include 'daily' if daily is enabled
       expect(missed).toContain('daily');
     });
 
-    it('does not detect missed reports when last run is today', () => {
+    it('does not detect missed reports when last run is today', async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
         groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
       });
 
       const today = getDataDate();
-      db.recordRun({
+      await db.recordRun({
         report_type: 'daily',
         report_date: today,
         scheduled_at: `${today}T22:05:00.000Z`,
@@ -460,11 +462,11 @@ describe('CatchUpManager', () => {
       });
 
       const catchUp = new CatchUpManager(db, () => config);
-      const missed = catchUp.detectMissedReports();
+      const missed = await catchUp.detectMissedReports();
       expect(missed).not.toContain('daily');
     });
 
-    it('handles unsorted weekly days in cross-month fallback', () => {
+    it('handles unsorted weekly days in cross-month fallback', async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
         schedule: {
@@ -477,7 +479,7 @@ describe('CatchUpManager', () => {
       // No run recorded — should detect weekly as missed
       // and correctly identify the last scheduled day as 28 (max), not 21 (last element)
       const catchUp = new CatchUpManager(db, () => config);
-      const missed = catchUp.detectMissedReports();
+      const missed = await catchUp.detectMissedReports();
       expect(missed).toContain('weekly');
     });
   });
@@ -519,7 +521,7 @@ describe('CatchUpManager', () => {
       await catchUp.executeCatchUp(sendReport);
 
       // Verify runs were recorded
-      const dailyRun = db.getLastSuccessfulRun('daily');
+      const dailyRun = await db.getLastSuccessfulRun('daily');
       // If daily was missed and sent, it should be recorded
       if (dailyRun) {
         expect(dailyRun.status).toBe('sent');

@@ -1,17 +1,24 @@
 /**
- * SQLite database for Uma Club Bot v3 operational state.
+ * SQLite database adapter for Uma Club Bot v3.
  *
  * Uses sql.js (pure WASM, no native deps).
- * Handles settings, schedule runs, alert events, member history, rank history.
+ * Implements IDatabase for pluggable backend support.
  */
 
 import type { ScheduleRunRow, MemberHistoryRow, RankHistoryRow } from '../types';
-import initSqlJs, { Database as SqlJsDatabase, QueryExecResult } from 'sql.js';
+import type {
+  IDatabase,
+  ScheduleRunInsert,
+  AlertEventInsert,
+  MemberHistoryInsert,
+  RankHistoryInsert,
+} from './types';
+import initSqlJs, { Database as SqlJsDatabase, QueryExecResult, BindParams } from 'sql.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import { log } from '../utils/logger';
 
-export class Database {
+export class SqliteDatabase implements IDatabase {
   private db: SqlJsDatabase | null = null;
   private dbPath: string;
   private saveTimer: ReturnType<typeof setInterval> | null = null;
@@ -47,7 +54,9 @@ export class Database {
 
     if (this.dbPath !== ':memory:') {
       this.saveTimer = setInterval(() => {
-        this.save();
+        this.save().catch((err) => {
+          log.error('DB', `Auto-save failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
       }, this.autoSaveMs);
     }
   }
@@ -59,7 +68,7 @@ export class Database {
     return this.db;
   }
 
-  private execSql(sql: string, params?: unknown[]): QueryExecResult[] {
+  private execSql(sql: string, params?: BindParams): QueryExecResult[] {
     try {
       const result = this.ensureDb().exec(sql, params);
       this.dirty = true;
@@ -71,7 +80,7 @@ export class Database {
     }
   }
 
-  private runSql(sql: string, params?: unknown[]): void {
+  private runSql(sql: string, params?: BindParams): void {
     try {
       this.ensureDb().run(sql, params);
       this.dirty = true;
@@ -82,20 +91,21 @@ export class Database {
     }
   }
 
-  /**
-   * Execute raw SQL without error logging. Intended for transaction control
-   * (BEGIN/COMMIT/ROLLBACK). sql.js is synchronous — no interleaving possible.
-   */
-  rawRun(sql: string, params?: unknown[]): void {
-    this.ensureDb().run(sql, params);
+  private rawRun(sql: string, params?: BindParams): void {
+    try {
+      this.ensureDb().run(sql, params);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error('DB', `Transaction command failed: ${msg} | SQL: ${sql}`);
+      throw err;
+    }
   }
 
   private createTables(): void {
-    const db = this.ensureDb();
-
+    // NOTE: settings table exists for future use — no IDatabase methods read/write it yet
     this.runSql(`
       CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
+        \`key\` TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -161,12 +171,7 @@ export class Database {
     this.runSql('CREATE INDEX IF NOT EXISTS idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)');
   }
 
-  // ============================================================
-  // Schedule runs
-  // ============================================================
-
-  getLastSuccessfulRun(reportType: string): ScheduleRunRow | null {
-    const db = this.ensureDb();
+async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     const result = this.execSql(
       'SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1',
       [reportType, 'sent']
@@ -177,17 +182,18 @@ export class Database {
     return this.rowToScheduleRun(result[0]);
   }
 
-  recordRun(run: {
-    report_type: string;
-    report_date: string;
-    scheduled_at: string;
-    sent_at?: string | null;
-    status: string;
-    is_catch_up: boolean;
-    target_jid: string;
-    error_message?: string | null;
-  }): number {
-    const db = this.ensureDb();
+  async getLastRun(reportType: string): Promise<ScheduleRunRow | null> {
+    const result = this.execSql(
+      'SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1',
+      [reportType, 'sent', 'skipped']
+    );
+    if (result.length === 0 || result[0].values.length === 0) {
+      return null;
+    }
+    return this.rowToScheduleRun(result[0]);
+  }
+
+  async recordRun(run: ScheduleRunInsert): Promise<number> {
     this.runSql(
       `INSERT INTO schedule_runs
         (report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message)
@@ -207,8 +213,7 @@ export class Database {
     return result[0].values[0][0] as number;
   }
 
-  updateRunStatus(id: number, status: string, errorMessage?: string): void {
-    const db = this.ensureDb();
+  async updateRunStatus(id: number, status: string, errorMessage?: string): Promise<void> {
     if (status === 'sent') {
       const now = new Date().toISOString();
       this.runSql(
@@ -223,12 +228,7 @@ export class Database {
     }
   }
 
-  // ============================================================
-  // Alert events
-  // ============================================================
-
-  isAlertAlreadySent(eventKey: string): boolean {
-    const db = this.ensureDb();
+async isAlertAlreadySent(eventKey: string): Promise<boolean> {
     const result = this.execSql(
       'SELECT id FROM alert_events WHERE event_key = ? AND status IN (?, ?)',
       [eventKey, 'sent', 'suppressed']
@@ -236,21 +236,24 @@ export class Database {
     return result.length > 0 && result[0].values.length > 0;
   }
 
-  recordAlert(alert: {
-    alert_type: string;
-    event_key: string;
-    member_viewer_id: string;
-    report_date: string;
-    created_at: string;
-    status?: string;
-    message: string;
-  }): number {
-    const db = this.ensureDb();
+  async getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>> {
+    if (eventKeys.length === 0) return new Set();
+    const placeholders = eventKeys.map(() => '?').join(',');
+    const result = this.execSql(
+      `SELECT event_key FROM alert_events WHERE event_key IN (${placeholders}) AND status IN (?, ?)`,
+      [...eventKeys, 'sent', 'suppressed']
+    );
+    if (result.length === 0) return new Set();
+    return new Set(result[0].values.map((row) => row[0] as string));
+  }
 
-    // Check if this event_key already exists
+  async recordAlert(alert: AlertEventInsert): Promise<number> {
+    // NOTE: This check-then-insert is not atomic (TOCTOU). Safe in single-process
+    // mode due to SQLite file-level locking. For multi-process scenarios, use the
+    // MySQL adapter's INSERT IGNORE pattern instead.
     const existing = this.execSql('SELECT id FROM alert_events WHERE event_key = ?', [alert.event_key]);
     if (existing.length > 0 && existing[0].values.length > 0) {
-      return existing[0].values[0][0] as number; // return existing ID
+      return existing[0].values[0][0] as number;
     }
 
     this.runSql(
@@ -271,8 +274,7 @@ export class Database {
     return result[0].values[0][0] as number;
   }
 
-  markAlertSent(id: number): void {
-    const db = this.ensureDb();
+  async markAlertSent(id: number): Promise<void> {
     const now = new Date().toISOString();
     this.runSql(
       'UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?',
@@ -280,21 +282,7 @@ export class Database {
     );
   }
 
-  // ============================================================
-  // Member history
-  // ============================================================
-
-  upsertMember(member: {
-    viewer_id: number;
-    trainer_name: string;
-    circle_id: number;
-    first_seen: string;
-    last_seen: string;
-    previous_circle_id?: number | null;
-    previous_circle_name?: string | null;
-    status?: string;
-  }): void {
-    const db = this.ensureDb();
+async upsertMember(member: MemberHistoryInsert): Promise<void> {
     this.runSql(
       `INSERT INTO member_history
         (viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status)
@@ -319,8 +307,7 @@ export class Database {
     );
   }
 
-  getMembers(circleId: number): MemberHistoryRow[] {
-    const db = this.ensureDb();
+  async getMembers(circleId: number): Promise<MemberHistoryRow[]> {
     const result = this.execSql(
       'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE circle_id = ? ORDER BY trainer_name',
       [circleId]
@@ -329,8 +316,7 @@ export class Database {
     return this.rowsToMemberHistory(result[0]);
   }
 
-  getMember(viewerId: number): MemberHistoryRow | null {
-    const db = this.ensureDb();
+  async getMember(viewerId: number): Promise<MemberHistoryRow | null> {
     const result = this.execSql(
       'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE viewer_id = ?',
       [viewerId]
@@ -339,20 +325,7 @@ export class Database {
     return this.rowToMemberHistory(result[0]);
   }
 
-  // ============================================================
-  // Rank history
-  // ============================================================
-
-  saveRankHistory(row: {
-    date: string;
-    circle_id: number;
-    monthly_rank: number;
-    monthly_point: number;
-    club_rank: number;
-    fans_to_next_tier: number;
-    fans_to_lower_tier: number;
-  }): void {
-    const db = this.ensureDb();
+async saveRankHistory(row: RankHistoryInsert): Promise<void> {
     this.runSql(
       `INSERT OR REPLACE INTO rank_history
         (date, circle_id, monthly_rank, monthly_point, club_rank, fans_to_next_tier, fans_to_lower_tier)
@@ -369,8 +342,7 @@ export class Database {
     );
   }
 
-  getRankHistory(circleId: number, days: number): RankHistoryRow[] {
-    const db = this.ensureDb();
+  async getRankHistory(circleId: number, days: number): Promise<RankHistoryRow[]> {
     const result = this.execSql(
       `SELECT date, circle_id, monthly_rank, monthly_point, club_rank, fans_to_next_tier, fans_to_lower_tier FROM rank_history
        WHERE circle_id = ?
@@ -382,11 +354,24 @@ export class Database {
     return this.rowsToRankHistory(result[0]);
   }
 
-  // ============================================================
-  // Persistence
-  // ============================================================
+async transaction<T>(fn: () => Promise<T>): Promise<T> {
+    this.ensureDb();
+    this.rawRun('BEGIN');
+    try {
+      const result = await fn();
+      this.rawRun('COMMIT');
+      return result;
+    } catch (err) {
+      try {
+        this.rawRun('ROLLBACK');
+      } catch (rollbackErr) {
+        log.error('DB', `Rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+      }
+      throw err;
+    }
+  }
 
-  save(): void {
+async save(): Promise<void> {
     if (!this.dirty) return;
     const db = this.ensureDb();
     const data = db.export();
@@ -395,25 +380,21 @@ export class Database {
     this.dirty = false;
   }
 
-  close(): void {
+  async close(): Promise<void> {
     if (this.saveTimer) {
       clearInterval(this.saveTimer);
       this.saveTimer = null;
     }
     if (this.db) {
       if (this.dbPath !== ':memory:') {
-        this.save();
+        await this.save();
       }
       this.db.close();
       this.db = null;
     }
   }
 
-  // ============================================================
-  // Helpers
-  // ============================================================
-
-  private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): ScheduleRunRow | null {
+private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): ScheduleRunRow | null {
     if (result.values.length === 0) return null;
     const obj: Record<string, unknown> = {};
     result.columns.forEach((col, i) => {
@@ -487,3 +468,7 @@ export class Database {
     );
   }
 }
+
+// Backward-compat aliases — will be removed once all consumers migrate to IDatabase
+export type Database = SqliteDatabase;
+export const Database = SqliteDatabase;

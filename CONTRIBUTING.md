@@ -36,7 +36,6 @@ src/                    # TypeScript source (target: ES2022, CommonJS)
 tests/                  # Jest tests (mirrors src/ structure)
   _helpers/             # Shared test utilities
   examples/             # Real snapshot JSON fixtures
-  bugs/                 # Regression tests for specific bugs
 ```
 
 ## Code Conventions
@@ -112,6 +111,74 @@ const sorted = [...members].sort((a, b) => b.monthlyGain - a.monthlyGain);
 
 **Don't retrofit.** When touching a file, bring its documentation to the same depth as `data/daily-fans.ts` for non-trivial logic. Don't rewrite files you're not changing.
 
+### Anti-AI-Slop Comment Rules
+
+These rules catch comments that look like they were generated, not written. If a comment follows an AI pattern, delete it.
+
+**Section divider comments — don't:**
+```typescript
+// ✗ Bad — AI separator pattern
+// ============================================================
+// Zod schema for validation
+// ============================================================
+
+// ✗ Bad — another AI separator pattern
+// ── Delivery ──────────────────────────────────────────────
+
+// ✓ Good — use blank lines instead, or nothing at all
+```
+Section dividers are noise. The file-level JSDoc already describes the module's purpose. If you need visual separation, use a single blank line. Function names and blank lines provide enough structure.
+
+**Redundant "what" comments — don't:**
+```typescript
+// ✗ Bad — restates what the next line does
+// Create directories recursively if they don't exist
+fs.mkdirSync(dir, { recursive: true });
+
+// ✗ Bad
+// Save to disk
+saveSnapshot(snapshot, dataDay, resolvedRoot);
+
+// ✗ Bad
+// Handle incoming messages
+sock.ev.on('messages.upsert', ...);
+
+// ✓ Good — explains WHY, not WHAT
+// Write to temp file then rename for atomicity.
+// This prevents corrupt files if the process crashes mid-write.
+const tmpPath = filePath + '.tmp';
+```
+
+**Phase/step comments — don't (usually):**
+```typescript
+// ✗ Bad — just labels the obvious
+// --- Performance drop ---
+if (config.alerts.performanceDrop.enabled) { ... }
+
+// ✗ Bad
+// --- Phase 2: Batch pre-fetch existing keys (1 query instead of N) ---
+// Phase labels are useful only when they explain a performance or architectural decision.
+// "1 query instead of N" is good. "Phase 2" alone is not.
+```
+
+**The "would a human write this?" test:**
+
+Before writing any comment, ask:
+1. **Would a human developer write this comment?** If not, don't write it.
+2. **Does the code already say this?** If yes, delete the comment.
+3. **Does this explain WHY?** If yes, keep it. If it only explains WHAT, delete it.
+4. **Is this a workaround for a library bug?** If yes, explain the bug and link to it.
+5. **Is this documenting a business rule?** If yes, keep it — but write it in plain language.
+
+**Summary of rules:**
+1. **No section dividers.** Use blank lines.
+2. **No "what" comments.** The code says what it does.
+3. **"Why" comments only.** Explain reasoning, not actions.
+4. **No phase labels** unless they explain a performance decision.
+5. **Write like a human.** No AI filler ("The following function...", "This method is responsible for...").
+6. **No restating parameter names.** `@param snapshot - The snapshot data` is noise.
+7. **Keep comments that explain non-obvious behavior**, workarounds, or business rules.
+
 ### Config
 
 - All config validated with Zod at load time. Invalid config throws immediately.
@@ -130,7 +197,7 @@ const sorted = [...members].sort((a, b) => b.monthlyGain - a.monthlyGain);
 - Coverage excludes: `src/index.ts`, `src/types/**`, `src/api/uma-moe.ts`.
 
 ```bash
-npm test                              # all 1389 tests
+npm test                              # all tests
 npx jest tests/reports/daily/daily.unit.test.ts  # single file
 npx jest -t "test name pattern"       # single test
 npm run test:coverage                 # with coverage report

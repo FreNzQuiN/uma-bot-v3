@@ -246,6 +246,45 @@ describe('REST API', () => {
   });
 });
 
+describe('Health endpoint with DB failure', () => {
+  let failingDbServer: ApiServer;
+  const FAIL_DB_PORT = 18767;
+
+  beforeAll(async () => {
+    const mockDb = {
+      getLastSuccessfulRun: jest.fn().mockRejectedValue(new Error('DB connection failed')),
+      getLastRun: jest.fn().mockRejectedValue(new Error('DB connection failed')),
+    };
+    failingDbServer = new ApiServer(FAIL_DB_PORT, () => SNAPSHOT, config, undefined, mockDb as any);
+    await failingDbServer.start();
+  });
+
+  afterAll(async () => {
+    await failingDbServer.stop();
+  });
+
+  it('returns 503 with dbConnected false when DB fails', async () => {
+    const res = await new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
+      http.get(`http://127.0.0.1:${FAIL_DB_PORT}/health`, (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: JSON.parse(data),
+          });
+        });
+      }).on('error', reject);
+    });
+
+    expect(res.status).toBe(503);
+    expect(res.body.success).toBe(false);
+    const data = res.body.data as Record<string, unknown>;
+    expect(data.dbConnected).toBe(false);
+    expect(data.status).toBe('degraded');
+  });
+});
+
 describe('createResponse', () => {
   it('writes correct status and JSON', () => {
     const mockRes = {

@@ -313,8 +313,8 @@ Terakhir sync: 11/6 22:00"
 });
 
 describe('Golden-file: Members Report', () => {
-  it('matches expected output without db', () => {
-    const report = generateMembersReport(snapshot, config, members);
+  it('matches expected output without db', async () => {
+    const report = await generateMembersReport(snapshot, config, members);
     expect(report).toMatchInlineSnapshot(`
 "👥 *Daftar Anggota*
 

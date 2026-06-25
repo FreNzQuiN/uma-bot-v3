@@ -285,40 +285,40 @@ describe('ReportOrchestrator — alignSnapshotToMonth', () => {
 // ============================================================
 
 describe('ReportOrchestrator — generateReportString', () => {
-  it('returns report string for known type', () => {
+  it('returns report string for known type', async () => {
     const { orch } = makeOrchestrator();
     const snapshot = loadRealSnapshot();
     const config = makeConfig();
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = orch.generateReportString('daily', snapshot, config, members);
+    const result = await orch.generateReportString('daily', snapshot, config, members);
 
     expect(result).toBeDefined();
     expect(typeof result).toBe('string');
     expect(result!.length).toBeGreaterThan(0);
   });
 
-  it('returns undefined for unknown type', () => {
+  it('returns undefined for unknown type', async () => {
     const { orch } = makeOrchestrator();
     const snapshot = loadRealSnapshot();
     const config = makeConfig();
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = orch.generateReportString('nonexistent', snapshot, config, members);
+    const result = await orch.generateReportString('nonexistent', snapshot, config, members);
 
     expect(result).toBeUndefined();
   });
 
-  it('inserts catch-up tag below title when isCatchUp is true', () => {
+  it('inserts catch-up tag below title when isCatchUp is true', async () => {
     const { orch } = makeOrchestrator();
     const snapshot = loadRealSnapshot();
     const config = makeConfig();
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = orch.generateReportString('daily', snapshot, config, members, { isCatchUp: true });
+    const result = await orch.generateReportString('daily', snapshot, config, members, { isCatchUp: true });
 
     expect(result).toBeDefined();
     expect(result).toContain('*⚠️ Catch-up*');
@@ -328,14 +328,14 @@ describe('ReportOrchestrator — generateReportString', () => {
     expect(lines[2]).toBe('*⚠️ Catch-up*');
   });
 
-  it('does not insert catch-up tag when isCatchUp is false', () => {
+  it('does not insert catch-up tag when isCatchUp is false', async () => {
     const { orch } = makeOrchestrator();
     const snapshot = loadRealSnapshot();
     const config = makeConfig();
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = orch.generateReportString('daily', snapshot, config, members, { isCatchUp: false });
+    const result = await orch.generateReportString('daily', snapshot, config, members, { isCatchUp: false });
 
     expect(result).toBeDefined();
     expect(result).not.toContain('Catch-up');
@@ -362,7 +362,7 @@ describe('ReportOrchestrator — generateCombinedReportString', () => {
 // ============================================================
 
 // Module-level mock for detectAlerts — controlled per test via mockReturnValue
-const mockDetectAlerts = jest.fn().mockReturnValue([]);
+const mockDetectAlerts = jest.fn().mockResolvedValue([]);
 jest.mock('../../src/alerts/alerts', () => {
   const actual = jest.requireActual('../../src/alerts/alerts');
   return { ...actual, detectAlerts: (...args: any[]) => mockDetectAlerts(...args) };
@@ -379,7 +379,7 @@ const sampleAlert: Alert = {
 describe('ReportOrchestrator — processAlertsForReport', () => {
   beforeEach(() => {
     mockDetectAlerts.mockReset();
-    mockDetectAlerts.mockReturnValue([]);
+    mockDetectAlerts.mockResolvedValue([]);
   });
 
   it('returns empty array when no alerts detected', async () => {
@@ -393,11 +393,11 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
   });
 
   it('records each alert in DB when alerts exist', async () => {
-    const mockRecordAlert = jest.fn().mockReturnValue(1);
-    const mockMarkAlertSent = jest.fn();
+    const mockRecordAlert = jest.fn().mockResolvedValue(1);
+    const mockMarkAlertSent = jest.fn().mockResolvedValue(undefined);
     const { orch } = makeOrchestrator();
     (orch as any).db = { recordAlert: mockRecordAlert, markAlertSent: mockMarkAlertSent };
-    mockDetectAlerts.mockReturnValue([sampleAlert]);
+    mockDetectAlerts.mockResolvedValue([sampleAlert]);
 
     await orch.processAlertsForReport('daily', loadRealSnapshot(), makeConfig(), [] as any);
 
@@ -416,8 +416,8 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
       waClient: makeWaClient({ sendMessage: mockSendMessage }),
       config,
     });
-    (orch as any).db = { recordAlert: jest.fn().mockReturnValue(1), markAlertSent: jest.fn() };
-    mockDetectAlerts.mockReturnValue([sampleAlert]);
+    (orch as any).db = { recordAlert: jest.fn().mockResolvedValue(1), markAlertSent: jest.fn().mockResolvedValue(undefined) };
+    mockDetectAlerts.mockResolvedValue([sampleAlert]);
 
     const result = await orch.processAlertsForReport('daily', loadRealSnapshot(), config, [] as any, { collectAlerts: true });
 
@@ -435,8 +435,8 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
 
   it('continues when alert processing encounters an error', async () => {
     const { orch } = makeOrchestrator();
-    (orch as any).db = { recordAlert: jest.fn().mockImplementation(() => { throw new Error('DB error'); }), markAlertSent: jest.fn() };
-    mockDetectAlerts.mockReturnValue([sampleAlert]);
+    (orch as any).db = { recordAlert: jest.fn().mockImplementation(async () => { throw new Error('DB error'); }), markAlertSent: jest.fn().mockResolvedValue(undefined) };
+    mockDetectAlerts.mockResolvedValue([sampleAlert]);
 
     // Should not throw — error is caught internally
     const result = await orch.processAlertsForReport('daily', loadRealSnapshot(), makeConfig(), [] as any);

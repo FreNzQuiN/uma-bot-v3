@@ -485,7 +485,4 @@ Count total inheritance records and support card accounts.
 8. **Veterans endpoint requires UUID** — not numeric viewer_id. Returns 400 with numeric IDs
 9. **`/api/tasks` is listed in health but returns 404** — likely deprecated or internal-only
 
----
 
-*Document generated from live API probing via Playwright token harvest.*
-*22 endpoints verified (21 working + 1 with known backend bug).*

@@ -9,10 +9,6 @@ import type { BotConfig } from '../types';
 import { getDefaultConfig, saveConfig } from '../config';
 import { formatNumber } from '../utils/format';
 
-// ============================================================
-// /setreq — Set member requirements
-// ============================================================
-
 export function handleSetReq(
   args: string[],
   config: BotConfig
@@ -57,10 +53,6 @@ export function handleSetReq(
   };
 }
 
-// ============================================================
-// /config — Show current configuration
-// ============================================================
-
 export function handleConfig(config: BotConfig): string {
   const lines = [
     '⚙️ *System Config*',
@@ -96,10 +88,6 @@ export function handleConfig(config: BotConfig): string {
 
   return lines.join('\n');
 }
-
-// ============================================================
-// /status — Show bot status
-// ============================================================
 
 export function handleStatus(
   config: BotConfig,
@@ -150,10 +138,6 @@ export function handleStatus(
   return lines.join('\n');
 }
 
-// ============================================================
-// Generic toggle helper
-// ============================================================
-
 function handleToggle(
   args: string[],
   config: BotConfig,
@@ -182,10 +166,6 @@ function handleToggle(
   return { config, message: `Usage: ${usage}` };
 }
 
-// ============================================================
-// /catchup on|off — Enable/disable catch-up reports
-// ============================================================
-
 export function handleCatchUp(
   args: string[],
   config: BotConfig
@@ -208,10 +188,6 @@ export function handleCatchUp(
     '/catchup on atau /catchup off'
   );
 }
-
-// ============================================================
-// /alerts on|off — Enable/disable alerts
-// ============================================================
 
 export function handleAlerts(
   args: string[],

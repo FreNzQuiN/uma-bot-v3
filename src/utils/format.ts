@@ -5,10 +5,6 @@
  * Used by reports, alerts, and whatsapp modules.
  */
 
-// ============================================================
-// Number formatting
-// ============================================================
-
 /**
  * Format a number for compact display in reports.
  *
@@ -31,10 +27,6 @@ export function formatNumber(n: number): string {
   return String(n);
 }
 
-// ============================================================
-// Name sanitization
-// ============================================================
-
 /**
  * Sanitize a trainer name for safe embedding in WhatsApp formatted messages.
  * Escapes WhatsApp formatting characters (*, _, ~) to prevent injection.
@@ -46,17 +38,13 @@ export function sanitizeName(name: string): string {
     .replace(/~/g, '-');
 }
 
-// ============================================================
-// Message splitting
-// ============================================================
-
 /**
  * Split a message into parts that fit within maxLength.
  * Splits at newline boundaries and adds "Part X/Y" markers.
  *
  * Uses a two-pass approach:
  * 1. Split content into chunks that fit (maxLength - markerOverhead)
- * 2. Prepend "Part X/Y\n" markers
+ * 2. Prepend "Part X/Y" markers
  *
  * The marker overhead is estimated at 20 chars (covers "Part XX/XX\n").
  */

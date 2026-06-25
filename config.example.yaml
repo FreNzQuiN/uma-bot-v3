@@ -155,3 +155,24 @@ logging:
   maxFiles: 3
   # Also output to console
   console: true
+
+# ============================================================
+# Database backend
+# ============================================================
+database:
+  # Backend: 'sqlite' (default, zero-config) or 'mysql'
+  backend: sqlite
+  sqlite:
+    path: data/bot.db
+    autoSaveMs: 30000
+  # MySQL/TiDB configuration (only used when backend: mysql)
+  # Minimum MySQL version: 8.0.31 (for CREATE INDEX compatibility)
+  # TiDB Cloud is fully supported (auto-detected, no version check enforced)
+  # mysql:
+  #   host: localhost
+  #   port: 3306
+  #   database: uma_club_bot
+  #   user: root
+  #   password: ''
+  #   connectionLimit: 5
+  #   ssl: false          # true for TiDB Cloud, false for local MySQL

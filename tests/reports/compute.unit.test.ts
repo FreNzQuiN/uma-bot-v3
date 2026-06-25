@@ -8,7 +8,7 @@
 import { Snapshot, ComputedMember, BotConfig } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 import { computeMembers } from '../../src/reports/compute';
-import { Database } from '../../src/db/database';
+import { SqliteDatabase } from '../../src/db/database';
 import { loadRealSnapshot } from '../_helpers';
 
 // Load real snapshot
@@ -372,10 +372,10 @@ describe('computeMembers', () => {
   // ----------------------------------------------------------
 
   describe('DB cross-check: left member detection', () => {
-    let db: Database;
+    let db: SqliteDatabase;
 
     beforeEach(async () => {
-      db = new Database(':memory:');
+      db = new SqliteDatabase(':memory:');
       await db.initialize();
     });
 

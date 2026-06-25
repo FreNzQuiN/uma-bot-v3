@@ -8,18 +8,14 @@
 
 import cron, { ScheduledTask } from 'node-cron';
 import type { BotConfig } from '../types';
-import type { Database } from '../db/database';
+import type { IDatabase } from '../db/types';
 import { getDataDate, getDataDay } from '../utils/timezone';
 import { log } from '../utils/logger';
 import { getCollidingTypes, isScheduledToday } from './helpers';
 
-// ============================================================
-// Scheduler
-// ============================================================
-
 export class Scheduler {
   private getConfig: () => BotConfig;
-  private db: Database;
+  private db: IDatabase;
   private onDataFetch?: () => Promise<void>;
   private onReport: (type: string, options?: { offset?: number }) => Promise<unknown>;
   private onCombinedReport?: (types: string[], options?: { offset?: number }) => Promise<void>;
@@ -27,7 +23,7 @@ export class Scheduler {
 
   constructor(
     getConfig: () => BotConfig,
-    db: Database,
+    db: IDatabase,
     onReport?: (type: string, options?: { offset?: number }) => Promise<unknown>,
     onCombinedReport?: (types: string[], options?: { offset?: number }) => Promise<void>,
     onDataFetch?: () => Promise<void>
@@ -57,7 +53,7 @@ export class Scheduler {
     const today = getDataDate();
 
     // Check if already sent today (catch-up or previous scheduler run)
-    const lastRun = this.db.getLastSuccessfulRun(reportType);
+    const lastRun = await this.db.getLastSuccessfulRun(reportType);
     if (lastRun && lastRun.report_date === today) {
       log.debug('Scheduler', `${reportType} already sent today, skipping`);
       return;
@@ -65,7 +61,7 @@ export class Scheduler {
 
     const scheduledAt = new Date().toISOString();
 
-    const runId = this.db.recordRun({
+    const runId = await this.db.recordRun({
       report_type: reportType,
       report_date: today,
       scheduled_at: scheduledAt,
@@ -76,10 +72,10 @@ export class Scheduler {
 
     try {
       await this.onReport(reportType, options);
-      this.db.updateRunStatus(runId, 'sent');
+      await this.db.updateRunStatus(runId, 'sent');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.db.updateRunStatus(runId, 'failed', errorMsg);
+      await this.db.updateRunStatus(runId, 'failed', errorMsg);
       throw error;
     }
   };
@@ -97,11 +93,13 @@ export class Scheduler {
 
     const today = getDataDate();
 
-    // Filter out types already sent today
-    const pending = types.filter((t) => {
-      const lastRun = this.db.getLastSuccessfulRun(t);
-      return !lastRun || lastRun.report_date !== today;
-    });
+    const pending: string[] = [];
+    for (const t of types) {
+      const lastRun = await this.db.getLastSuccessfulRun(t);
+      if (!lastRun || lastRun.report_date !== today) {
+        pending.push(t);
+      }
+    }
 
     if (pending.length === 0) {
       log.debug('Scheduler', 'Combined reports already sent today, skipping');
@@ -110,7 +108,7 @@ export class Scheduler {
 
     const scheduledAt = new Date().toISOString();
 
-    const runId = this.db.recordRun({
+    const runId = await this.db.recordRun({
       report_type: pending.join('+'),
       report_date: today,
       scheduled_at: scheduledAt,
@@ -128,10 +126,10 @@ export class Scheduler {
           await this.onReport(type, options);
         }
       }
-      this.db.updateRunStatus(runId, 'sent');
+      await this.db.updateRunStatus(runId, 'sent');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.db.updateRunStatus(runId, 'failed', errorMsg);
+      await this.db.updateRunStatus(runId, 'failed', errorMsg);
       throw error;
     }
   };

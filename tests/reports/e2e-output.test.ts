@@ -39,7 +39,7 @@ beforeAll(() => {
 // ============================================================
 
 describe('cross-report validation', () => {
-  it('all reports produce non-empty output', () => {
+  it('all reports produce non-empty output', async () => {
     const reports = [
       generateDailyReport(snapshot, config, computeMembers(snapshot, config)),
       generateWeeklyReport(snapshot, config, computeMembers(snapshot, config)),
@@ -47,7 +47,7 @@ describe('cross-report validation', () => {
       generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
       generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
       generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
-      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      await generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
       generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
 
@@ -56,7 +56,7 @@ describe('cross-report validation', () => {
     }
   });
 
-  it('all reports respect maxLength', () => {
+  it('all reports respect maxLength', async () => {
     const reports = [
       generateDailyReport(snapshot, config, computeMembers(snapshot, config)),
       generateWeeklyReport(snapshot, config, computeMembers(snapshot, config)),
@@ -64,7 +64,7 @@ describe('cross-report validation', () => {
       generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
       generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
       generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
-      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      await generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
       generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
 
@@ -73,7 +73,7 @@ describe('cross-report validation', () => {
     }
   });
 
-  it('all reports contain the club name', () => {
+  it('all reports contain the club name', async () => {
     const reports = [
       generateDailyReport(snapshot, config, computeMembers(snapshot, config)),
       generateWeeklyReport(snapshot, config, computeMembers(snapshot, config)),
@@ -81,7 +81,7 @@ describe('cross-report validation', () => {
       generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
       generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
       generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
-      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      await generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
       generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
 
@@ -159,7 +159,7 @@ describe('E2E: Data integrity', () => {
     expect(active).toBe(30);
   });
 
-  it('no report exceeds WhatsApp message limit (4096 chars)', () => {
+  it('no report exceeds WhatsApp message limit (4096 chars)', async () => {
     const reports = [
       generateDailyReport(snapshot, config, computeMembers(snapshot, config), 0),
       generateWeeklyReport(snapshot, config, computeMembers(snapshot, config), 0),
@@ -167,7 +167,7 @@ describe('E2E: Data integrity', () => {
       generateRanksReport(snapshot, config, computeMembers(snapshot, config)),
       generateBottomReport(snapshot, config, computeMembers(snapshot, config)),
       generateStatsReport(snapshot, config, computeMembers(snapshot, config)),
-      generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
+      await generateMembersReport(snapshot, config, computeMembers(snapshot, config)),
       generateTierReport(snapshot, config, computeMembers(snapshot, config)),
     ];
     for (const report of reports) {

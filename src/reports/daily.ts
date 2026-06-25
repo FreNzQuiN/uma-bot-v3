@@ -42,7 +42,6 @@ export function generateDailyReport(
     dailyGain: getDailyGain(m.dailyFans, adjustedDataDay, config.requirements.includeTransferDataInCalculation),
   }));
 
-  // Filter active members (not stale/left)
   const contributing = memberGains.filter(
     (m) => m.status === 'active'
   );
@@ -52,7 +51,6 @@ export function generateDailyReport(
     (a, b) => b.dailyGain - a.dailyGain
   );
 
-  // Build RankedMember list
   const ranked: RankedMember[] = sorted.map((m, i) => ({
     rank: i + 1,
     trainerName: m.trainerName,
@@ -69,7 +67,6 @@ export function generateDailyReport(
     return m.dailyGain === 0;
   });
 
-  // Stats
   const activeCount = contributing.length;
   const contributorCount = sorted.filter((m) => m.dailyGain > 0).length;
   const totalDailyGain = contributing.reduce(
@@ -77,16 +74,13 @@ export function generateDailyReport(
     0
   );
 
-  // Club info
   const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } =
     snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
-  // Format date
   const dateStr = buildDateStr(snapshot, adjustedDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
-  // Build report
   const lines: string[] = [];
   lines.push(`📊 *Daily Report — ${formattedDate}*`);
   lines.push('');
@@ -142,7 +136,6 @@ export function generateDailyReport(
     lines.push(staleWarning);
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot, latestDataDay)));
   return lines.join('\n');

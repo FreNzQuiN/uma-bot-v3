@@ -6,7 +6,7 @@
  */
 
 import type { BotConfig, Snapshot } from '../types';
-import type { Database } from '../db/database';
+import type { IDatabase } from '../db/types';
 import type { WhatsAppClient, IncomingMessage } from './client';
 import { parseCommand, resolveMemberName } from './commands';
 import { canUseCommand, isAdmin, ADMIN_COMMANDS, ADMIN_COMMAND_HELP } from './access';
@@ -20,18 +20,10 @@ import { getRuntimeStats, getUptimeMs, recordMessageParsed, recordMessageRespond
 import { getTargetMonth, getDataDateComponents } from '../utils/timezone';
 import { preFetchMonthlySnapshot } from '../scheduler/helpers';
 
-// ============================================================
-// Command sets
-// ============================================================
-
 const REPORT_COMMANDS = new Set([
   'daily', 'weekly', 'monthly', 'ranks', 'bottom',
   'stats', 'members', 'tier', 'compare', 'analyze',
 ]);
-
-// ============================================================
-// Loading messages (Bourbon-flavored rotation)
-// ============================================================
 
 const LOADING_MESSAGES = [
   '⏳ Accessing club data...',
@@ -54,10 +46,6 @@ function formatUptime(): string {
   return `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`;
 }
 
-// ============================================================
-// Dispatch function
-// ============================================================
-
 /**
  * Set up the command handler on the WhatsApp client.
  *
@@ -69,7 +57,7 @@ function formatUptime(): string {
 export function setupCommandHandler(
   client: WhatsAppClient,
   configOrGetter: BotConfig | (() => BotConfig),
-  db: Database,
+  db: IDatabase,
   getSnapshot: () => Snapshot | null,
   onConfigUpdate?: (config: BotConfig) => void,
   prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>,
@@ -103,7 +91,7 @@ export function setupCommandHandler(
 async function dispatchMessage(
   client: WhatsAppClient,
   config: BotConfig,
-  db: Database,
+  db: IDatabase,
   getSnapshot: () => Snapshot | null,
   msg: IncomingMessage,
   prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>,
@@ -148,10 +136,6 @@ async function dispatchMessage(
   // Dispatch to report generator or admin handler
   await generateAndSend(client, config, db, getSnapshot, parsed, chatJid, senderJid, prefetchSnapshot, onConfigUpdate);
 }
-
-// ============================================================
-// Command handlers (extracted from generateAndSend)
-// ============================================================
 
 async function handlePingCommand(
   client: WhatsAppClient,
@@ -218,7 +202,7 @@ async function handleAdminReferenceCommand(
 async function handleReportCommand(
   client: WhatsAppClient,
   config: BotConfig,
-  db: Database,
+  db: IDatabase,
   getSnapshot: () => Snapshot | null,
   parsed: { command: string; args: string[]; offset: number | null; raw: string },
   chatJid: string,
@@ -272,11 +256,11 @@ async function handleAdminCommand(
   command: string,
   args: string[],
   config: BotConfig,
-  db: Database,
+  db: IDatabase,
   chatJid: string,
   onConfigUpdate?: (config: BotConfig) => void
 ): Promise<void> {
-  const result = processAdminCommand(command, args, config, db);
+  const result = await processAdminCommand(command, args, config, db);
 
   // Admin commands that modify config already wrote to config.yaml via saveConfig().
   // Update in-memory config immediately; the watcher will also detect the file change.
@@ -288,17 +272,13 @@ async function handleAdminCommand(
   await client.sendOrEdit(chatJid, null, message);
 }
 
-// ============================================================
-// Report generation dispatcher
-// ============================================================
-
 /**
  * Route a parsed command to the appropriate handler.
  */
 async function generateAndSend(
   client: WhatsAppClient,
   config: BotConfig,
-  db: Database,
+  db: IDatabase,
   getSnapshot: () => Snapshot | null,
   parsed: { command: string; args: string[]; offset: number | null; raw: string },
   chatJid: string,
@@ -327,12 +307,12 @@ async function generateReport(
   offset: number | null,
   snapshot: Snapshot,
   config: BotConfig,
-  db?: Database
+  db?: IDatabase
 ): Promise<string> {
   const computedMembers = computeMembers(snapshot, config);
 
   // Try standard report types from registry
-  const registryResult = generateReportString(command, snapshot, config, computedMembers, { offset: offset ?? 0, db });
+  const registryResult = await generateReportString(command, snapshot, config, computedMembers, { offset: offset ?? 0, db });
   if (registryResult !== undefined) return registryResult;
 
   // Dispatch-specific commands requiring member resolution
@@ -378,12 +358,12 @@ async function generateReport(
  * Process admin commands. Returns either a plain message string
  * or { config, message } when the command modifies config.
  */
-function processAdminCommand(
+async function processAdminCommand(
   command: string,
   args: string[],
   config: BotConfig,
-  db: Database
-): string | { config: BotConfig; message: string } {
+  db: IDatabase
+): Promise<string | { config: BotConfig; message: string }> {
   switch (command) {
     case 'setreq': {
       return handleSetReq(args, config);
@@ -392,7 +372,7 @@ function processAdminCommand(
       return handleConfig(config);
     }
     case 'status': {
-      const lastDaily = db.getLastSuccessfulRun('daily');
+      const lastDaily = await db.getLastSuccessfulRun('daily');
       const lastReport = lastDaily?.sent_at ?? undefined;
       const lastFetch = lastDaily?.scheduled_at ?? undefined;
       const rt = getRuntimeStats();

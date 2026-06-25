@@ -60,7 +60,6 @@ export function generateWeeklyReport(
   const targetWeek = Math.max(1, currentWeek - absOffset);
   const block = WEEK_BLOCKS.find((b) => b.week === targetWeek)!;
 
-  // Build ranked members with weekly gain
   const ranked: WeeklyRankedMember[] = computedMembers
     .map((m, i) => ({
       rank: 0,
@@ -79,19 +78,16 @@ export function generateWeeklyReport(
     0
   );
 
-  // Club info
   const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } = snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
   const dateStr = buildDateStr(snapshot);
   const formattedDate = formatDateWIB(dateStr);
 
-  // Contributor stats
   const contributors = ranked.filter((m) => m.weeklyGain > 0);
   const activeCount = computedMembers.filter((m) => m.status === 'active').length;
   const contributorCount = contributors.length;
 
-  // Build report
   const lines: string[] = [];
   lines.push(`📈 *Weekly Report — Minggu ${targetWeek}*`);
   lines.push('');
@@ -114,7 +110,6 @@ export function generateWeeklyReport(
   );
   lines.push('');
 
-  // Member list (only members with positive gain)
   if (contributors.length > 0) {
     for (const member of contributors) {
       const transferBadge = member.isTransfer ? ' 🔄' : '';
@@ -126,7 +121,6 @@ export function generateWeeklyReport(
     lines.push('(Data gain mingguan belum tersedia)');
   }
 
-  // Below requirement
   const weeklyReq = config.requirements.weeklyFans;
   if (weeklyReq > 0) {
     const belowReq = ranked.filter(
@@ -157,7 +151,6 @@ export function generateWeeklyReport(
     }
   }
 
-  // Stale data warning
   const { year, month } = snapshot.members[0];
   const staleWarning = getStaleDataWarning(year, month, latestDataDay);
   if (staleWarning) {
@@ -165,7 +158,6 @@ export function generateWeeklyReport(
     lines.push(staleWarning);
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

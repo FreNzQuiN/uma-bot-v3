@@ -106,6 +106,7 @@ function makeMockDb(): any {
     upsertMember: jest.fn(),
     saveRankHistory: jest.fn(),
     getLastSuccessfulRun: jest.fn().mockReturnValue(null),
+    getLastRun: jest.fn().mockReturnValue(null),
     recordRun: jest.fn(),
     updateRunStatus: jest.fn(),
   };

@@ -1,4 +1,4 @@
-# BobonGPT Message Design System
+# Uma Club Bot — Message Design System
 
 > Bot persona: **Mihono Bourbon** (codename: MB-19890425)
 > A cyborg who processes club data with machine precision — and unexpected care.
@@ -265,7 +265,7 @@ For every new message added to the codebase:
 |--------|-------|
 | `⏳ Loading...` | `⏳ Accessing club data...` |
 | `⚠️ Tidak ada data anggota untuk snapshot ini.` | `ℹ️ *No daily data*\nClub records show no active members for this period.` |
-| `❌ Perintah /x tidak dikenal.` | `❌ *Command not found*\n`/x` is not in my command registry. Check /help for available operations.` |
+| `❌ Perintah /x tidak dikenal.` | `❌ *Perintah tidak dikenal*\n`/x` tidak ada di command registry. Cek /help.` |
 | `⚙️ Bot Configuration:` | `⚙️ *System Config*\nCurrent operational parameters:` |
 | `⸻ Sync at:` | `⸻ Last sync:` |
 | `[catch-up]` | `*⚠️ Catch-up*` (below title) |

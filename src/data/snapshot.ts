@@ -57,11 +57,10 @@ export function saveSnapshot(
   const filePath = buildSnapshotPath(dataDay, rootDir);
   const dir = path.dirname(filePath);
 
-  // Create directories recursively if they don't exist
   fs.mkdirSync(dir, { recursive: true });
 
-  // Write to temp file then rename for atomicity
-  // This prevents corrupt files if the process crashes mid-write
+  // Write to temp file then rename for atomicity.
+  // This prevents corrupt files if the process crashes mid-write.
   const tmpPath = filePath + '.tmp';
   fs.writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), 'utf-8');
   fs.renameSync(tmpPath, filePath);
@@ -99,8 +98,9 @@ export function loadSnapshot(
     }
 
     return parsed;
-  } catch {
+  } catch (err) {
     // Corrupt JSON or any parse error
+    log.debug('Snapshot', `Failed to load ${dataDay}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -198,10 +198,6 @@ export function getDataDayFromSnapshot(snapshot: Snapshot): number {
   return maxDay;
 }
 
-// ============================================================
-// Internal helpers
-// ============================================================
-
 /**
  * Scan the snapshots directory and return all date strings (YYYY-MM-DD)
  * for which a JSON file exists.
@@ -238,10 +234,6 @@ function listDirs(dirPath: string): string[] {
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
 }
-
-// ============================================================
-// Stale snapshot messaging
-// ============================================================
 
 /**
  * Get the latest snapshot date string (YYYY-MM-DD) from disk.

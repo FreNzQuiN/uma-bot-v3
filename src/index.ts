@@ -11,7 +11,7 @@
 
 import { loadConfig } from './config';
 import type { BotConfig, Snapshot } from './types';
-import { Database } from './db/database';
+import { createDatabase } from './db/factory';
 import { UmaMoeClient } from './api/uma-moe';
 import { ApiServer } from './api/server';
 import { Scheduler } from './scheduler/scheduler';
@@ -31,7 +31,6 @@ import { preFetchMonthlySnapshot } from './scheduler/helpers';
 
 const PID_FILE = 'data/bot.pid';
 
-// Global error handlers
 process.on('unhandledRejection', (reason) => {
   log.error('Bot', `Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
 });
@@ -92,19 +91,17 @@ async function main() {
   }
   log.info('Bot', 'Uma Club Bot v3 starting...');
 
-  // ── 1. Load config + init DB ──
   let config = loadConfig();
   log.configure({ ...config.logging, timezone: config.timezone });
 
-  const db = new Database('data/bot.db');
-  await db.initialize();
+  const db = await createDatabase(config.database);
   log.info('Bot', `Database initialized`);
 
   log.info('Bot', `Circle ID: ${config.circleId}`);
   log.info('Bot', `Timezone: ${config.timezone}`);
   log.info('Bot', `Log level: ${config.logging.level}`);
 
-  // ── 1b. Watch config.yaml for manual edits (polling-based, reliable on Windows) ──
+  // Watch config.yaml for manual edits (polling-based, reliable on Windows)
   const configPath = require('path').resolve('config.yaml');
   let lastConfigMtime = 0;
   let lastConfigHash = '';
@@ -121,10 +118,8 @@ async function main() {
   const getSnapshot = () => loadLatestSnapshot();
   const getConfig = () => config;
 
-  // ── 2. WhatsApp client (connect later) ──
   const waClient = new WhatsAppClient(getConfig);
 
-  // ── 3. Report orchestrator ──
   const orchestrator = new ReportOrchestrator({ getConfig, getSnapshot, umaMoe, db, waClient });
 
   setupCommandHandler(waClient, getConfig, db, getSnapshot, (updatedConfig) => {
@@ -132,7 +127,6 @@ async function main() {
   }, (year: number, month: number) => ensureMonthSnapshot(umaMoe, config.circleId, year, month));
   log.info('WhatsApp', 'Command dispatch registered');
 
-  // ── 4. Config watcher ──
   let scheduler: Scheduler | undefined;
 
   setInterval(() => {
@@ -183,6 +177,11 @@ async function main() {
             log.info('Config', 'Config reloaded from config.yaml');
           }
 
+          // Warn if database config changed — requires full restart
+          if (!deepEqual(oldConfig.database, config.database)) {
+            log.warn('Config', 'Database config changed — restart required to apply new database settings');
+          }
+
           // Always restart scheduler on any config change
           if (scheduler) {
             scheduler.stop();
@@ -199,7 +198,6 @@ async function main() {
   }, 5000);
   log.info('Config', 'Watching config.yaml for changes (polling every 5s)');
 
-  // ── 5. Fetch fresh data if latest snapshot is stale ──
   const todayStr = getDataDate();
   const { year: currentYear, month: currentMonth, day: currentDay } = getDataDateComponents();
 
@@ -234,7 +232,6 @@ async function main() {
     }
   }
 
-  // ── 5a. Ensure previous months are cached (non-fatal) ──
   const offsets = [1, 2];
   for (const offset of offsets) {
     try {
@@ -247,33 +244,34 @@ async function main() {
     }
   }
 
-  // ── 5b. Update member history + rank history from latest snapshot ──
   const latestSnapshot = loadLatestSnapshot();
   if (latestSnapshot) {
-    updateMemberHistory(latestSnapshot, db);
-    db.saveRankHistory({
-      date: latestSnapshot.circle.last_updated?.split('T')[0] ?? todayStr,
-      circle_id: latestSnapshot.circle.circle_id,
-      monthly_rank: latestSnapshot.circle.monthly_rank,
-      monthly_point: latestSnapshot.circle.monthly_point,
-      club_rank: latestSnapshot.club_rank,
-      fans_to_next_tier: latestSnapshot.fans_to_next_tier,
-      fans_to_lower_tier: latestSnapshot.fans_to_lower_tier,
-    });
-    log.debug('Data', 'Member history and rank history updated');
+    try {
+      await updateMemberHistory(latestSnapshot, db);
+      await db.saveRankHistory({
+        date: latestSnapshot.circle.last_updated?.split('T')[0] ?? todayStr,
+        circle_id: latestSnapshot.circle.circle_id,
+        monthly_rank: latestSnapshot.circle.monthly_rank,
+        monthly_point: latestSnapshot.circle.monthly_point,
+        club_rank: latestSnapshot.club_rank,
+        fans_to_next_tier: latestSnapshot.fans_to_next_tier,
+        fans_to_lower_tier: latestSnapshot.fans_to_lower_tier,
+      });
+      log.debug('Data', 'Member history and rank history updated');
+    } catch (err) {
+      log.warn('Data', `Failed to update member/rank history: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
-  // ── 6. Start API server ──
   const apiPortRaw = parseInt(process.env.API_PORT ?? '3000', 10);
   const apiPort = (apiPortRaw >= 1 && apiPortRaw <= 65535) ? apiPortRaw : 3000;
   const api = new ApiServer(apiPort, getSnapshot, getConfig, {
     isConnected: () => waClient.isConnected(),
     getGroups: () => waClient.getGroups(),
     getChats: () => waClient.getChats(),
-  });
+  }, db);
   await api.start();
 
-  // ── 7. Start scheduler + Connect WhatsApp ──
   const onDataFetch = async () => {
     try {
       const { year: currentYear, month: currentMonth } = getDataDateComponents();
@@ -319,9 +317,10 @@ async function main() {
     log.info('WhatsApp', 'Connected — running catch-up');
 
     // Run catch-up with alert aggregation
+    const catchUp = new CatchUpManager(db, getConfig);
+    const missed = await catchUp.detectMissedReports();
+
     if (getConfig().catchUp.enabled) {
-      const catchUp = new CatchUpManager(db, getConfig);
-      const missed = catchUp.detectMissedReports();
       if (missed.length > 0) {
         log.info('CatchUp', `Detected ${missed.length} missed reports: ${missed.join(', ')}`);
 
@@ -338,24 +337,26 @@ async function main() {
       } else {
         log.debug('CatchUp', 'No missed reports detected');
       }
+    } else if (missed.length > 0) {
+      // Catch-up disabled — record skipped so future detection won't re-trigger
+      await catchUp.recordSkippedReports(missed);
     }
   }).catch((err) => {
     // Unexpected error — loggedOut/badSession now self-heal via auto-reconnect
-    log.error('WhatsApp', `${(err as Error).message}`);
+    log.error('WhatsApp', `${err instanceof Error ? err.message : String(err)}`);
   });
 
-  // ── 8. Graceful shutdown ──
-  const cleanup = () => {
+  const cleanup = async () => {
     log.info('Bot', 'Shutting down...');
     scheduler?.stop();
     waClient?.disconnect();
-    db.close();
+    await db.close();
     try { unlinkSync(PID_FILE); } catch {}
     process.exit(0);
   };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
-  process.on('exit', () => { try { db.close(); } catch {} try { unlinkSync(PID_FILE); } catch {} });
+  process.on('exit', () => { try { unlinkSync(PID_FILE); } catch {} });
 
   log.info('Bot', 'Uma Club Bot v3 ready');
 }

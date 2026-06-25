@@ -9,10 +9,6 @@
 
 import type { BotConfig } from '../types';
 
-// ============================================================
-// Admin commands (require admin JID)
-// ============================================================
-
 export const ADMIN_COMMANDS = new Set([
   'setreq',
   'config',
@@ -35,10 +31,6 @@ export const ADMIN_COMMAND_HELP: Record<string, string> = {
   admin: '`/admin` — Info perintah admin',
 };
 
-// ============================================================
-// Helpers
-// ============================================================
-
 export function isAdmin(senderJid: string, config: BotConfig): boolean {
   return config.admins.includes(senderJid);
 }
@@ -50,10 +42,6 @@ export function isCommandGroup(chatJid: string, config: BotConfig): boolean {
 export function isAnnouncementGroup(chatJid: string, config: BotConfig): boolean {
   return config.groups.announcement.includes(chatJid);
 }
-
-// ============================================================
-// Main access control
-// ============================================================
 
 /**
  * Check if a sender can use a given command in a given chat.

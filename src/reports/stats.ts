@@ -25,7 +25,6 @@ export function generateStatsReport(
   config: BotConfig,
   computedMembers: ComputedMember[]
 ): string {
-  // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Stats*\nData statistik belum tersedia.';
   }
@@ -36,7 +35,6 @@ export function generateStatsReport(
     (m) => m.status === 'active'
   );
 
-  // Aggregate stats
   const totalMonthlyGain = contributing.reduce(
     (sum, m) => sum + m.monthlyGain,
     0
@@ -61,7 +59,6 @@ export function generateStatsReport(
   const avgDailyGain =
     contributing.length > 0 ? Math.round(totalDailyGain / contributing.length) : 0;
 
-  // Requirement pass rate
   const monthlyReq = config.requirements.monthlyFans;
   const passCount = contributing.filter((m) => m.monthlyGain >= monthlyReq).length;
   const passRate =
@@ -78,12 +75,10 @@ export function generateStatsReport(
         )
       : 0;
 
-  // Members with zero daily gain today
   const zeroGainToday = contributing.filter(
     (m) => m.latestDailyGain === 0
   ).length;
 
-  // Club info
   const { circle, club_rank, fans_to_next_tier, fans_to_lower_tier } =
     snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
@@ -112,7 +107,6 @@ export function generateStatsReport(
   lines.push(`🎯 Zero gain hari ini: ${zeroGainToday} orang`);
   lines.push('');
 
-  // Top member and lowest active member
   const activeMembers = contributing.filter((m) => m.status === 'active');
   if (activeMembers.length > 0) {
     const sortedByGain = [...activeMembers].sort((a, b) => b.monthlyGain - a.monthlyGain);
@@ -123,7 +117,6 @@ export function generateStatsReport(
     lines.push('');
   }
 
-  // Projected month-end total
   const daysInMonth = new Date(year, month, 0).getDate();
   const daysElapsed = actualDataDay;
   const projectedMonthEnd =
@@ -132,7 +125,6 @@ export function generateStatsReport(
       : 0;
   lines.push(`📅 Proyeksi akhir bulan: ~${formatNumber(projectedMonthEnd)}`);
 
-  // Tier projection
   const daysLeft = daysInMonth - daysElapsed;
   const currentPace = daysElapsed > 0 ? Math.round(totalMonthlyGain / daysElapsed) : 0;
   if (fans_to_next_tier > 0 && currentPace > 0) {
@@ -155,14 +147,12 @@ export function generateStatsReport(
     `Promosi: ${formatNumber(fans_to_next_tier)} | Degradasi: ${formatNumber(fans_to_lower_tier)}`
   );
 
-  // Stale data warning
   const staleWarning = getStaleDataWarning(year, month, actualDataDay);
   if (staleWarning) {
     lines.push('');
     lines.push(staleWarning);
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

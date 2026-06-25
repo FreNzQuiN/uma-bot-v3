@@ -8,14 +8,11 @@
 
 import http from 'http';
 import type { Snapshot, BotConfig } from '../types';
+import type { IDatabase } from '../db/types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeMembers, computeTierData } from '../reports/compute';
 import { log } from '../utils/logger';
 import { getRuntimeStats, getUptimeMs } from '../runtime';
-
-// ============================================================
-// Response envelope
-// ============================================================
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -36,10 +33,6 @@ export function createResponse(
   res.end(JSON.stringify(body));
 }
 
-// ============================================================
-// API Server
-// ============================================================
-
 export interface WhatsAppCapabilities {
   isConnected: () => boolean;
   getGroups: () => Promise<Array<{ id: string; name: string; participants: number }>>;
@@ -53,6 +46,7 @@ export class ApiServer {
   private waConnected: () => boolean = () => false;
   private waGroups: () => Promise<Array<{ id: string; name: string; participants: number }>> = async () => [];
   private waChats: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }> = () => [];
+  private db: IDatabase | null = null;
   private requestTimestamps: Map<string, number[]> = new Map();
   private server: http.Server | null = null;
   private apiToken: string | undefined;
@@ -61,12 +55,14 @@ export class ApiServer {
     port: number,
     snapshotLoader: () => Snapshot | null,
     config: BotConfig | (() => BotConfig),
-    whatsapp?: WhatsAppCapabilities
+    whatsapp?: WhatsAppCapabilities,
+    db?: IDatabase
   ) {
     this.port = port;
     this.snapshotLoader = snapshotLoader;
     this.configLoader = typeof config === 'function' ? config : () => config;
     this.apiToken = process.env.API_TOKEN || undefined;
+    this.db = db ?? null;
     if (whatsapp) {
       this.waConnected = whatsapp.isConnected;
       this.waGroups = whatsapp.getGroups;
@@ -128,7 +124,11 @@ export class ApiServer {
 
     try {
       if (path === '/health') {
-        return this.handleHealth(res);
+        this.handleHealth(res).catch(err => {
+          log.error('API', 'health handler error', err);
+          createResponse(res, 500, { success: false, error: 'Internal server error' });
+        });
+        return;
       }
 
       if (path === '/groups') {
@@ -202,14 +202,24 @@ export class ApiServer {
     }
   }
 
-  private handleHealth(res: http.ServerResponse): void {
+  private async handleHealth(res: http.ServerResponse): Promise<void> {
     const rt = getRuntimeStats();
-    createResponse(res, 200, {
-      success: true,
+    let dbOk = true;
+    if (this.db) {
+      try {
+        await this.db.getLastSuccessfulRun('_health_check');
+      } catch (err) {
+        log.debug('API', `Health check DB probe failed: ${err instanceof Error ? err.message : String(err)}`);
+        dbOk = false;
+      }
+    }
+    createResponse(res, dbOk ? 200 : 503, {
+      success: dbOk,
       data: {
-        status: 'ok',
+        status: dbOk ? 'ok' : 'degraded',
         timestamp: new Date().toISOString(),
         uptimeMs: getUptimeMs(),
+        dbConnected: dbOk,
         waConnected: this.waConnected(),
         waState: rt.connectionState,
         configReloads: rt.configReloadCount,

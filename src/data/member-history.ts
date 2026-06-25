@@ -6,7 +6,7 @@
  */
 
 import type { Snapshot, MemberHistoryRow } from '../types';
-import type { Database } from '../db/database';
+import type { IDatabase } from '../db/types';
 import { getDataDate } from '../utils/timezone';
 import { log } from '../utils/logger';
 
@@ -24,21 +24,19 @@ import { log } from '../utils/logger';
  * @param snapshot - The current snapshot
  * @param db - Database instance
  */
-export function updateMemberHistory(snapshot: Snapshot, db: Database): void {
+export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Promise<void> {
   const today = getDataDate();
   const circleId = snapshot.circle.circle_id;
   const currentViewerIds = new Set<number>();
 
-  try {
-    db.rawRun('BEGIN');
-
+  await db.transaction(async () => {
     for (const member of snapshot.members) {
       currentViewerIds.add(member.viewer_id);
 
-      const existing = db.getMember(member.viewer_id);
+      const existing = await db.getMember(member.viewer_id);
       const firstSeen = existing?.first_seen ?? today;
 
-      db.upsertMember({
+      await db.upsertMember({
         viewer_id: member.viewer_id,
         trainer_name: member.trainer_name,
         circle_id: member.circle_id,
@@ -51,10 +49,10 @@ export function updateMemberHistory(snapshot: Snapshot, db: Database): void {
     }
 
     // Mark historical members not in current snapshot as 'left'
-    const historicalMembers = db.getMembers(circleId);
+    const historicalMembers = await db.getMembers(circleId);
     for (const hist of historicalMembers) {
       if (!currentViewerIds.has(hist.viewer_id)) {
-        db.upsertMember({
+        await db.upsertMember({
           viewer_id: hist.viewer_id,
           trainer_name: hist.trainer_name,
           circle_id: circleId,
@@ -66,14 +64,7 @@ export function updateMemberHistory(snapshot: Snapshot, db: Database): void {
         });
       }
     }
-
-    db.rawRun('COMMIT');
-  } catch (err) {
-    db.rawRun('ROLLBACK');
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error('Snapshot', `updateMemberHistory failed, rolled back: ${msg}`);
-    throw err;
-  }
+  });
 }
 
 /**
@@ -87,14 +78,14 @@ export function updateMemberHistory(snapshot: Snapshot, db: Database): void {
  * @param db - Database instance
  * @returns Array of member_history rows for departed members
  */
-export function getLeftMembers(snapshot: Snapshot, db: Database): MemberHistoryRow[] {
+export async function getLeftMembers(snapshot: Snapshot, db: IDatabase): Promise<MemberHistoryRow[]> {
   if (snapshot.members.length === 0) return [];
 
   const circleId = snapshot.circle.circle_id;
   const currentViewerIds = new Set(snapshot.members.map((m) => m.viewer_id));
 
   // Get all historical members for this circle
-  const historicalMembers = db.getMembers(circleId);
+  const historicalMembers = await db.getMembers(circleId);
 
   // Filter to those not in the current snapshot
   return historicalMembers.filter(

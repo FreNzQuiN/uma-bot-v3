@@ -1,12 +1,12 @@
 import { CatchUpManager } from '../../src/scheduler/catchup';
-import { Database } from '../../src/db/database';
+import { SqliteDatabase } from '../../src/db/database';
 import { makeConfig } from '../_helpers';
 
 describe('Bug 1: Catch-up detects missed reports across days', () => {
-  let db: Database;
+  let db: SqliteDatabase;
 
   beforeEach(async () => {
-    db = new Database(':memory:');
+    db = new SqliteDatabase(':memory:');
     await db.initialize();
   });
 
@@ -14,7 +14,7 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
     db.close();
   });
 
-  it('detects missed weekly from day 7 when bot restarts on day 8', () => {
+  it('detects missed weekly from day 7 when bot restarts on day 8', async () => {
     // Weekly scheduled on days [7, 14, 21, 28]
     // Last successful weekly was on day 7 of previous month or before
     // Today is day 8 — the weekly from day 7 should be caught
@@ -37,7 +37,7 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
     const lastMonth = new Date(todayYear, todayMonth - 1, 7);
     const lastMonthStr = lastMonth.toISOString().split('T')[0];
 
-    db.recordRun({
+    await db.recordRun({
       report_type: 'weekly',
       report_date: lastMonthStr,
       scheduled_at: `${lastMonthStr}T22:05:00.000Z`,
@@ -48,13 +48,13 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
     });
 
     const catchUp = new CatchUpManager(db, () => config);
-    const missed = catchUp.detectMissedReports();
+    const missed = await catchUp.detectMissedReports();
 
     // Weekly should be detected as missed since we haven't run it this month
     expect(missed).toContain('weekly');
   });
 
-  it('does not double-detect weekly when already sent on most recent scheduled day', () => {
+  it('does not double-detect weekly when already sent on most recent scheduled day', async () => {
     const config = makeConfig({
       catchUp: { enabled: true, maxReportsPerStartup: 10 },
       schedule: {
@@ -83,7 +83,7 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
       const todayMonth = today.getMonth();
       const scheduledDate = `${todayYear}-${String(todayMonth + 1).padStart(2, '0')}-${String(mostRecentDay).padStart(2, '0')}`;
 
-      db.recordRun({
+      await db.recordRun({
         report_type: 'weekly',
         report_date: scheduledDate,
         scheduled_at: `${scheduledDate}T22:05:00.000Z`,
@@ -94,12 +94,12 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
       });
 
       const catchUp = new CatchUpManager(db, () => config);
-      const missed = catchUp.detectMissedReports();
+      const missed = await catchUp.detectMissedReports();
       expect(missed).not.toContain('weekly');
     }
   });
 
-  it('detects missed monthly when bot restarts after monthly day has passed', () => {
+  it('detects missed monthly when bot restarts after monthly day has passed', async () => {
     const config = makeConfig({
       catchUp: { enabled: true, maxReportsPerStartup: 10 },
       schedule: {
@@ -117,7 +117,7 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
     const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const lastMonthStr = lastMonth.toISOString().split('T')[0];
 
-    db.recordRun({
+    await db.recordRun({
       report_type: 'monthly',
       report_date: lastMonthStr,
       scheduled_at: `${lastMonthStr}T22:12:00.000Z`,
@@ -130,7 +130,7 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
     // If today >= 1 (always true), monthly should be detected
     if (todayDay >= 1) {
       const catchUp = new CatchUpManager(db, () => config);
-      const missed = catchUp.detectMissedReports();
+      const missed = await catchUp.detectMissedReports();
       expect(missed).toContain('monthly');
     }
   });

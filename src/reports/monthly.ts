@@ -63,7 +63,6 @@ export function generateMonthlyReport(
 
   const { year, month } = activeSnapshot.members[0];
 
-  // Build ranked members sorted by monthly gain descending
   const ranked: RankedMember[] = computedMembers
     .map((m) => ({
       rank: 0,
@@ -81,18 +80,15 @@ export function generateMonthlyReport(
     0
   );
 
-  // Contributor count (members with monthlyGain > 0)
   const contributorCount = ranked.filter((m) => m.monthlyGain > 0).length;
   const activeCount = computedMembers.filter((m) => m.status === 'active').length;
 
-  // Club info
   const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } = activeSnapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
   const dateStr = buildDateStr(activeSnapshot);
   const formattedDate = formatDateWIB(dateStr);
 
-  // Projected month end (extrapolate based on current pace)
   const adjustedDataDay = getDataDayFromSnapshot(activeSnapshot);
   const daysInMonth = new Date(year, month, 0).getDate();
   const daysElapsed = adjustedDataDay;
@@ -101,24 +97,19 @@ export function generateMonthlyReport(
       ? Math.round((totalMonthlyGain / daysElapsed) * daysInMonth)
       : 0;
 
-  // Build report
   const lines: string[] = [];
 
-  // Fallback warning (prepended when target month snapshot unavailable)
   if (fallbackWarning) {
     lines.push(fallbackWarning);
   }
 
-  // Title (bold with emoji inside)
   lines.push(`📅 *Monthly Report — ${formatMonthYear(month, year)}*`);
   lines.push('');
 
-  // Club info with rank in parens
   lines.push(
     `${circle.name} | ${tierName} (#${circle.monthly_rank})`
   );
 
-  // Data line
   lines.push(buildDataLine(formattedDate));
 
   // Tier context
@@ -127,18 +118,15 @@ export function generateMonthlyReport(
   );
   lines.push('');
 
-  // Summary line
   lines.push(
     `👥 ${contributorCount} kontribusi dari ${activeCount} anggota | Total: ${formatNumber(totalMonthlyGain)}`
   );
 
-  // Projected month end
   lines.push(
     `Proyeksi akhir bulan: ~${formatNumber(projectedMonthEnd)}`
   );
   lines.push('');
 
-  // Member rankings (only members with positive gain)
   const contributors = ranked.filter((m) => m.monthlyGain > 0);
   for (const member of contributors) {
     const transferBadge = member.isTransfer ? ' 🔄' : '';
@@ -147,7 +135,6 @@ export function generateMonthlyReport(
     );
   }
 
-  // Requirement pass/fail
   const monthlyReq = config.requirements.monthlyFans;
   if (monthlyReq > 0) {
     const activeMembers = computedMembers.filter((m) => m.status === 'active');
@@ -179,14 +166,12 @@ export function generateMonthlyReport(
     }
   }
 
-  // Stale data warning
   const staleWarning = getStaleDataWarning(year, month, getDataDayFromSnapshot(activeSnapshot));
   if (staleWarning) {
     lines.push('');
     lines.push(staleWarning);
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(activeSnapshot)));
   return lines.join('\n');

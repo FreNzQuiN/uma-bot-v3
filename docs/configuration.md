@@ -14,9 +14,10 @@ Config is watched via mtime polling every 5 seconds. Changes to `config.yaml` ar
 
 - **Non-schedule changes** (groups, alerts, requirements, etc.) → in-memory config updates immediately.
 - **Schedule changes** → scheduler is stopped and restarted with new cron expressions.
+- **Database backend change** → logs a warning but does NOT swap adapters at runtime. A full restart is required to switch between SQLite and MySQL.
 - **Any config change** triggers a scheduler restart to ensure all values are fresh.
 
-No restart needed for config edits. The file watcher handles it.
+Config edits are picked up automatically for most settings. A full restart is only needed when changing `database.backend`.
 
 ## Full Schema
 
@@ -130,7 +131,7 @@ Fan requirements for members. If a member doesn't meet the monthly requirement, 
 requirements:
   monthlyFans: 20000000
   weeklyFans: 7000000
-  weeksInMonthEquivalent: 4
+  weeksInMonthEquivalent: 30/7   # ~4.2857 — converts weekly req to monthly
   includeTransferDataInCalculation: false
 ```
 
@@ -138,7 +139,7 @@ requirements:
 |-------|------|---------|-------------|
 | `monthlyFans` | `number` | `20000000` | Monthly fan requirement per member (max: 10B) |
 | `weeklyFans` | `number` | `0` | Weekly fan requirement per member (max: 10B) |
-| `weeksInMonthEquivalent` | `number` | `4` | Weeks per month for weekly→monthly derivation |
+| `weeksInMonthEquivalent` | `number` | `30/7` (~4.2857) | Weeks per month for weekly→monthly derivation |
 | `includeTransferDataInCalculation` | `boolean` | `false` | Whether to include transfer data in gain calculations |
 
 **Why `weeksInMonthEquivalent`:** A month isn't exactly 4 weeks. This constant converts weekly requirements to monthly by multiplying: `weeklyFans × weeksInMonthEquivalent`.
@@ -353,6 +354,84 @@ logging:
 | `console` | `boolean` | `true` | Also output logs to console |
 
 **For debugging:** Set `level: debug` to see all message parsing, API calls, and scheduler decisions.
+
+---
+
+### `database`
+
+```yaml
+database:
+  backend: sqlite
+  sqlite:
+    path: data/bot.db
+    autoSaveMs: 30000
+  mysql:
+    host: localhost
+    port: 3306
+    database: uma_club_bot
+    user: root
+    password: ''
+    connectionLimit: 5
+    ssl: false
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `backend` | `"sqlite" \| "mysql"` | `"sqlite"` | Database backend to use |
+| `sqlite.path` | `string` | `"data/bot.db"` | SQLite file path (relative to project root) |
+| `sqlite.autoSaveMs` | `number` | `30000` | Auto-save interval in ms (0 = disabled) |
+| `mysql.host` | `string` | `"localhost"` | MySQL/TiDB host |
+| `mysql.port` | `number` | `3306` | MySQL/TiDB port |
+| `mysql.database` | `string` | — | Database name (must already exist) |
+| `mysql.user` | `string` | — | MySQL user |
+| `mysql.password` | `string` | `""` | MySQL password |
+| `mysql.connectionLimit` | `number` | `5` | Max connections in pool |
+| `mysql.ssl` | `boolean` | `false` | Enable SSL connection (required for TiDB Cloud) |
+
+**Why pluggable:** SQLite is zero-config and works everywhere. MySQL/TiDB is better for production (multiple bot instances, external monitoring, existing infrastructure). The `IDatabase` interface makes the switch transparent — all consumer code depends only on the interface. MySQL requires 8.0.31+ (version checked at startup). TiDB is auto-detected.
+
+**MySQL adapter:** Uses `mysql2/promise` with connection pooling. Requires MySQL 8.0.31+ (version checked at startup). TiDB auto-detected. The package is an optional runtime dependency — it's dynamically imported only when `backend: mysql`, so SQLite deployments don't need it installed.
+
+**Auto-save:** SQLite writes to disk periodically (configurable via `autoSaveMs`). MySQL auto-persists — `save()` is a no-op.
+
+**Config hot-reload:** Changing `database.backend` at runtime logs a warning but does NOT swap adapters. A full restart is required to switch database backends.
+
+#### SQLite vs MySQL Comparison
+
+| | SQLite | MySQL/TiDB |
+|---|---|---|
+| **Setup** | Zero-config, works immediately | Requires running MySQL/TiDB server + `npm install mysql2` |
+| **Storage** | Local file (`data/bot.db`) | External server |
+| **Concurrency** | Single writer (WASM, in-memory) | Connection pool (configurable) |
+| **Persistence** | Periodic auto-save (30s default) | Immediate (auto-persists) |
+| **Use case** | Development, single instance, small clubs | Production, multiple bot instances, existing DB infra |
+| **Dependencies** | sql.js (bundled, no native deps) | mysql2/promise (optional, dynamic import) |
+
+#### TiDB Cloud Setup
+
+For TiDB Cloud, enable SSL and use the full connection string from the TiDB Cloud console:
+
+```yaml
+database:
+  backend: mysql
+  mysql:
+    host: gateway01.us-west-2.prod.aws.tidbcloud.com
+    port: 4000
+    database: uma_club_bot
+    user: <your-tidb-user>
+    password: '<your-tidb-password>'
+    connectionLimit: 5
+    ssl: true
+```
+
+**Notes:**
+- TiDB uses port `4000` (not `3306`).
+- `ssl: true` sets `rejectUnauthorized: true` — TiDB Cloud requires it.
+- Tables auto-create on first run. No manual schema migration needed.
+- The MySQL adapter auto-detects TiDB at startup. Upsert syntax branches at runtime: `VALUES()` for TiDB, `AS new_vals` alias for standard MySQL 8.0.20+.
+- `INSERT IGNORE` is used for alert dedup — atomic, avoids TOCTOU race conditions.
+- Minimum MySQL version: 8.0.31. The adapter checks at startup and throws a clear error if below minimum.
+- `BIGINT` columns (`viewer_id`, `circle_id`, `monthly_point`, `fans_to_*`) handle values that exceed MySQL `INT` range.
 
 ---
 

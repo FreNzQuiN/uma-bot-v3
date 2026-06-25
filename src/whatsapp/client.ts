@@ -12,10 +12,6 @@ import { splitMessage } from '../utils/format';
 import { rmSync, existsSync } from 'node:fs';
 import { recordReconnect, recordMessageReceived, recordMessageParsed, recordMessageResponded, recordMessageFailed, recordSocketCreated, recordDisconnect, getRuntimeStats, recordConnectionState } from '../runtime';
 
-// ============================================================
-// Types
-// ============================================================
-
 export interface IncomingMessage {
   key: {
     remoteJid: string;
@@ -32,14 +28,6 @@ export interface IncomingMessage {
 }
 
 export type MessageHandler = (msg: IncomingMessage) => Promise<void>;
-
-// ============================================================
-// WhatsAppClient
-// ============================================================
-
-// ============================================================
-// libsignal noise suppression
-// ============================================================
 
 /**
  * libsignal/src/session_cipher.js writes decryption failures directly to
@@ -214,6 +202,7 @@ export class WhatsAppClient {
     const Baileys = await import('@whiskeysockets/baileys');
     const makeWASocket = Baileys.default;
     const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, normalizeMessageContent } = Baileys;
+    // @ts-ignore — no type declarations available for qrcode-terminal
     const qrcodeTerminal = await import('qrcode-terminal');
 
     // Ensure auth directory exists
@@ -347,7 +336,7 @@ export class WhatsAppClient {
             await handler(msg as IncomingMessage);
           } catch (err) {
             recordMessageFailed();
-            log.warn('WhatsApp', `Message handler error: ${(err as Error).message}`);
+            log.warn('WhatsApp', `Message handler error: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
       }
@@ -405,11 +394,11 @@ export class WhatsAppClient {
                 log.info('WhatsApp', 'Deleted stale session — reconnecting for QR scan');
               }
             } catch (error) {
-              log.warn('WhatsApp', `Failed to delete stale auth directory: ${(error as Error).message}`);
+              log.warn('WhatsApp', `Failed to delete stale auth directory: ${error instanceof Error ? error.message : String(error)}`);
             }
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after logout failed: ${(err as Error).message}`);
+                log.error('WhatsApp', `Reconnection after logout failed: ${err instanceof Error ? err.message : String(err)}`);
               });
             }, 2000);
           } else if (statusCode === DisconnectReason.badSession) {
@@ -422,11 +411,11 @@ export class WhatsAppClient {
                 log.info('WhatsApp', 'Deleted stale session (badSession) — reconnecting for QR scan');
               }
             } catch (error) {
-              log.warn('WhatsApp', `Failed to delete stale auth directory: ${(error as Error).message}`);
+              log.warn('WhatsApp', `Failed to delete stale auth directory: ${error instanceof Error ? error.message : String(error)}`);
             }
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after badSession failed: ${(err as Error).message}`);
+                log.error('WhatsApp', `Reconnection after badSession failed: ${err instanceof Error ? err.message : String(err)}`);
               });
             }, 2000);
           } else if (statusCode === DisconnectReason.restartRequired) {
@@ -438,7 +427,7 @@ export class WhatsAppClient {
             this.sock = null;
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after restartRequired failed: ${(err as Error).message}`);
+                log.error('WhatsApp', `Reconnection after restartRequired failed: ${err instanceof Error ? err.message : String(err)}`);
               });
             }, delay);
           } else {
@@ -455,7 +444,7 @@ export class WhatsAppClient {
             this.sock = null;
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection failed: ${(err as Error).message}`);
+                log.error('WhatsApp', `Reconnection failed: ${err instanceof Error ? err.message : String(err)}`);
               });
             }, delay);
           }
@@ -521,7 +510,7 @@ export class WhatsAppClient {
           recordMessageResponded();
           return messageId;
         } catch (err) {
-          log.warn('WhatsApp', `Edit failed, sending as new message: ${(err as Error).message}`);
+          log.warn('WhatsApp', `Edit failed, sending as new message: ${err instanceof Error ? err.message : String(err)}`);
           // Fall through to send as new
         }
       }

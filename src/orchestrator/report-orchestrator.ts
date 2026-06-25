@@ -6,7 +6,7 @@
  */
 
 import type { BotConfig, Snapshot, ComputedMember } from '../types';
-import type { Database } from '../db/database';
+import type { IDatabase } from '../db/types';
 import type { UmaMoeClient } from '../api/uma-moe';
 import type { WhatsAppClient } from '../whatsapp/client';
 import { detectAlerts, formatAlerts, type Alert } from '../alerts/alerts';
@@ -22,7 +22,7 @@ export interface ReportOrchestratorDeps {
   getConfig: () => BotConfig;
   getSnapshot: () => Snapshot | null;
   umaMoe: UmaMoeClient;
-  db: Database;
+  db: IDatabase;
   waClient: WhatsAppClient;
 }
 
@@ -30,7 +30,7 @@ export class ReportOrchestrator {
   private getConfig: () => BotConfig;
   private getSnapshot: () => Snapshot | null;
   private umaMoe: UmaMoeClient;
-  private db: Database;
+  private db: IDatabase;
   private waClient: WhatsAppClient;
 
   constructor(deps: ReportOrchestratorDeps) {
@@ -40,8 +40,6 @@ export class ReportOrchestrator {
     this.db = deps.db;
     this.waClient = deps.waClient;
   }
-
-  // ── Delivery ──────────────────────────────────────────────
 
   /**
    * Deliver a report text to all announcement groups.
@@ -95,8 +93,6 @@ export class ReportOrchestrator {
     }
   }
 
-  // ── Snapshot alignment ────────────────────────────────────
-
   /**
    * Month-alignment + stale data pre-fetch.
    * If the snapshot is from a different month, or data is 2+ days behind,
@@ -143,20 +139,18 @@ export class ReportOrchestrator {
     return snapshot;
   }
 
-  // ── Report generation ─────────────────────────────────────
-
   /**
    * Generate a report string for a single report type.
    * Returns the formatted report string, or undefined for unknown types.
    */
-  generateReportString(
+  async generateReportString(
     type: string,
     snapshot: Snapshot,
     config: BotConfig,
     computedMembers: ComputedMember[],
     options?: { offset?: number; isCatchUp?: boolean }
-  ): string | undefined {
-    let report: string | undefined = generateReportString(type, snapshot, config, computedMembers, { offset: options?.offset, db: this.db });
+  ): Promise<string | undefined> {
+    let report: string | undefined = await generateReportString(type, snapshot, config, computedMembers, { offset: options?.offset, db: this.db });
     if (report === undefined) {
       log.error('Report', `Unknown report type: ${type}`);
       return undefined;
@@ -183,8 +177,6 @@ export class ReportOrchestrator {
     return generateCombinedReport(types, snapshot, config, computedMembers);
   }
 
-  // ── Alert processing ──────────────────────────────────────
-
   /**
    * Detect, record, and deliver alerts for a report.
    * Returns collected alerts when options.collectAlerts is true (for catch-up aggregation).
@@ -198,12 +190,12 @@ export class ReportOrchestrator {
   ): Promise<Alert[]> {
     let alerts: Alert[] = [];
     try {
-      alerts = detectAlerts(computedMembers, snapshot, config, this.db);
+      alerts = await detectAlerts(computedMembers, snapshot, config, this.db);
       if (alerts.length > 0) {
         log.info('Alert', `${alerts.length} alerts detected for ${type} report`);
         const alertIds: number[] = [];
         for (const alert of alerts) {
-          const alertId = this.db.recordAlert({
+          const alertId = await this.db.recordAlert({
             alert_type: alert.type,
             event_key: alert.eventKey,
             member_viewer_id: alert.memberViewerId,
@@ -219,7 +211,7 @@ export class ReportOrchestrator {
           await this.deliverAlerts(alerts, options?.isCatchUp ?? false);
         }
         for (const alertId of alertIds) {
-          this.db.markAlertSent(alertId);
+          await this.db.markAlertSent(alertId);
         }
       }
     } catch (err) {
@@ -265,8 +257,6 @@ export class ReportOrchestrator {
     return allAlerts;
   }
 
-  // ── Full send pipeline ────────────────────────────────────
-
   /**
    * Generate a report, deliver it, and process alerts.
    * Returns collected alerts when options.collectAlerts is true (for catch-up aggregation).
@@ -305,7 +295,7 @@ export class ReportOrchestrator {
 
     // Compute once, use everywhere
     const computedMembers = computeMembers(snapshot, config);
-    const report = this.generateReportString(type, snapshot, config, computedMembers, options);
+    const report = await this.generateReportString(type, snapshot, config, computedMembers, options);
     if (report === undefined) return [];
     log.info('Report', `${type} report generated (${report.length} chars)`);
 

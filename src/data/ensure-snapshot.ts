@@ -36,7 +36,6 @@ export async function ensureMonthSnapshot(
 ): Promise<Snapshot> {
   const resolvedRoot = rootDir ?? process.cwd();
 
-  // Check disk cache first
   const cached = loadMonthSnapshots(year, month, resolvedRoot);
   if (cached.length > 0) {
     const latest = cached[cached.length - 1];
@@ -48,18 +47,15 @@ export async function ensureMonthSnapshot(
     log.warn('Snapshot', `Cached snapshot circle_id ${latest.circle.circle_id} doesn't match requested ${circleId}, fetching fresh`);
   }
 
-  // Cache miss — fetch from API
   log.info('Snapshot', `Cache miss for ${year}-${String(month).padStart(2, '0')}, fetching from uma.moe`);
   const snapshot = await umaMoe.fetchCircleData(circleId, year, month);
 
-  // Determine save date
   const { year: currYear, month: currMonth } = getDataDateComponents();
   const isCurrentMonth = currYear === year && currMonth === month;
   const dataDay = isCurrentMonth
     ? getDataDate()
     : `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
 
-  // Save to disk
   saveSnapshot(snapshot, dataDay, resolvedRoot);
 
   return snapshot;

@@ -3,29 +3,37 @@
  *
  * Detects which scheduled reports were missed while the bot was offline,
  * and sends them on restart. Respects maxReportsPerStartup limit.
+ *
+ * When catch-up is disabled, detection still runs and missed reports are
+ * recorded as 'skipped' in the database. This prevents stale catch-up
+ * triggers when catch-up is later re-enabled.
  */
 
 import type { BotConfig } from '../types';
-import type { Database } from '../db/database';
-import { getDataDate, getDataDay, getDataMonth, getDataYear } from '../utils/timezone';
+import type { IDatabase } from '../db/types';
+import { getDataDate, getDataDay, getDataMonth, getDataYear, getDataDateComponents } from '../utils/timezone';
 import { log } from '../utils/logger';
 import { groupByCollision } from './helpers';
 
-// ============================================================
-// Report types that can be caught up
-// ============================================================
-
 const REPORT_TYPES = ['daily', 'weekly', 'monthly'] as const;
 
-// ============================================================
-// CatchUpManager
-// ============================================================
+/**
+ * Calculate yesterday's date in YYYY-MM-DD (data timezone: JST).
+ */
+function getYesterdayDate(): string {
+  const { year, month, day } = getDataDateComponents();
+  const d = new Date(year, month - 1, day - 1);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const dd = d.getDate();
+  return `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
 
 export class CatchUpManager {
-  private db: Database;
+  private db: IDatabase;
   private getConfig: () => BotConfig;
 
-  constructor(db: Database, getConfig: () => BotConfig) {
+  constructor(db: IDatabase, getConfig: () => BotConfig) {
     this.db = db;
     this.getConfig = getConfig;
   }
@@ -37,25 +45,19 @@ export class CatchUpManager {
   /**
    * Detect which report types were missed.
    *
-   * For each report type, checks whether the most recent scheduled run
-   * has already been completed. Instead of only checking "is today a
-   * scheduled day", this checks "was the last successful run before the
-   * most recent scheduled day".
+   * Always runs regardless of catchUp.enabled — the caller decides
+   * whether to execute catch-up or just record skipped runs.
    *
-   * This handles the case where the bot is off on a scheduled day and
-   * restarts on a later day — the missed report is still detected.
+   * For each report type, checks whether the most recent run (sent or
+   * skipped) covers the most recent scheduled day. A report is missed
+   * only when the last run predates the most recent scheduled day.
    */
-  detectMissedReports(): string[] {
-    if (!this.config.catchUp.enabled) {
-      log.debug('CatchUp', 'Catch-up is disabled');
-      return [];
-    }
-
+  async detectMissedReports(): Promise<string[]> {
     const missed: string[] = [];
 
     for (const reportType of REPORT_TYPES) {
       if (!this.isReportEnabled(reportType)) continue;
-      if (this.isReportMissed(reportType)) {
+      if (await this.isReportMissed(reportType)) {
         missed.push(reportType);
       }
     }
@@ -66,18 +68,49 @@ export class CatchUpManager {
   }
 
   /**
-   * Determine if a report type was missed based on last successful run
-   * vs the most recent scheduled day.
+   * Record missed reports as 'skipped' in the database.
+   *
+   * Called when catch-up is disabled — marks each missed report type
+   * so future detection won't treat those days as still pending.
    */
-  private isReportMissed(reportType: string): boolean {
-    const lastRun = this.db.getLastSuccessfulRun(reportType);
+  async recordSkippedReports(missed: string[]): Promise<void> {
+    if (missed.length === 0) return;
+
+    const today = getDataDate();
+    const scheduledAt = new Date().toISOString();
+    const targetJid = this.config.groups.announcement[0] ?? '';
+
+    for (const reportType of missed) {
+      await this.db.recordRun({
+        report_type: reportType,
+        report_date: today,
+        scheduled_at: scheduledAt,
+        status: 'skipped',
+        is_catch_up: false,
+        target_jid: targetJid,
+      });
+    }
+    await this.db.save();
+    log.info('CatchUp', `Recorded ${missed.length} skipped report(s): ${missed.join(', ')}`);
+  }
+
+  /**
+   * Determine if a report type was missed based on last run (sent or skipped)
+   * vs the most recent scheduled day.
+   *
+   * Uses `< yesterday` instead of `< today` so that a run recorded on the
+   * day the bot starts (even as 'skipped') prevents stale catch-up triggers.
+   */
+  private async isReportMissed(reportType: string): Promise<boolean> {
+    const lastRun = await this.db.getLastRun(reportType);
 
     switch (reportType) {
       case 'daily': {
-        // Daily should run every day. Missed if last run is before today.
-        const todayStr = getDataDate();
+        // Daily should run every day. Missed if last run is before yesterday.
+        // A run on today or yesterday means the report is covered.
+        const yesterdayStr = getYesterdayDate();
         if (!lastRun) return true;
-        return lastRun.report_date < todayStr;
+        return lastRun.report_date < yesterdayStr;
       }
 
       case 'weekly': {
@@ -151,7 +184,7 @@ export class CatchUpManager {
       return { sent: 0, skipped: 0, failed: 0, alerts: [] };
     }
 
-    const missed = this.detectMissedReports();
+    const missed = await this.detectMissedReports();
     const maxReports = this.config.catchUp.maxReportsPerStartup;
     const today = getDataDate();
     const scheduledAt = new Date().toISOString();
@@ -179,7 +212,7 @@ export class CatchUpManager {
       if (group.length === 1) {
         // Single report — send individually
         const reportType = group[0];
-        const runId = this.db.recordRun({
+        const runId = await this.db.recordRun({
           report_type: reportType,
           report_date: today,
           scheduled_at: scheduledAt,
@@ -191,12 +224,12 @@ export class CatchUpManager {
         try {
           const result = await sendReport(reportType, { isCatchUp: true });
           if (Array.isArray(result)) alerts.push(...result);
-          this.db.updateRunStatus(runId, 'sent');
-          this.db.save(); // Persist immediately for crash recovery
+          await this.db.updateRunStatus(runId, 'sent');
+          await this.db.save(); // Persist immediately for crash recovery
           sent++;
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
-          this.db.updateRunStatus(runId, 'failed', errorMsg);
+          await this.db.updateRunStatus(runId, 'failed', errorMsg);
           failed++;
           log.error('CatchUp', `Failed to send ${reportType} report`, error);
         }
@@ -207,7 +240,7 @@ export class CatchUpManager {
         if (onCombinedReport) {
           let runId: number | undefined;
           try {
-            runId = this.db.recordRun({
+            runId = await this.db.recordRun({
               report_type: combinedKey,
               report_date: today,
               scheduled_at: scheduledAt,
@@ -217,11 +250,11 @@ export class CatchUpManager {
             });
             const result = await onCombinedReport(group);
             if (Array.isArray(result)) alerts.push(...result);
-            this.db.updateRunStatus(runId, 'sent');
-            this.db.save(); // Persist immediately for crash recovery
+            await this.db.updateRunStatus(runId, 'sent');
+            await this.db.save(); // Persist immediately for crash recovery
             // Record individual runs so scheduled reports don't duplicate
             for (const type of group) {
-              this.db.recordRun({
+              await this.db.recordRun({
                 report_type: type,
                 report_date: today,
                 scheduled_at: scheduledAt,
@@ -230,20 +263,20 @@ export class CatchUpManager {
                 target_jid: targetJid,
               });
             }
-            this.db.save(); // Persist individual records for crash recovery
+            await this.db.save(); // Persist individual records for crash recovery
             sent++;
             log.info('CatchUp', `Sent combined report: ${combinedKey}`);
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             if (runId !== undefined) {
-              this.db.updateRunStatus(runId, 'failed', errorMsg);
+              await this.db.updateRunStatus(runId, 'failed', errorMsg);
             }
             failed++;
             log.error('CatchUp', `Failed to send combined report ${combinedKey}`, error);
           }
         } else {
           for (const reportType of group) {
-            const runId = this.db.recordRun({
+            const runId = await this.db.recordRun({
               report_type: reportType,
               report_date: today,
               scheduled_at: scheduledAt,
@@ -254,12 +287,12 @@ export class CatchUpManager {
             try {
               const result = await sendReport(reportType, { isCatchUp: true });
               if (Array.isArray(result)) alerts.push(...result);
-              this.db.updateRunStatus(runId, 'sent');
-              this.db.save(); // Persist immediately for crash recovery
+              await this.db.updateRunStatus(runId, 'sent');
+              await this.db.save(); // Persist immediately for crash recovery
               sent++;
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : String(error);
-              this.db.updateRunStatus(runId, 'failed', errorMsg);
+              await this.db.updateRunStatus(runId, 'failed', errorMsg);
               failed++;
               log.error('CatchUp', `Failed to send ${reportType} report`, error);
             }
@@ -270,10 +303,6 @@ export class CatchUpManager {
 
     return { sent, skipped, failed, alerts };
   }
-
-  // ============================================================
-  // Private helpers
-  // ============================================================
 
   private isReportEnabled(reportType: string): boolean {
     switch (reportType) {

@@ -12,7 +12,7 @@ import { join } from 'path';
 import { generateMembersReport } from '../../src/reports/members';
 import { computeMembers } from '../../src/reports/compute';
 import { formatNumber } from '../../src/utils/format';
-import { Database } from '../../src/db/database';
+import { SqliteDatabase } from '../../src/db/database';
 import { updateMemberHistory } from '../../src/data/member-history';
 import type { Snapshot, BotConfig, MemberData } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
@@ -128,10 +128,10 @@ function makeStaleMember(overrides: Partial<MemberData> & { viewer_id: number; t
   };
 }
 
-let db: Database;
+let db: SqliteDatabase;
 
 beforeEach(async () => {
-  db = new Database(':memory:');
+  db = new SqliteDatabase(':memory:');
   await db.initialize();
 });
 
@@ -144,41 +144,41 @@ afterEach(() => {
 // ============================================================
 
 describe('generateMembersReport', () => {
-  it('includes club name and tier in header', () => {
+  it('includes club name and tier in header', async () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('TestClub');
     expect(report).toContain('A+'); // club_rank 8 = A+
   });
 
-  it('lists all current members', () => {
+  it('lists all current members', async () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('Alice');
     expect(report).toContain('Bob');
   });
 
-  it('shows transfer badge for transfer members', () => {
+  it('shows transfer badge for transfer members', async () => {
     const snapshot = makeSnapshot({
       members: [
         makeTransferMember({ viewer_id: 1001, trainer_name: 'Alice' }),
       ],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('🔄');
     expect(report).toContain('OldClub');
   });
 
-  it('does not show left members section when no db provided', () => {
+  it('does not show left members section when no db provided', async () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).not.toMatch(/🚪|keluar/i);
   });
@@ -187,57 +187,57 @@ describe('generateMembersReport', () => {
   // Edge cases
   // ============================================================
 
-  it('returns warning for empty members array', () => {
+  it('returns warning for empty members array', async () => {
     const snapshot = makeSnapshot({ members: [] });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('Daftar Anggota');
     expect(report).toContain('Data anggota belum tersedia');
   });
 
-  it('handles single member', () => {
+  it('handles single member', async () => {
     const snapshot = makeSnapshot({
       members: [makeSnapshot().members[0]],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
     const memberLines = report.split('\n').filter(l => l.startsWith('•'));
 
     expect(memberLines).toHaveLength(1);
     expect(memberLines[0]).toContain('Alice');
   });
 
-  it('handles all active members (no transfers, no stale)', () => {
+  it('handles all active members (no transfers, no stale)', async () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).not.toContain('🔄');
     expect(report).not.toContain('⚠️');
     expect(report).not.toContain('🚪');
   });
 
-  it('uses plain text formatting (no Markdown bold or headers)', () => {
+  it('uses plain text formatting (no Markdown bold or headers)', async () => {
     const snapshot = makeSnapshot();
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).not.toMatch(/\*\*[^*]+\*\*/);
     expect(report).not.toMatch(/^#/m);
   });
 
-  it('handles Unicode club names', () => {
+  it('handles Unicode club names', async () => {
     const snapshot = makeSnapshot({
       circle: { ...makeSnapshot().circle, name: 'テストクラブ' },
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('テストクラブ');
   });
 
-  it('handles Unicode member names', () => {
+  it('handles Unicode member names', async () => {
     const snapshot = makeSnapshot({
       members: [
         {
@@ -249,12 +249,12 @@ describe('generateMembersReport', () => {
       ],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('ゆうき');
   });
 
-  it('shows "0" for zero monthly gain', () => {
+  it('shows "0" for zero monthly gain', async () => {
     const snapshot = makeSnapshot({
       members: [
         {
@@ -271,7 +271,7 @@ describe('generateMembersReport', () => {
       ],
     });
     const config = getDefaultConfig();
-    const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
     expect(report).toContain('• *ZeroGain* — 0');
   });
@@ -281,10 +281,10 @@ describe('generateMembersReport', () => {
   // ============================================================
 
   describe('badge logic', () => {
-    it('active member has no badge', () => {
+    it('active member has no badge', async () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       for (const line of lines) {
@@ -293,19 +293,19 @@ describe('generateMembersReport', () => {
       }
     });
 
-    it('transfer member has 🔄 badge and (dari X) info', () => {
+    it('transfer member has 🔄 badge and (dari X) info', async () => {
       const snapshot = makeSnapshot({
         members: [
           makeTransferMember({ viewer_id: 1001, trainer_name: 'T1', previous_circle_name: 'OriginClub' }),
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       expect(report).toContain('• *T1* 🔄 — 200 (dari OriginClub)');
     });
 
-    it('stale member has ⚠️ badge (no positive data)', () => {
+    it('stale member has ⚠️ badge (no positive data)', async () => {
       const snapshot = makeSnapshot({
         members: [
           {
@@ -333,12 +333,12 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       expect(report).toContain('• *OldMember* ⚠️');
     });
 
-    it('transfer member without previous_circle_name shows no (dari X)', () => {
+    it('transfer member without previous_circle_name shows no (dari X)', async () => {
       const snapshot = makeSnapshot({
         members: [
           {
@@ -355,13 +355,13 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       expect(report).toContain('• *T1* 🔄');
       expect(report).not.toContain('(dari');
     });
 
-    it('left member has 🚪 badge', () => {
+    it('left member has 🚪 badge', async () => {
       const snapshot = makeSnapshot({
         members: [
           {
@@ -378,7 +378,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
 
       // Status is 'stale' (no positive days), but with member_count gap=0,
       // stays stale. If member_count was 0, would be 'left'.
@@ -393,7 +393,7 @@ describe('generateMembersReport', () => {
   // ============================================================
 
   describe('sort order', () => {
-    it('active members sorted by monthlyGain descending', () => {
+    it('active members sorted by monthlyGain descending', async () => {
       const snapshot = makeSnapshot({
         members: [
           {
@@ -421,14 +421,14 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       expect(lines[0]).toContain('HighGain');
       expect(lines[1]).toContain('LowGain');
     });
 
-    it('active members (including transfers) sorted by monthlyGain descending', () => {
+    it('active members (including transfers) sorted by monthlyGain descending', async () => {
       const snapshot = makeSnapshot({
         members: [
           makeTransferMember({
@@ -450,7 +450,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       // Both are active (transfers are active with badge), sorted by gain desc
@@ -458,7 +458,7 @@ describe('generateMembersReport', () => {
       expect(lines[1]).toContain('ActiveLow');
     });
 
-    it('transfer members appear before stale members', () => {
+    it('transfer members appear before stale members', async () => {
       const snapshot = makeSnapshot({
         members: [
           makeStaleMember({ viewer_id: 1001, trainer_name: 'StaleMember' }),
@@ -477,7 +477,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       const transferIdx = lines.findIndex(l => l.includes('TransferMember'));
@@ -485,7 +485,7 @@ describe('generateMembersReport', () => {
       expect(transferIdx).toBeLessThan(staleIdx);
     });
 
-    it('transfer members sorted by monthlyGain desc within group', () => {
+    it('transfer members sorted by monthlyGain desc within group', async () => {
       const snapshot = makeSnapshot({
         members: [
           makeTransferMember({
@@ -502,7 +502,7 @@ describe('generateMembersReport', () => {
         ],
       });
       const config = getDefaultConfig();
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const lines = report.split('\n').filter(l => l.startsWith('•'));
 
       expect(lines[0]).toContain('HighTransfer');
@@ -515,7 +515,7 @@ describe('generateMembersReport', () => {
   // ============================================================
 
   describe('left members with DB', () => {
-    it('shows left members section when db is provided and left members exist', () => {
+    it('shows left members section when db is provided and left members exist', async () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
 
@@ -535,15 +535,15 @@ describe('generateMembersReport', () => {
           },
         ],
       });
-      updateMemberHistory(earlierSnapshot, db);
+      await updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).toContain('Charlie');
       expect(report).toContain('🚪');
     });
 
-    it('shows last_seen date for left members', () => {
+    it('shows last_seen date for left members', async () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
 
@@ -563,35 +563,35 @@ describe('generateMembersReport', () => {
           },
         ],
       });
-      updateMemberHistory(earlierSnapshot, db);
+      await updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).toContain('Diana');
       expect(report).toContain('terakhir');
     });
 
-    it('does not show left section when no members have left', () => {
+    it('does not show left section when no members have left', async () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
 
-      updateMemberHistory(snapshot, db);
+      await updateMemberHistory(snapshot, db);
 
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).not.toMatch(/🚪/);
     });
 
-    it('does not show left section when db has no history', () => {
+    it('does not show left section when db has no history', async () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
 
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).not.toMatch(/🚪/);
     });
 
-    it('still shows current members when db is provided', () => {
+    it('still shows current members when db is provided', async () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
 
@@ -611,16 +611,16 @@ describe('generateMembersReport', () => {
           },
         ],
       });
-      updateMemberHistory(earlierSnapshot, db);
+      await updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
 
       expect(report).toContain('Alice');
       expect(report).toContain('Bob');
       expect(report).toContain('Charlie');
     });
 
-    it('left members section appears after main member list', () => {
+    it('left members section appears after main member list', async () => {
       const snapshot = makeSnapshot();
       const config = getDefaultConfig();
 
@@ -640,9 +640,9 @@ describe('generateMembersReport', () => {
           },
         ],
       });
-      updateMemberHistory(earlierSnapshot, db);
+      await updateMemberHistory(earlierSnapshot, db);
 
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config), db);
       const lines = report.split('\n');
       const mainListEnd = lines.findIndex(l => l.includes('🚪'));
       const aliceIdx = lines.findIndex(l => l.includes('Alice'));
@@ -664,20 +664,20 @@ describe('generateMembersReport', () => {
     );
     const config = getDefaultConfig();
 
-    it('generates report with 34 member lines', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('generates report with 34 member lines', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const memberLines = report.split('\n').filter(l => l.startsWith('•'));
       expect(memberLines).toHaveLength(34);
     });
 
-    it('first member is GoldFamily at 27.7M', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('first member is GoldFamily at 27.7M', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const firstMemberLine = report.split('\n').filter(l => l.startsWith('•'))[0];
       expect(firstMemberLine).toBe('• *GoldFamily* — 27.7M');
     });
 
-    it('last active member is Yukil at 4.6M', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('last active member is Yukil at 4.6M', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const members = computeMembers(snapshot, config);
       const activeCount = members.filter(m => m.status === 'active').length;
       const memberLines = report.split('\n').filter(l => l.startsWith('•'));
@@ -685,8 +685,8 @@ describe('generateMembersReport', () => {
       expect(lastActiveLine).toBe('• *Yukil* — 4.6M');
     });
 
-    it('all 6 transfer members have 🔄 badge and correct origin', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('all 6 transfer members have 🔄 badge and correct origin', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const transferLines = report.split('\n').filter(l => l.includes('🔄'));
 
       expect(transferLines).toHaveLength(6);
@@ -716,8 +716,8 @@ describe('generateMembersReport', () => {
       ]));
     });
 
-    it('all 4 left members have 🚪 badge', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('all 4 left members have 🚪 badge', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const leftLines = report.split('\n').filter(l => l.includes('🚪'));
 
       expect(leftLines).toHaveLength(4);
@@ -735,8 +735,8 @@ describe('generateMembersReport', () => {
       ]));
     });
 
-    it('sort order: active (desc) → stale → left', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('sort order: active (desc) → stale → left', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       const memberLines = report.split('\n').filter(l => l.startsWith('•'));
 
       // Find boundaries
@@ -768,19 +768,19 @@ describe('generateMembersReport', () => {
       }
     });
 
-    it('header shows club name and tier', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('header shows club name and tier', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       expect(report).toContain('Hol＿Horse');
       expect(report).toContain('A+');
     });
 
-    it('report starts with 👥 Daftar Anggota', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('report starts with 👥 Daftar Anggota', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       expect(report.substring(0, 100)).toContain('👥 *Daftar Anggota');
     });
 
-    it('no Markdown bold or headers in output', () => {
-      const report = generateMembersReport(snapshot, config, computeMembers(snapshot, config));
+    it('no Markdown bold or headers in output', async () => {
+      const report = await generateMembersReport(snapshot, config, computeMembers(snapshot, config));
       expect(report).not.toMatch(/\*\*[^*]+\*\*/);
       expect(report).not.toMatch(/^#/m);
     });

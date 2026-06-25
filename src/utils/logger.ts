@@ -13,10 +13,6 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 
-// ============================================================
-// Log levels
-// ============================================================
-
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
@@ -25,10 +21,6 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   warn: 2,
   error: 3,
 };
-
-// ============================================================
-// Configuration
-// ============================================================
 
 export interface LoggerConfig {
   level: LogLevel;
@@ -53,10 +45,6 @@ const DEFAULT_CONFIG: LoggerConfig = {
   // automatically so tests don't pollute the real bot.log.
   fileOutput: !process.env.JEST_WORKER_ID,
 };
-
-// ============================================================
-// Logger class
-// ============================================================
 
 class Logger {
   private config: LoggerConfig;
@@ -146,22 +134,35 @@ class Logger {
 
   /**
    * Write a log line to console and/or file.
+   *
+   * For error-level logs, the stack trace is written to the file only —
+   * console output shows just the message to keep production logs clean.
    */
   private write(level: LogLevel, tag: string, message: string): void {
     if (!this.shouldLog(level)) return;
 
-    const line = this.formatLine(level, tag, message);
-
-    // Console output
+      // Console output — strip stack trace for error/warn level
     if (this.config.console) {
+      const consoleMsg = (level === 'error' || level === 'warn') ? this.stripStackTrace(message) : message;
+      const consoleLine = this.formatLine(level, tag, consoleMsg);
       const color = this.getColor(level);
       const reset = '\x1b[0m';
       // eslint-disable-next-line no-console
-      console.log(`${color}${line}${reset}`);
+      console.log(`${color}${consoleLine}${reset}`);
     }
 
-    // File output
-    this.writeToFile(line);
+    // File output — full message including stack trace
+    const fileLine = this.formatLine(level, tag, message);
+    this.writeToFile(fileLine);
+  }
+
+  /**
+   * Strip stack trace from an error message.
+   * "Error: foo\n    at bar\n    at baz" → "Error: foo"
+   */
+  private stripStackTrace(message: string): string {
+    const newlineIdx = message.indexOf('\n');
+    return newlineIdx >= 0 ? message.slice(0, newlineIdx) : message;
   }
 
   /**
@@ -230,10 +231,6 @@ class Logger {
     }
   }
 
-  // ============================================================
-  // Public API
-  // ============================================================
-
   debug(tag: string, message: string, err?: unknown): void {
     const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
     this.write('debug', tag, message + suffix);
@@ -254,9 +251,5 @@ class Logger {
     this.write('error', tag, message + suffix);
   }
 }
-
-// ============================================================
-// Singleton instance
-// ============================================================
 
 export const log = new Logger();

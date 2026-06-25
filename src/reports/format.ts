@@ -5,19 +5,11 @@
  * timezone helpers in utils/timezone.ts.
  */
 
-// ============================================================
-// Date formatting
-// ============================================================
-
 import { formatDateWIB, getDataDateComponents, formatForDisplay } from '../utils/timezone';
 
 import type { Snapshot, BotConfig } from '../types';
 import { getLatestDataDay } from '../data/daily-fans';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-
-// ============================================================
-// Stale data warning
-// ============================================================
 
 /**
  * Check if a snapshot's data is stale (more than 1 day behind current data day).
@@ -47,10 +39,6 @@ export function getStaleDataWarning(
   return '';
 }
 
-// ============================================================
-// Shared report helpers
-// ============================================================
-
 /**
  * Build the snapshot date string from the data day.
  * Uses the snapshot's year/month and the computed data day.
@@ -73,10 +61,6 @@ export function buildFooter(config: BotConfig, snapshotDate?: string): string {
   const dateToUse = isNaN(parsed.getTime()) ? new Date() : parsed;
   return `⸻\nTerakhir sync: ${formatForDisplay(dateToUse, config.timezone)}`;
 }
-
-// ============================================================
-// Data update line
-// ============================================================
 
 const DATA_UPDATE_STRING = '22:00 WIB';
 

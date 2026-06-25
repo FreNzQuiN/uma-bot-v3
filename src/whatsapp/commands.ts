@@ -7,20 +7,12 @@
 
 import type { ComputedMember } from '../types';
 
-// ============================================================
-// Types
-// ============================================================
-
 export interface ParsedCommand {
   command: string;
   args: string[];
   offset: number | null;
   raw: string;
 }
-
-// ============================================================
-// Levenshtein distance helper
-// ============================================================
 
 function levenshteinDistance(a: string, b: string): number {
   const aLen = a.length;
@@ -49,18 +41,10 @@ function levenshteinDistance(a: string, b: string): number {
   return prev[bLen];
 }
 
-// ============================================================
-// Strict integer parsing (prevents hex/octal injection)
-// ============================================================
-
 function parseStrictInt(value: string): number | null {
   if (!/^-?\d+$/.test(value)) return null;
   return parseInt(value, 10);
 }
-
-// ============================================================
-// parseCommand
-// ============================================================
 
 /**
  * Parse a message text into a structured command.
@@ -106,10 +90,6 @@ export function parseCommand(text: string, prefixes: string[]): ParsedCommand | 
     raw: trimmed,
   };
 }
-
-// ============================================================
-// resolveMemberName
-// ============================================================
 
 /**
  * Resolve a partial name to a unique member.

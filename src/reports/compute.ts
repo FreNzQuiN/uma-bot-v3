@@ -38,7 +38,6 @@ export function computeMembers(
 ): ComputedMember[] {
   const latestDataDay = getDataDayFromSnapshot(snapshot);
 
-  // First pass: compute raw status for every member
   const membersWithGain: (ComputedMember & { monthlyGain: number })[] =
     snapshot.members.map((member) => {
       const dailyFans = member.daily_fans;

@@ -25,21 +25,17 @@ export function generateBottomReport(
   config: BotConfig,
   computedMembers: ComputedMember[]
 ): string {
-  // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Perlu Perhatian*\nData anggota belum tersedia untuk analisis.';
   }
 
-  // Active members, sorted by monthly gain ascending (lowest first)
   const contributing = computedMembers
     .filter((m) => m.status === 'active')
     .sort((a, b) => a.monthlyGain - b.monthlyGain);
 
-  // Club info
   const { circle, club_rank } = snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
-  // Date
   const dataDay = getDataDayFromSnapshot(snapshot);
   const dateStr = buildDateStr(snapshot, dataDay);
   const formattedDate = formatDateWIB(dateStr);
@@ -51,7 +47,6 @@ export function generateBottomReport(
   lines.push(buildDataLine(formattedDate));
   lines.push('');
 
-  // Requirements context
   const { monthlyFans, weeklyFans } = config.requirements;
   const daysInMonth = new Date(snapshot.members[0].year, snapshot.members[0].month, 0).getDate();
   const daysElapsed = dataDay;
@@ -63,7 +58,6 @@ export function generateBottomReport(
   }
   lines.push('');
 
-  // Show bottom 10 or all if fewer
   const bottomCount = Math.min(10, contributing.length);
   for (let i = 0; i < bottomCount; i++) {
     const m = contributing[i];
@@ -95,7 +89,6 @@ export function generateBottomReport(
     }
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

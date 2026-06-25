@@ -85,7 +85,7 @@ Logs are saved to `data/logs/pm2-error.log` and `data/logs/pm2-out.log`.
 
 | Script | Description |
 |--------|-------------|
-| `npm test` | Run all 1599 tests |
+| `npm test` | Run all tests |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:coverage` | Run tests with coverage report |
 | `npm run lint:check` | TypeScript type check (no emit) |
@@ -190,4 +190,3 @@ The bot runs a local HTTP API on `127.0.0.1:3000` (configurable via `API_PORT`).
 | `/status` | Admin | Bot status |
 | `/catchup on\|off` | Admin | Toggle catch-up mode |
 | `/alerts on\|off` | Admin | Toggle alerts |
-| `/schedule` | Admin | Schedule settings (coming soon) |

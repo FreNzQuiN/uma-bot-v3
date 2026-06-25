@@ -1,6 +1,6 @@
 import { computeMembers } from '../../src/reports/compute';
 import { detectAlerts } from '../../src/alerts/alerts';
-import { Database } from '../../src/db/database';
+import { SqliteDatabase } from '../../src/db/database';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot } from '../../src/types';
 import { loadRealSnapshot } from '../_helpers';
@@ -8,15 +8,15 @@ import { getDailyGain } from '../../src/data/daily-fans';
 
 const realSnapshot: Snapshot = loadRealSnapshot();
 
-let db: Database;
+let db: SqliteDatabase;
 
 beforeEach(async () => {
-  db = new Database(':memory:');
+  db = new SqliteDatabase(':memory:');
   await db.initialize();
 });
 
-afterEach(() => {
-  db.close();
+afterEach(async () => {
+  await db.close();
 });
 
 describe('Bug 2: countActiveDaysUpTo consecutive streak counting', () => {
@@ -79,7 +79,7 @@ describe('Bug 2: countActiveDaysUpTo consecutive streak counting', () => {
     const config = getDefaultConfig();
     config.alerts.streakBreak.enabled = true;
 
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
     const streakAlerts = alerts.filter(
       (a) => a.type === 'streak_break' && a.memberViewerId === '99999'
     );
@@ -137,7 +137,7 @@ describe('Bug 2: countActiveDaysUpTo consecutive streak counting', () => {
     const config = getDefaultConfig();
     config.alerts.streakBreak.enabled = true;
 
-    const alerts = detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
     const streakAlerts = alerts.filter(
       (a) => a.type === 'streak_break' && a.memberViewerId === '99999'
     );

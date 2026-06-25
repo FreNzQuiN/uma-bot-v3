@@ -8,7 +8,7 @@
 
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
-import type { Database } from '../db/database';
+import type { IDatabase } from '../db/types';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { formatDateWIB } from '../utils/timezone';
 import { buildFooter, buildDateStr } from './format';
@@ -22,22 +22,19 @@ import { getLeftMembers } from '../data/member-history';
  * @param computedMembers - Pre-computed member data (ComputedMember[])
  * @param db - Optional database for querying left members history
  */
-export function generateMembersReport(
+export async function generateMembersReport(
   snapshot: Snapshot,
   config: BotConfig,
   computedMembers: ComputedMember[],
-  db?: Database
-): string {
-  // Guard: empty members
+  db?: IDatabase
+): Promise<string> {
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Daftar Anggota*\nData anggota belum tersedia.';
   }
 
-  // Club info
   const { circle, club_rank } = snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
-  // Sort: active first (by monthly gain desc), then stale, then left
   const statusOrder = { active: 0, stale: 1, left: 2 };
   const sorted = [...computedMembers].sort((a, b) => {
     const sa = statusOrder[a.status] ?? 3;
@@ -69,9 +66,8 @@ export function generateMembersReport(
     );
   }
 
-  // Append left members section if DB is provided
   if (db) {
-    const leftMembers = getLeftMembers(snapshot, db);
+    const leftMembers = await getLeftMembers(snapshot, db);
     if (leftMembers.length > 0) {
       lines.push('');
       lines.push('*🚪 Anggota yang sudah keluar:*');
@@ -83,7 +79,6 @@ export function generateMembersReport(
     }
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

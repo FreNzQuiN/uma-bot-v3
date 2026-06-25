@@ -53,13 +53,11 @@ export function generateCompareReport(
   const weeklyGainA = memberA.weeklyGains[currentWeekNum - 1] || 0;
   const weeklyGainB = memberB.weeklyGains[currentWeekNum - 1] || 0;
 
-  // Format member names with transfer badge and bold
   const badgeA = memberA.isTransfer ? ' 🔄' : '';
   const badgeB = memberB.isTransfer ? ' 🔄' : '';
   const boldA = `*${sanitizeName(memberA.trainerName)}*${badgeA}`;
   const boldB = `*${sanitizeName(memberB.trainerName)}*${badgeB}`;
 
-  // Snapshot date for context
   const dateStr = buildDateStr(snapshot, latestDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
@@ -107,7 +105,6 @@ export function generateCompareReport(
     lines.push('🤝 *Seri* di monthly gain');
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

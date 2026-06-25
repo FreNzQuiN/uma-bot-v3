@@ -22,22 +22,18 @@ const MEDALS = ['🥇', '🥈', '🥉'];
  * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateRanksReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
-  // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Peringkat*\nData peringkat belum tersedia.';
   }
 
-  // Sort by monthly gain descending, top 10 only
   const sorted = [...computedMembers]
     .filter((m) => m.status === 'active')
     .sort((a, b) => b.monthlyGain - a.monthlyGain)
     .slice(0, 10);
 
-  // Club info
   const { circle, club_rank } = snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
-  // Date
   const dataDay = getDataDayFromSnapshot(snapshot);
   const dateStr = buildDateStr(snapshot, dataDay);
   const formattedDate = formatDateWIB(dateStr);
@@ -59,7 +55,6 @@ export function generateRanksReport(snapshot: Snapshot, config: BotConfig, compu
     );
   }
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

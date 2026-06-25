@@ -43,27 +43,22 @@ export function generateAnalyzeReport(
   const avg7d = computeRollingAverage(member.dailyFans, latestDataDay, 7, config.requirements.includeTransferDataInCalculation);
   const daysInMonth = latestDataDay;
 
-  // Days where member actually contributed (daily gain > 0)
   const activeDays = countActiveDays(member.dailyFans, latestDataDay, config.requirements.includeTransferDataInCalculation);
 
-  // Consistency: active days / total data days
   const consistency = daysInMonth > 0
     ? Math.round((activeDays / daysInMonth) * 100)
     : 0;
 
-  // Trend direction (Indonesian)
   let trend: 'naik' | 'turun' | 'stabil' = 'stabil';
   if (avg3d > avg7d * TREND_UP_THRESHOLD) trend = 'naik';
   else if (avg3d < avg7d * TREND_DOWN_THRESHOLD) trend = 'turun';
   const trendEmoji = { naik: '📈', turun: '📉', stabil: '➡️' };
 
-  // Requirement status
   const monthlyReq = config.requirements.monthlyFans;
   const reqStatus = member.monthlyGain >= monthlyReq
     ? `✅ Memenuhi (${formatNumber(member.monthlyGain)} / ${formatNumber(monthlyReq)})`
     : `❌ Kurang ${formatNumber(monthlyReq - member.monthlyGain)} lagi`;
 
-  // Projected month-end
   const { year, month } = snapshot.members[0];
   const daysInFullMonth = new Date(year, month, 0).getDate();
   const daysElapsed = daysInMonth;
@@ -71,14 +66,11 @@ export function generateAnalyzeReport(
     ? Math.round((member.monthlyGain / daysElapsed) * daysInFullMonth)
     : 0;
 
-  // Snapshot date for context
   const dateStr = buildDateStr(snapshot, latestDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
-  // Transfer badge in title
   const transferBadge = member.isTransfer ? ' 🔄' : '';
 
-  // Weekly gains
   const weekLabels = member.weeklyGains.map((_, i) => `W${i + 1}`);
   const weeklyStr = member.weeklyGains
     .map((g, i) => `${weekLabels[i]}: ${formatNumber(g)}`)
@@ -109,7 +101,6 @@ export function generateAnalyzeReport(
   lines.push(`• Status: ${reqStatus}`);
   lines.push(`• Proyeksi akhir bulan: ~${formatNumber(projected)}`);
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

@@ -1,730 +1,372 @@
-# Architecture Map: Uma Club Bot v3
+# Database Abstraction Layer — Architecture Map
 
-> Generated: 2026-06-24
-> Scope: Full codebase (`src/` — 40 TypeScript files, 7,883 lines)
+## 1. Module Dependency Graph
+
+### Core DB layer (4 files)
+
+```
+src/db/types.ts          ← IDatabase interface (the contract)
+src/db/database.ts       ← SqliteDatabase implements IDatabase
+src/db/mysql-database.ts ← MysqlDatabase implements IDatabase
+src/db/factory.ts        ← createDatabase() factory, returns IDatabase
+```
+
+### Who imports what from the DB layer
+
+**Type-only imports (`IDatabase`)** — 10 consumer files depend only on the interface:
+
+| Consumer file | Import | Usage |
+|---|---|---|
+| `src/api/server.ts:11` | `IDatabase` type | Health-check query via `getLastSuccessfulRun` |
+| `src/alerts/alerts.ts:18` | `IDatabase` type | Batch dedup via `getExistingAlertKeys`, quiet-hours `recordAlert` |
+| `src/data/member-history.ts:9` | `IDatabase` type | `transaction`, `getMember`, `upsertMember`, `getMembers` |
+| `src/orchestrator/report-orchestrator.ts:9` | `IDatabase` type | `recordAlert`, `markAlertSent` |
+| `src/reports/members.ts:11` | `IDatabase` type | Passed to `getLeftMembers` for left-member history |
+| `src/reports/registry.ts:9` | `IDatabase` type | Optional `db` param forwarded to `generateMembersReport` |
+| `src/scheduler/catchup.ts:9` | `IDatabase` type | `getLastSuccessfulRun`, `recordRun`, `updateRunStatus`, `save` |
+| `src/scheduler/scheduler.ts:11` | `IDatabase` type | `getLastSuccessfulRun`, `recordRun`, `updateRunStatus` |
+| `src/whatsapp/dispatch.ts:9` | `IDatabase` type | `getLastSuccessfulRun` (status command) |
+
+**Value import (`createDatabase`)** — 1 consumer:
+
+| Consumer file | Import | Usage |
+|---|---|---|
+| `src/index.ts:14` | `createDatabase` from `./db/factory` | Creates adapter at startup, stored as `IDatabase` |
+
+**Value import (`SqliteDatabase`)** — 1 internal + tests:
+
+| Consumer file | Import | Usage |
+|---|---|---|
+| `src/db/factory.ts:7` | `SqliteDatabase` from `./database` | Instantiated when `backend === 'sqlite'` |
+
+**No consumer in `src/` imports `SqliteDatabase` or `MysqlDatabase` directly** — all production code depends on `IDatabase` or `createDatabase`. The backward-compat aliases (`Database = SqliteDatabase` at `src/db/database.ts:487-488`) are only used by test files.
+
+### Test-layer imports (concrete classes)
+
+| Test file | Import |
+|---|---|
+| `tests/db/database.integration.test.ts:1` | `SqliteDatabase` |
+| `tests/db/database-regression.test.ts:1` | `SqliteDatabase` |
+| `tests/db/mysql-database.unit.test.ts:36-37` | `MysqlDatabase`, `MysqlConfig` |
+| `tests/alerts/alerts.unit.test.ts:3` | `SqliteDatabase` |
+| `tests/alerts/alerts-regression.test.ts:3` | `SqliteDatabase` |
+| `tests/data/member-history.unit.test.ts:6` | `SqliteDatabase` |
+| `tests/data/left-members.unit.test.ts:9` | `SqliteDatabase` |
+| `tests/reports/members.unit.test.ts:15` | `Database` (alias) |
+| `tests/reports/compute.unit.test.ts:11` | `Database` (alias) |
+| `tests/scheduler/scheduler.unit.test.ts:4` | `Database` (alias) |
+| `tests/scheduler/catchup-regression.test.ts:2` | `Database` (alias) |
 
 ---
 
-## 1. Entry Points and How They Connect
+## 2. Async Boundary Analysis
 
-### Primary Entry Point
-- **`src/index.ts`** (354 lines) — Composition root. Wires all modules together and orchestrates startup.
-  - `main()` is the only async entry function, called at the bottom of the file
-  - Writes PID to `data/bot.pid` for stop script
-  - Registers global error handlers (`unhandledRejection`, `uncaughtException`)
+Every method on `IDatabase` returns `Promise`. All callers have been migrated to `async/await`.
 
-### Secondary Entry Points
-- **`src/whatsapp/dispatch.ts:setupCommandHandler()`** — Registers as WhatsApp message handler; all user interaction flows through here.
-- **`src/api/server.ts:ApiServer.start()`** — HTTP API on `127.0.0.1:3000`; external consumers hit this.
-- **`src/scheduler/scheduler.ts:Scheduler.start()`** — Cron-based auto-delivery; triggers report generation on schedule.
-- **`src/config.ts:loadConfig()`** — Called by entry point and config watcher; validates YAML → BotConfig.
+### Functions that became async (full list)
 
-### Startup Sequence (verified in `src/index.ts:76-348`)
-```
-1. Load config + init DB                    (lines 87-92)
-2. Watch config.yaml for changes            (lines 98-191)
-3. Create WhatsApp client (not connected)   (line 116)
-4. Create ReportOrchestrator                (line 119)
-5. Register command dispatch                (lines 121-124)
-6. Fetch fresh data if stale                (lines 194-226)
-7. Pre-fetch previous 2 months              (lines 228-239)
-8. Update member history + rank history     (lines 241-255)
-9. Start HTTP API server                    (lines 257-265)
-10. Start scheduler                         (lines 279-302)
-11. Connect WhatsApp (non-blocking)         (lines 306-333)
-12. After WA connects → catch-up → normal   (lines 306-329)
-13. Graceful shutdown on SIGINT/SIGTERM     (lines 336-346)
-```
+**Report generators** — `generateReportString` in `src/reports/registry.ts:25` is now `async`. This propagated to:
 
----
+- `src/reports/registry.ts:39` — `generateMembersReport` is `async` (uses `getLeftMembers`)
+- `src/dispatch.ts:324-335` — `generateReport()` calls `await generateReportString()`
+- `src/orchestrator/report-orchestrator.ts:152-172` — `generateReportString()` is `async`
 
-## 2. Main Modules/Components and Their Responsibilities
+**Alert detection** — `detectAlerts` in `src/alerts/alerts.ts:43` is `async` because it calls `db.getExistingAlertKeys`. This propagated to:
 
-### Core Infrastructure
+- `src/orchestrator/report-orchestrator.ts:201` — `await detectAlerts(...)` in `processAlertsForReport`
+- `src/orchestrator/report-orchestrator.ts:316` — `await this.processAlertsForReport(...)` in `sendReport`
 
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **Entry** | `src/index.ts` | 354 | Composition root, startup orchestration, config watcher, graceful shutdown |
-| **Config** | `src/config.ts` | 229 | YAML loading, Zod validation, immutable updates, atomic save |
-| **Types** | `src/types/index.ts` | 334 | All shared TypeScript interfaces, type definitions, constants |
-| **Runtime** | `src/runtime.ts` | 93 | Module-level mutable state for uptime, reconnects, message counts |
-| **Logger** | `src/utils/logger.ts` | 262 | Structured logging with file rotation, configurable timezone |
-| **Timezone** | `src/utils/timezone.ts` | 173 | JST data timezone + WIB display timezone via Intl API |
-| **Format** | `src/utils/format.ts` | 128 | Pure string utilities: formatNumber, sanitizeName, splitMessage |
+**Member history** — `updateMemberHistory` in `src/data/member-history.ts:27` is `async`. Uses `db.transaction()`, `db.getMember()`, `db.upsertMember()`, `db.getMembers()`.
 
-### Data Layer
+**Scheduler** — `recordAndSend` in `src/scheduler/scheduler.ts:50` is `async`. Calls `db.getLastSuccessfulRun`, `db.recordRun`, `db.updateRunStatus`.
 
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **Snapshot** | `src/data/snapshot.ts` | 278 | Immutable JSON save/load/path management (`data/snapshots/YYYY/MM/DD.json`) |
-| **Ensure Snapshot** | `src/data/ensure-snapshot.ts` | 66 | Cache-or-fetch for month snapshots (bridges data ↔ API) |
-| **Daily Fans** | `src/data/daily-fans.ts` | 313 | Core arithmetic on the 32-element `daily_fans` array |
-| **Member History** | `src/data/member-history.ts` | 103 | Track member join/leave by diffing snapshots against DB |
-| **Database** | `src/db/database.ts` | 482 | SQLite via sql.js: settings, schedule_runs, alert_events, member_history, rank_history |
+**CatchUpManager** — `detectMissedReports` in `src/scheduler/catchup.ts:48` is `async`. Calls `db.getLastSuccessfulRun` for each report type.
 
-### API Layer
+**Dispatch** — `setupCommandHandler` in `src/whatsapp/dispatch.ts:69` registers an `async` message handler.
 
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **UmaMoe Client** | `src/api/uma-moe.ts` | 137 | Playwright-based HTTP client for uma.moe (Turnstile bypass) |
-| **API Server** | `src/api/server.ts` | 374 | REST API on localhost: reports, members, tier, snapshots, groups, chats |
+**API server** — Health check in `src/api/server.ts:218` calls `await db.getLastSuccessfulRun('_health_check')`.
 
-### Report Engine
-
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **Compute** | `src/reports/compute.ts` | 173 | Transform raw snapshots → ComputedMember[] with gains, status, weekly breakdowns |
-| **Registry** | `src/reports/registry.ts` | 43 | Type string → generator function mapping (single source of truth) |
-| **Format (reports)** | `src/reports/format.ts` | 86 | Shared report helpers: stale warnings, date strings, footer, data line |
-| **Daily** | `src/reports/daily.ts` | 150 | Daily performance summary |
-| **Weekly** | `src/reports/weekly.ts` | 173 | Weekly performance summary |
-| **Monthly** | `src/reports/monthly.ts` | 190 | Monthly performance summary |
-| **Ranks** | `src/reports/ranks.ts` | 65 | Top 10 leaderboard |
-| **Bottom** | `src/reports/bottom.ts` | 103 | Members needing attention |
-| **Stats** | `src/reports/stats.ts` | 170 | Club-wide statistics |
-| **Members** | `src/reports/members.ts` | 89 | Full member listing |
-| **Tier** | `src/reports/tier.ts` | 79 | Tier promotion/demotion intelligence |
-| **Compare** | `src/reports/compare.ts` | 113 | Side-by-side member comparison |
-| **Analyze** | `src/reports/analyze.ts` | 115 | Deep single-member analysis |
-| **Combined** | `src/reports/combined.ts` | 47 | Multi-type combined report (collision days) |
-
-### Orchestration
-
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **Report Orchestrator** | `src/orchestrator/report-orchestrator.ts` | 315 | Full report pipeline: alignment, pre-fetch, generation, delivery, alerts |
-
-### Scheduler
-
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **Scheduler** | `src/scheduler/scheduler.ts` | 321 | Cron-based auto-delivery with collision detection |
-| **CatchUp** | `src/scheduler/catchup.ts` | 291 | Detect missed reports on restart, send catch-up reports |
-| **Helpers** | `src/scheduler/helpers.ts` | 52 | `isScheduledToday`, `getCollidingTypes`, `groupByCollision` |
-
-### WhatsApp
-
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **Client** | `src/whatsapp/client.ts` | 635 | Baileys connection lifecycle, QR auth, reconnection, message sending |
-| **Dispatch** | `src/whatsapp/dispatch.ts` | 466 | Command routing: parse → access control → generate → send |
-| **Commands** | `src/whatsapp/commands.ts` | 192 | Command parser + Levenshtein member name resolution |
-| **Admin** | `src/whatsapp/admin.ts` | 234 | Admin command handlers: /setreq, /config, /status, /catchup, /alerts |
-| **Access** | `src/whatsapp/access.ts` | 96 | Access control: admin vs command group vs announcement group |
-
-### Alerts
-
-| Module | Path | Lines | Purpose |
-|--------|------|-------|---------|
-| **Alerts** | `src/alerts/alerts.ts` | 333 | Detection (5 types), dedup via DB, formatting, quiet hours, catch-up aggregation |
-
----
-
-## 3. Data Flow Through the System
-
-### Inbound: Data Acquisition
+### Async propagation chain
 
 ```
-uma.moe API
-    │
-    ▼
-UmaMoeClient.fetchCircleData()     ← src/api/uma-moe.ts:77
-    │  (Playwright → Turnstile → same-origin fetch)
-    ▼
-saveSnapshot()                     ← src/data/snapshot.ts:52
-    │
-    ▼
-data/snapshots/YYYY/MM/DD.json    (immutable after save)
-```
-
-**Triggers:**
-- On startup if snapshot is stale (`src/index.ts:194-226`)
-- On scheduled data fetch (`src/scheduler/scheduler.ts:158-169`)
-- On-demand via `npm run fetch`
-- On report request with month mismatch (`src/orchestrator/report-orchestrator.ts:104-143`)
-
-### Outbound: Report Delivery
-
-```
-Snapshot (JSON)
-    │
-    ▼
-computeMembers()                   ← src/reports/compute.ts:33
-    │  (daily_fans[] → ComputedMember[])
-    │  Called ONCE per pipeline by orchestrator or dispatch
-    ▼
-generateReportString()             ← src/reports/registry.ts:25
-    │  (registry dispatches to daily/weekly/monthly/etc.)
-    ▼
-ReportOrchestrator.deliverReport() ← src/orchestrator/report-orchestrator.ts:49
-    │
-    ▼
-WhatsAppClient.sendMessage()       ← src/whatsapp/client.ts:471
-    │  (splits at newline boundaries)
-    ▼
-Announcement Groups (WhatsApp)
-```
-
-### Alert Flow
-
-```
-ComputedMember[] + Snapshot + Config
-    │
-    ▼
-detectAlerts()                     ← src/alerts/alerts.ts:43
-    │  (5 types: performance_drop, demotion_risk, streak_break, new_transfer, rank_drop)
-    ▼
-db.recordAlert()                   ← dedup via event_key uniqueness
-    │
-    ▼
-formatAlerts() / aggregateAlerts() ← src/alerts/alerts.ts:229, 285
-    │
-    ▼
-WhatsApp → Admin JIDs or alertAdmin groups
-```
-
-### Command Flow (WhatsApp → Report)
-
-```
-WhatsApp message
-    │
-    ▼
-WhatsAppClient.onMessage()         ← src/whatsapp/client.ts:298
-    │
-    ▼
-setupCommandHandler()              ← src/whatsapp/dispatch.ts:68
-    │
-    ▼
-parseCommand()                     ← src/whatsapp/commands.ts:73
-    │
-    ▼
-canUseCommand()                    ← src/whatsapp/access.ts:59
-    │  (admin check, group check, command type check)
-    ▼
-dispatchMessage()                  ← src/whatsapp/dispatch.ts:102
-    ├─► ping/help/admin reference commands
-    ├─► handleReportCommand()       (daily/weekly/monthly/ranks/bottom/stats/members/tier/compare/analyze)
-    └─► handleAdminCommand()        (setreq/config/status/catchup/alerts/debug)
+index.ts:99  await createDatabase(config.database)
+  ↓
+index.ts:257  await updateMemberHistory(snapshot, db)
+index.ts:258  await db.saveRankHistory(...)
+  ↓
+scheduler.ts:60  await this.db.getLastSuccessfulRun(reportType)
+scheduler.ts:68  await this.db.recordRun(...)
+scheduler.ts:79  await this.db.updateRunStatus(runId, 'sent')
+  ↓
+catchup.ts:58  await this.db.getLastSuccessfulRun(reportType) [per report type]
+catchup.ts:182  await this.db.recordRun(...)
+catchup.ts:194  await this.db.updateRunStatus(runId, 'sent')
+  ↓
+orchestrator.ts:201  await detectAlerts(..., this.db)
+orchestrator.ts:206  await this.db.recordAlert(...)
+orchestrator.ts:222  await this.db.markAlertSent(alertId)
+  ↓
+alerts.ts:172  await db.getExistingAlertKeys(candidateKeys)
+  ↓
+registry.ts:39  await generateMembersReport(snapshot, config, computedMembers, options?.db)
+  ↓
+members.ts:74  await getLeftMembers(snapshot, db)
+member-history.ts:36  await db.getMember(member.viewer_id)
+member-history.ts:39  await db.upsertMember(...)
+member-history.ts:52  await db.getMembers(circleId)
 ```
 
 ---
 
-## 4. External Dependencies (APIs, Databases, Services)
+## 3. Type System Health
 
-### External APIs
-| Service | Protocol | Purpose | Client |
-|---------|----------|---------|--------|
-| **uma.moe** | HTTPS (via Playwright browser context) | Circle data, member stats, tier thresholds | `src/api/uma-moe.ts` |
-| **WhatsApp Web** | WebSocket (via Baileys library) | Message sending, group management | `src/whatsapp/client.ts` |
+### IDatabase interface contract (`src/db/types.ts:64-94`)
 
-### Data Stores
-| Store | Technology | Path | Purpose |
-|-------|-----------|------|---------|
-| **Snapshots** | JSON files | `data/snapshots/YYYY/MM/DD.json` | Immutable daily data snapshots |
-| **Database** | SQLite via sql.js (WASM) | `data/bot.db` | Schedule runs, alert dedup, member history, rank history |
-| **Config** | YAML | `config.yaml` | All bot configuration (hot-reloaded every 5s) |
-| **WA Session** | Multi-file auth state | `data/auth/` | WhatsApp connection persistence |
-| **Logs** | Rotating text files | `data/logs/bot.log` | Application logs (5MB, 3 rotated files) |
+The interface defines 15 methods across 5 domains:
 
-### Runtime Dependencies (from `package.json`)
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `@whiskeysockets/baileys` | ^7.0.0-rc13 | WhatsApp Web multi-device API |
-| `node-cron` | ^3.0.3 | Cron-based scheduling |
-| `playwright` | ^1.52.0 | Browser automation for uma.moe Turnstile bypass |
-| `sql.js` | ^1.12.0 | In-memory SQLite (WASM, no native deps) |
-| `yaml` | ^2.7.1 | YAML parsing and serialization |
-| `zod` | ^3.25.67 | Runtime schema validation for config |
-| `pino` | ^9.6.0 | Listed but NOT used in production code (custom logger instead) |
-| `qrcode-terminal` | ^0.12.0 | QR code display in terminal for WhatsApp auth |
+| Domain | Methods |
+|---|---|
+| Lifecycle | `initialize()`, `close()`, `save()` |
+| Schedule runs | `getLastSuccessfulRun()`, `recordRun()`, `updateRunStatus()` |
+| Alerts | `isAlertAlreadySent()`, `getExistingAlertKeys()`, `recordAlert()`, `markAlertSent()` |
+| Members | `upsertMember()`, `getMembers()`, `getMember()` |
+| Rank history | `saveRankHistory()`, `getRankHistory()` |
+| Transactions | `transaction<T>()` |
 
-### Dev Dependencies
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `typescript` | ^5.8.3 | TypeScript compiler (ES2022 target, CommonJS) |
-| `jest` | ^29.7.0 | Test framework |
-| `ts-jest` | ^29.3.4 | TypeScript support for Jest |
-| `ts-node-dev` | ^2.0.0 | Hot-reload dev server |
+### Type flow
+
+```
+BotConfig.database          → config.ts:123-138 (Zod schema)
+                           → src/types/index.ts:253-268 (BotConfig interface)
+                           → factory.ts:10 (receives as BotConfig['database'])
+                           → SqliteDatabase(dbPath, autoSaveMs) or MysqlDatabase(config.mysql)
+                           → returns IDatabase
+
+ScheduleRunInsert           → src/db/types.ts:18-27
+ScheduleRunRow              → src/types/index.ts:281-291 (imported by db/types.ts:9)
+
+AlertEventInsert            → src/db/types.ts:29-37
+AlertEventRow               → src/types/index.ts:293-303 (exists in types but NOT in IDatabase return types)
+
+MemberHistoryInsert         → src/db/types.ts:39-48
+MemberHistoryRow            → src/types/index.ts:305-314
+
+RankHistoryInsert           → src/db/types.ts:50-58
+RankHistoryRow              → src/types/index.ts:316-324
+```
+
+### `AlertEventRow` — defined but unused in IDatabase
+
+`AlertEventRow` at `src/types/index.ts:293-303` is defined and imported by `src/db/types.ts` indirectly (via `../types`), but `IDatabase` has **no method that returns `AlertEventRow`**. The only alert read methods return `boolean` (dedup check) or `Set<string>` (batch dedup). The actual alert row data is never exposed to consumers.
+
+### SettingsRow — orphaned type
+
+`SettingsRow` at `src/types/index.ts:275-279` corresponds to the `settings` table created by both adapters, but `IDatabase` has **zero methods for reading or writing settings**. The table exists in both SQLite and MySQL schemas but is unused.
 
 ---
 
-## 5. Configuration and Environment Handling
+## 4. Config Propagation
 
-### Configuration Loading
-- **File:** `config.yaml` (gitignored, copied from `config.example.yaml`)
-- **Schema:** Zod validation at load time (`src/config.ts:26-122`)
-- **Hot-reload:** Polling every 5s via mtime + content hash (`src/index.ts:129-191`)
-- **Persistence:** Atomic write via temp file + rename (`src/config.ts:213-229`)
-- **Updates:** Immutable — `updateConfig()` returns new validated object (`src/config.ts:198-201`)
-
-### Environment Variables
-| Variable | Default | Source |
-|----------|---------|--------|
-| `API_PORT` | `3000` | `.env` or shell |
-| `API_TOKEN` | *(none)* | `.env` or shell — bearer token for API auth |
-| `WA_SESSION_DIR` | `data/auth` | `.env` or shell — WhatsApp session directory |
-| `NODE_ENV` | `production` | Dockerfile, PM2 ecosystem |
-
-### Config Sections
-| Section | Key Fields | Hot-reload behavior |
-|---------|-----------|---------------------|
-| `circleId` | Required | In-memory update |
-| `admins` | WhatsApp JIDs | In-memory update |
-| `groups` | command, announcement, alertAdmin JIDs | In-memory update |
-| `requirements` | monthlyFans, weeklyFans | In-memory update |
-| `schedule` | daily/weekly/monthly times | **Scheduler restart** |
-| `catchUp` | enabled, maxReportsPerStartup | In-memory update |
-| `alerts` | 5 alert types, quietHours | In-memory update |
-| `memberStatus` | stale thresholds | In-memory update |
-| `message` | maxLength, splitAtNewline, language | In-memory update |
-| `logging` | level, logFile, rotation | In-memory update |
-
----
-
-## 6. Key File List with Roles and Line Counts
-
-### Source Files (7,883 lines total)
-
-| File | Lines | Role |
-|------|------:|------|
-| `src/index.ts` | 354 | Entry point, composition root, startup orchestration |
-| `src/config.ts` | 229 | YAML config + Zod validation + hot-reload + atomic save |
-| `src/runtime.ts` | 93 | Runtime stats singleton (uptime, reconnects, messages) |
-| `src/types/index.ts` | 334 | All shared interfaces, types, constants |
-| `src/types/sql.js.d.ts` | 26 | Type declarations for sql.js and qrcode-terminal |
-| **Data** | | |
-| `src/data/daily-fans.ts` | 313 | Core arithmetic on 32-element daily_fans array |
-| `src/data/snapshot.ts` | 278 | Snapshot save/load/path/stale-messaging |
-| `src/data/ensure-snapshot.ts` | 66 | Cache-or-fetch bridge for month snapshots |
-| `src/data/member-history.ts` | 103 | Member join/leave tracking via snapshot diffing |
-| **Database** | | |
-| `src/db/database.ts` | 482 | SQLite via sql.js: 5 tables, CRUD, auto-save |
-| **API** | | |
-| `src/api/uma-moe.ts` | 137 | Playwright-based uma.moe HTTP client |
-| `src/api/server.ts` | 374 | REST API (localhost-only, rate-limited, bearer auth) |
-| **Reports** | | |
-| `src/reports/compute.ts` | 173 | Snapshot → ComputedMember[] (ghost detection, tier data) |
-| `src/reports/registry.ts` | 43 | Type → generator mapping |
-| `src/reports/format.ts` | 86 | Report-specific formatting helpers |
-| `src/reports/daily.ts` | 150 | Daily report generator |
-| `src/reports/weekly.ts` | 173 | Weekly report generator |
-| `src/reports/monthly.ts` | 190 | Monthly report generator |
-| `src/reports/ranks.ts` | 65 | Top 10 leaderboard |
-| `src/reports/bottom.ts` | 103 | Members needing attention |
-| `src/reports/stats.ts` | 170 | Club-wide statistics |
-| `src/reports/members.ts` | 89 | Full member listing |
-| `src/reports/tier.ts` | 79 | Tier intelligence |
-| `src/reports/compare.ts` | 113 | Side-by-side member comparison |
-| `src/reports/analyze.ts` | 115 | Deep single-member analysis |
-| `src/reports/combined.ts` | 47 | Multi-type combined report |
-| **Orchestration** | | |
-| `src/orchestrator/report-orchestrator.ts` | 315 | Full report pipeline orchestration |
-| **Scheduler** | | |
-| `src/scheduler/scheduler.ts` | 321 | Cron-based auto-delivery + collision detection |
-| `src/scheduler/catchup.ts` | 291 | Missed report detection + catch-up execution |
-| `src/scheduler/helpers.ts` | 52 | Schedule utility functions |
-| **WhatsApp** | | |
-| `src/whatsapp/client.ts` | 635 | Baileys connection lifecycle, QR, reconnection, sending |
-| `src/whatsapp/dispatch.ts` | 466 | Command routing: parse → access → generate → send |
-| `src/whatsapp/commands.ts` | 192 | Command parser + Levenshtein name resolution |
-| `src/whatsapp/admin.ts` | 234 | Admin command handlers |
-| `src/whatsapp/access.ts` | 96 | Access control logic |
-| **Alerts** | | |
-| `src/alerts/alerts.ts` | 333 | 5-type alert detection, dedup, formatting, quiet hours |
-| **Utils** | | |
-| `src/utils/format.ts` | 128 | Pure string utilities (formatNumber, sanitizeName, splitMessage) |
-| `src/utils/logger.ts` | 262 | Structured logger with file rotation |
-| `src/utils/timezone.ts` | 173 | JST/WIB timezone conversion via Intl API |
-| `src/utils/index.ts` | 1 | Re-exports timezone |
-
-### Configuration Files
-
-| File | Lines | Role |
-|------|------:|------|
-| `config.example.yaml` | 157 | Config template (all fields documented) |
-| `tsconfig.json` | 20 | TypeScript: ES2022, CommonJS, strict mode |
-| `package.json` | 60 | Dependencies, scripts, project metadata |
-| `jest.config.js` | 23 | Jest: ts-jest preset, coverage thresholds |
-| `ecosystem.config.js` | 21 | PM2: single instance, 500MB memory limit |
-| `Dockerfile` | 54 | node:22-slim + Playwright chromium |
-| `docker-compose.yml` | 21 | Volume mounts for config, data, auth |
-
-### Tests (62 test files)
-
-| Directory | File Count | Categories |
-|-----------|-----------|------------|
-| `tests/reports/` | 28 | unit, format, stale, edge, dispatch, regression, golden, e2e |
-| `tests/data/` | 14 | daily-fans (12 files), snapshot, left-members |
-| `tests/whatsapp/` | 7 | dispatch, commands, access, admin, client, regression, fuzz |
-| `tests/api/` | 3 | server, server-auth, uma-moe |
-| `tests/alerts/` | 2 | unit, regression |
-| `tests/db/` | 2 | integration, regression |
-| `tests/scheduler/` | 2 | unit, catchup regression |
-| `tests/orchestrator/` | 1 | unit |
-| `tests/utils/` | 2 | timezone, logger |
-| `tests/` (root) | 1 | config.unit.test.ts |
-
----
-
-## 7. Module Dependency Graph
-
-### Legend
-```
-A → B  means "A imports from B"
-```
-
-### Core Dependencies
+### Flow: config.yaml → Zod → BotConfig → factory → adapter
 
 ```
-src/index.ts
-  → config
-  → types
-  → db/database
-  → api/uma-moe
-  → api/server
-  → scheduler/scheduler
-  → scheduler/catchup
-  → whatsapp/client
-  → whatsapp/dispatch
-  → data/snapshot
-  → data/member-history
-  → utils/timezone
-  → utils/logger
-  → runtime
-  → reports/compute
-  → orchestrator/report-orchestrator
-
-src/config.ts
-  → types
-  → utils/logger
-
-src/runtime.ts
-  (no internal imports — standalone module)
-
-src/types/index.ts
-  (no internal imports — standalone module)
+config.yaml
+  ↓ loadConfig()            src/config.ts:163
+  ↓ parseYaml + ConfigSchema.parse()  src/config.ts:174
+BotConfig.database          src/types/index.ts:253-268
+  ↓ config.database         src/index.ts:99
+  ↓ createDatabase()        src/db/factory.ts:10
+  ↓ config.backend switch   src/db/factory.ts:11
+  case 'mysql':
+    ↓ dynamic import        src/db/factory.ts:15
+    ↓ new MysqlDatabase(config.mysql)  src/db/factory.ts:20
+    ↓ await db.initialize() src/db/factory.ts:21
+  case 'sqlite':
+    ↓ new SqliteDatabase(config.sqlite.path, config.sqlite.autoSaveMs)  src/db/factory.ts:26
+    ↓ await db.initialize() src/db/factory.ts:28
+  ↓ returns IDatabase
 ```
 
-### Data Layer Dependencies
+### Zod schema for database section (`src/config.ts:123-138`)
 
 ```
-src/data/snapshot.ts
-  → types
-  → data/daily-fans
-  → utils/timezone
-  → utils/logger
-
-src/data/ensure-snapshot.ts
-  → api/uma-moe (type only)
-  → types
-  → data/snapshot
-  → utils/timezone
-  → utils/logger
-
-src/data/daily-fans.ts
-  → types (WEEK_BLOCKS constant)
-
-src/data/member-history.ts
-  → types
-  → db/database
-  → utils/timezone
-  → utils/logger
+database.backend: z.enum(['sqlite', 'mysql']).default('sqlite')
+database.sqlite.path: z.string().default('data/bot.db')
+database.sqlite.autoSaveMs: z.number().int().min(1000).default(30_000)
+database.mysql.host: z.string().default('localhost')
+database.mysql.port: z.number().int().min(1).max(65535).default(3306)
+database.mysql.database: z.string().default('uma_club_bot')
+database.mysql.user: z.string().default('')
+database.mysql.password: z.string().default('')
+database.mysql.connectionLimit: z.number().int().min(1).max(100).default(5)
+database.mysql.ssl: z.boolean().default(false)
 ```
 
-### Report Layer Dependencies
+### Config change detection (`src/index.ts:186-188`)
 
-```
-src/reports/compute.ts
-  → types
-  → data/daily-fans
-  → data/snapshot
+Hot-reload detects `database` config changes but only logs a warning — it does NOT recreate the DB adapter. This is correct: `src/index.ts:186-188`:
 
-src/reports/registry.ts
-  → types
-  → db/database
-  → reports/daily, weekly, monthly, ranks, bottom, stats, members, tier
-
-src/reports/format.ts
-  → utils/timezone
-  → types
-  → data/daily-fans
-  → data/snapshot
-
-src/reports/daily.ts
-  → types
-  → db/database
-  → data/snapshot
-  → data/daily-fans
-  → utils/format
-  → reports/format
-
-src/reports/weekly.ts
-  → types
-  → db/database
-  → data/snapshot
-  → data/daily-fans
-  → utils/format
-  → reports/format
-
-src/reports/monthly.ts
-  → types
-  → db/database
-  → data/snapshot
-  → data/daily-fans
-  → utils/format
-  → reports/format
-  → utils/timezone
-
-src/reports/combined.ts
-  → types
-  → db/database
-  → reports/daily, weekly, monthly
-
-src/reports/ranks.ts → types, data/snapshot, utils/format, reports/format
-src/reports/bottom.ts → types, db/database, data/snapshot, data/daily-fans, utils/format, reports/format
-src/reports/stats.ts → types, db/database, data/snapshot, data/daily-fans, utils/format, reports/format
-src/reports/members.ts → types, db/database, data/member-history, utils/format, reports/format
-src/reports/tier.ts → types, db/database, data/snapshot, utils/format, reports/format, reports/compute
-src/reports/compare.ts → types, data/snapshot, data/daily-fans, utils/format, reports/format
-src/reports/analyze.ts → types, data/snapshot, data/daily-fans, utils/format, reports/format
-```
-
-### Scheduler Dependencies
-
-```
-src/scheduler/scheduler.ts
-  → types
-  → db/database
-  → utils/timezone
-  → utils/logger
-  → scheduler/helpers
-
-src/scheduler/catchup.ts
-  → types
-  → db/database
-  → utils/timezone
-  → utils/logger
-  → scheduler/helpers
-
-src/scheduler/helpers.ts
-  → types
-  → utils/logger
-```
-
-### WhatsApp Dependencies
-
-```
-src/whatsapp/client.ts
-  → types
-  → utils/logger
-  → utils/format
-  → runtime
-
-src/whatsapp/dispatch.ts
-  → types
-  → db/database
-  → whatsapp/client
-  → whatsapp/commands
-  → whatsapp/access
-  → whatsapp/admin
-  → reports/compute
-  → reports/registry
-  → reports/compare
-  → reports/analyze
-  → utils/logger
-  → runtime
-  → utils/timezone
-
-src/whatsapp/commands.ts
-  → types
-
-src/whatsapp/admin.ts
-  → types
-  → config
-  → utils/format
-
-src/whatsapp/access.ts
-  → types
-```
-
-### Orchestrator Dependencies
-
-```
-src/orchestrator/report-orchestrator.ts
-  → types
-  → db/database
-  → api/uma-moe
-  → whatsapp/client
-  → alerts/alerts
-  → data/snapshot
-  → utils/timezone
-  → reports/compute
-  → reports/combined
-  → reports/registry
-  → utils/logger
-```
-
-### Alert Dependencies
-
-```
-src/alerts/alerts.ts
-  → types
-  → data/snapshot
-  → reports/compute
-  → utils/format
-  → data/daily-fans
-  → db/database
-  → utils/timezone
-  → utils/logger
-```
-
-### Utility Dependencies
-
-```
-src/utils/format.ts    (no internal imports)
-src/utils/logger.ts    (no internal imports)
-src/utils/timezone.ts  (no internal imports)
-src/utils/index.ts     → utils/timezone
-```
-
-### Inverted Tree (who depends on what)
-
-```
-types          ← used by: ALL modules (18 consumers)
-utils/logger   ← used by: 14 modules
-utils/format   ← used by: 9 modules
-utils/timezone ← used by: 11 modules
-data/snapshot  ← used by: 8 modules
-data/daily-fans← used by: 7 modules
-db/database    ← used by: 9 modules
-reports/compute← used by: 4 modules
-config         ← used by: 2 modules (index, admin)
-runtime        ← used by: 3 modules (index, client, dispatch)
+```typescript
+if (!deepEqual(oldConfig.database, config.database)) {
+  log.warn('Config', 'Database config changed — restart required to apply new database settings');
+}
 ```
 
 ---
 
-## 8. Documented Design Decisions
+## 5. Test Coverage Map
 
-These are intentional choices documented in `docs/architecture.md:390-418`. They have been reviewed and accepted. Do not flag these as issues.
+### SQLite adapter (`tests/db/database.integration.test.ts` — 599 lines)
 
-### Rate limiter Map is unbounded (`api/server.ts:56`)
-`requestTimestamps` Map is never pruned. Acceptable because API binds exclusively to `127.0.0.1` — at most 2 loopback entries.
+| IDatabase method | Tested? | Tests |
+|---|---|---|
+| `initialize()` | Yes | Creates tables, idempotent, throws before init, directory creation |
+| `close()` | Yes | Closes cleanly, persistence round-trip |
+| `save()` | Yes | Persistence round-trip, disk file creation |
+| `getLastSuccessfulRun()` | Yes | Returns null, finds by type, not found for failed |
+| `recordRun()` | Yes | Returns ID > 0 |
+| `updateRunStatus()` | Yes | Sent + failed, sent_at timestamp |
+| `isAlertAlreadySent()` | Yes | Before/after markAlertSent |
+| `getExistingAlertKeys()` | **NO** | Not tested for SQLite |
+| `recordAlert()` | Yes | Insert, duplicate dedup, sequential IDs |
+| `markAlertSent()` | Yes | Dedup after marking |
+| `upsertMember()` | Yes | Insert, conflict update, transfer info |
+| `getMembers()` | Yes | By circle_id |
+| `getMember()` | Yes | Found + not found |
+| `saveRankHistory()` | Yes | Insert, upsert on conflict, LIMIT |
+| `getRankHistory()` | Yes | Query + limit |
+| `transaction()` | Yes | Commit + rollback |
 
-### WA_SESSION_DIR is not path-sanitized (`whatsapp/client.ts:139`)
-Env var used directly as filesystem path. Acceptable because the operator controls env vars — an attacker with env access already has process-level access.
+### SQLite regression tests (`tests/db/database-regression.test.ts` — 89 lines)
 
-### Security headers are minimal (`api/server.ts:32-34`)
-Only `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Cache-Control: no-store, no-cache`. HSTS and X-XSS-Protection omitted because API serves only JSON, binds to localhost.
+Tests `recordAlert` sequential IDs and duplicate handling. Covers Bug #4 regression.
 
-### Runtime stats use module-level mutable state (`runtime.ts:21-39`)
-Module-level singleton. Standard Node.js pattern for single-process apps. No reset mechanism needed.
+### MySQL adapter (`tests/db/mysql-database.unit.test.ts` — 808 lines)
 
-### Logger uses synchronous file I/O (`utils/logger.ts:183,189`)
-`appendFileSync` on every log line. Acceptable at current scale (~100 lines per report cycle).
+All 15 methods are tested with mocked `mysql2/promise` pool:
 
-### Catch-up persistence has a narrow window (`scheduler/catchup.ts:217-233`)
-~10ms window between combined run save and individual record saves. Real-world risk is negligible.
+| IDatabase method | Tested? | Notes |
+|---|---|---|
+| `initialize()` | Yes | Pool creation, DDL verification |
+| `close()` | Yes | pool.end(), double-close safe |
+| `save()` | Yes | Confirmed no-op |
+| `getLastSuccessfulRun()` | Yes | Row mapping, is_catch_up conversion |
+| `recordRun()` | Yes | INSERT + LAST_INSERT_ID() |
+| `updateRunStatus()` | Yes | sent_at logic, error path |
+| `isAlertAlreadySent()` | Yes | Returns true/false |
+| `getExistingAlertKeys()` | Yes | Empty input, batch query |
+| `recordAlert()` | Yes | INSERT IGNORE + fallback SELECT |
+| `markAlertSent()` | Yes | Status + sent_at update |
+| `upsertMember()` | Yes | ON DUPLICATE KEY UPDATE syntax |
+| `getMembers()` | Yes | Row mapping |
+| `getMember()` | Yes | Found + not found |
+| `saveRankHistory()` | Yes | REPLACE INTO syntax |
+| `getRankHistory()` | Yes | LIMIT param |
+| `transaction()` | Yes | Commit, rollback, connection routing |
 
-### computeRollingAverage excludes zero-gain days (`data/daily-fans.ts:249`)
-`gain > 0` filter is documented in JSDoc. Computes "average when active" not "average over time."
+### MySQL-specific SQL pattern tests
 
-### Ghost detection edge case (`reports/compute.ts:90-104`)
-Transfer members with low gain could theoretically be misclassified as "left" when `ghostCount` exceeds zero-gain + stale members. Requires `ghostCount > (zero-gain + stale)` to manifest — doesn't happen with real data.
+Section 14 of the MySQL test file explicitly verifies:
+- No `ON CONFLICT` / `excluded.` (SQLite syntax) in upsert — `mysql-database.unit.test.ts:739-753`
+- `REPLACE INTO` not `INSERT OR REPLACE` — `mysql-database.unit.test.ts:755-771`
+- `LAST_INSERT_ID()` not `last_insert_rowid()` — `mysql-database.unit.test.ts:773-807`
 
-### WhatsApp client is a large file (`whatsapp/client.ts`, 635 lines)
-Connection lifecycle, QR auth, reconnection, heartbeat, message caching, and send logic are inherently coupled to Baileys' state machine. Splitting would increase cross-module coupling.
+### Mock DB in shared helpers (`tests/_helpers/index.ts:198-217`)
 
-### Single-process architecture (`docs/architecture.md:3`)
-No microservices, no cache layer. Data processing is arithmetic on ~34 integers. uma.moe data is static for 24h. Splitting adds operational friction without benefit.
+`makeMockDb()` returns all 15 `IDatabase` methods as `jest.fn()` stubs. This is used by non-DB test files (dispatch, orchestrator, alerts, scheduler tests) to mock database interactions.
 
-### Snapshot immutability (`docs/architecture.md:49`)
-Snapshots are never mutated after saving. Reports recompute from the `daily_fans` array each time. This ensures pure-function report generators.
+### Coverage gap summary
 
-### sql.js over sqlite3 (`docs/architecture.md:122`)
-Pure WASM, no native compilation. Works in Docker without system deps. DB file is a binary blob loaded into memory.
-
-### node-cron for scheduling (`docs/architecture.md:147`)
-Simple, no external deps, works on all platforms. No need for a task queue in a single-process bot.
-
-### Baileys for WhatsApp (`docs/architecture.md:170`)
-Unofficial WhatsApp Web API. No official API available. Handles auth, reconnection, and message sending.
-
-### Collision handling in scheduler (`docs/architecture.md:149`)
-When daily + weekly are scheduled at the same time, only the daily handler fires. It detects the collision and sends a combined message.
-
-### Config hot-reload via mtime + content hash (`docs/architecture.md:141`)
-Avoids false triggers from editors that touch mtime without content changes.
-
-### `ensureMonthSnapshot` extracted from `snapshot.ts` (`docs/architecture.md:116`)
-Lives in `data/ensure-snapshot.ts` to avoid a data → api dependency. Bridges data layer and API layer.
-
----
-
-## 9. Risk Signals (NOT documented as accepted)
-
-> Items below are observations from code exploration. These are NOT flagged as issues — they are factual observations about the codebase.
-
-### pino listed but unused
-`pino` (^9.6.0) is in `package.json:40` dependencies but the project uses a custom logger (`src/utils/logger.ts`). Pino is never imported in any source file.
-
-### `src/utils/index.ts` is a single re-export
-`src/utils/index.ts:1` only re-exports `./timezone`. No consumers import from `utils/index.ts` directly — all imports target specific submodules.
-
-### Baileys monkey-patching
-`src/whatsapp/client.ts:52-69` suppresses `console.error` globally for libsignal noise. This affects the entire process, not just Baileys.
-
-### No graceful shutdown for API server
-`src/index.ts:336-346` cleans up scheduler, WhatsApp client, and database, but does not call `api.stop()`. The HTTP server is not explicitly closed.
-
-### Database auto-save timer not cleaned up on error paths
-`src/db/database.ts:47-49` sets an interval for auto-save. If `initialize()` throws partway through, the timer might not be set, but the error path doesn't explicitly clear it.
+| Gap | Severity |
+|---|---|
+| SQLite `getExistingAlertKeys()` has no direct integration test | **Medium** — only tested via MySQL mocks and `makeMockDb` |
+| `AlertEventRow` type exists but no method returns it | **Low** — dead type, not a bug |
+| `settings` table created but unused by IDatabase | **Low** — schema exists for future use |
+| `Database` backward-compat alias used by 4 test files | **Low** — works but will break if alias is removed |
 
 ---
 
-## 10. Architecture Summary
+## 6. Risk Signals
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Uma Club Bot v3 (7,883 LOC)                  │
-│                    Single Node.js Process                        │
-│                                                                 │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────────┐  │
-│  │ WhatsApp   │  │  HTTP API  │  │  Scheduler  │  │  Config  │  │
-│  │ (Baileys)  │  │ (localhost)│  │ (node-cron) │  │  (YAML)  │  │
-│  │ 635 LOC    │  │  374 LOC   │  │  664 LOC    │  │ 229 LOC  │  │
-│  └─────┬──────┘  └─────┬──────┘  └──────┬──────┘  └────┬─────┘  │
-│        │               │                │              │         │
-│        └───────────────┴────────┬───────┴──────────────┘         │
-│                                 │                                │
-│                    ┌────────────▼────────────┐                   │
-│                    │   Report Orchestrator   │                   │
-│                    │        315 LOC          │                   │
-│                    └────────────┬────────────┘                   │
-│                                 │                                │
-│         ┌───────────────────────┼───────────────────────┐        │
-│         │                       │                       │        │
-│   ┌─────▼─────┐  ┌─────────────▼─────────────┐  ┌──────▼─────┐ │
-│   │  Reports   │  │       Data Layer          │  │   Alerts   │ │
-│   │  1,433 LOC │  │  snapshot (278)           │  │  333 LOC   │ │
-│   │ 12 types   │  │  daily-fans (313)         │  │ 5 types    │ │
-│   │ registry   │  │  ensure-snapshot (66)     │  │ dedup+DB   │ │
-│   │ compute    │  │  member-history (103)     │  │ quiet hrs  │ │
-│   └────────────┘  └──────────────────────────┘  └────────────┘ │
-│                                 │                                │
-│                    ┌────────────▼────────────┐                   │
-│                    │  SQLite (sql.js WASM)   │                   │
-│                    │       482 LOC           │                   │
-│                    │  5 tables, 30s auto-save│                   │
-│                    └─────────────────────────┘                   │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Shared: types (334) │ utils (564) │ config (229)         │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+### R1: SQLite `getExistingAlertKeys` lacks direct test coverage
 
-External connections:
-  • uma.moe ──(Playwright/Turnstile)──► circle data
-  • WhatsApp Web ──(Baileys WebSocket)──► message delivery
-  • SQLite file on disk ──(sql.js WASM)──► operational state
-```
+- **Location**: `src/db/database.ts:235-243` (implementation), `tests/db/database.integration.test.ts` (missing test)
+- **Evidence**: `grep` for `getExistingAlertKeys` in `tests/db/database.integration.test.ts` returns zero matches. Only tested in MySQL unit test (`tests/db/mysql-database.unit.test.ts:517-539`) and mock helper.
+- **Impact**: The SQLite implementation constructs a dynamic `IN` clause with placeholders. If the placeholder logic or `Set` construction has a bug, no test catches it. The alerts system (`src/alerts/alerts.ts:171-173`) is the sole production caller.
+
+### R2: `settings` table created but dead
+
+- **Location**: `src/db/database.ts:105-111` (SQLite), `src/db/mysql-database.ts:71-77` (MySQL)
+- **Evidence**: Both adapters create a `settings` table with `key`, `value`, `updated_at` columns. `IDatabase` at `src/db/types.ts:64-94` has no methods for reading/writing settings. The `SettingsRow` type at `src/types/index.ts:275-279` is defined but never used.
+- **Impact**: Schema drift. If someone assumes settings are stored in the DB (based on schema existence), they'll find no API to access them.
+
+### R3: `Database` backward-compat alias is a maintenance trap
+
+- **Location**: `src/db/database.ts:486-488`
+- **Evidence**: `export type Database = SqliteDatabase; export const Database = SqliteDatabase;`
+- **Impact**: 4 test files import `Database` instead of `SqliteDatabase`: `tests/scheduler/scheduler.unit.test.ts:4`, `tests/scheduler/catchup-regression.test.ts:2`, `tests/reports/members.unit.test.ts:15`, `tests/reports/compute.unit.test.ts:11`. When this alias is removed, those tests break. The comment says "will be removed once all consumers migrate to IDatabase" but test files use concrete instances for in-memory DB creation, so they'll need `SqliteDatabase` imports.
+
+### R4: MySQL adapter's `transaction()` holds connection for entire callback duration
+
+- **Location**: `src/db/mysql-database.ts:379-398`
+- **Evidence**: `getConn()` at line 64 returns `this.transactionConn ?? this.pool!`. During a transaction, all queries within the callback use the pinned connection (`this.transactionConn`). This is correct behavior but creates a risk: if the callback is long-running or throws after a partial commit boundary, the connection is held.
+- **Impact**: Low in current usage. `transaction()` is only called from `src/data/member-history.ts:32` for member upsert loops. But the connection is released in `finally` block (`src/db/mysql-database.ts:395-397`), which is correct.
+
+### R5: Config change detection warns but doesn't block
+
+- **Location**: `src/index.ts:186-188`
+- **Evidence**: If `database` config changes via hot-reload, only a warning is logged. The running adapter is not replaced.
+- **Impact**: Intentional design (documented in AGENTS.md: "Database config changed — restart required"). But if someone changes `database.backend` from `sqlite` to `mysql` without restarting, the SQLite adapter continues operating. No runtime error occurs — the new config simply has no effect until restart.
+
+### R6: Factory uses dynamic import for MySQL only
+
+- **Location**: `src/db/factory.ts:13-17`
+- **Evidence**: `await import('./mysql-database')` with try/catch. SQLite is a static import.
+- **Impact**: Correct design (MySQL is optional, SQLite always works). But the dynamic import means TypeScript can't verify `MysqlDatabase` implements `IDatabase` at compile time. The return type is `Promise<IDatabase>` and the factory casts via `db` which is typed as `MysqlDatabase`. Since `MysqlDatabase implements IDatabase`, this is type-safe. The risk is that if someone adds a method to `IDatabase` and forgets to implement it in `MysqlDatabase`, it won't be caught until runtime with MySQL backend.
+
+### R7: SQLite auto-save timer holds a reference to `this`
+
+- **Location**: `src/db/database.ts:56-61`
+- **Evidence**: `setInterval(() => { this.save().catch(...) }, this.autoSaveMs)` — arrow function captures `this` correctly.
+- **Impact**: None. The timer is cleared in `close()` at line 394-397. The `save()` method handles the `dirty` flag correctly (line 385). No leak risk.
+
+---
+
+## 7. Type Declaration Changes
+
+### Deleted: `src/types/sql.js.d.ts`
+
+Was declaring both `sql.js` and `qrcode-terminal` modules. Deleted because:
+- `@types/sql.js` is in `devDependencies` (`package.json:52`) — the types come from the package
+- `qrcode-terminal` needed its own declaration
+
+### Created: `src/types/qrcode-terminal.d.ts`
+
+- **Location**: `src/types/qrcode-terminal.d.ts:1-3`
+- Contains only the `qrcode-terminal` module declaration (3 lines)
+
+### tsconfig.json (`tsconfig.json:1-26`)
+
+- `strict: true` — all type checks enforced
+- `skipLibCheck: true` — skips declaration file validation (relevant for `sql.js.d.ts` deletion)
+- `include: ["src/**/*"]` — covers the new `.d.ts` file
+- No `paths` aliases — all imports use relative paths
+
+---
+
+## 8. Schema Comparison: SQLite vs MySQL
+
+Both adapters create identical logical schemas with dialect-specific syntax:
+
+| Feature | SQLite (`database.ts`) | MySQL (`mysql-database.ts`) |
+|---|---|---|
+| Auto-increment | `INTEGER PRIMARY KEY AUTOINCREMENT` | `INT AUTO_INCREMENT PRIMARY KEY` |
+| String type | `TEXT` | `VARCHAR(255)` |
+| Boolean | `INTEGER NOT NULL DEFAULT 0` | `TINYINT(1) NOT NULL DEFAULT 0` |
+| Upsert | `ON CONFLICT(col) DO UPDATE SET ... excluded.col` | `ON DUPLICATE KEY UPDATE ... VALUES(col)` |
+| Rank upsert | `INSERT OR REPLACE INTO` | `REPLACE INTO` |
+| Last insert ID | `last_insert_rowid()` | `LAST_INSERT_ID()` |
+| Alert dedup | SELECT + INSERT (check-then-act) | `INSERT IGNORE` + fallback SELECT (atomic) |
+| Index creation | `CREATE INDEX IF NOT EXISTS` | `CREATE INDEX IF NOT EXISTS` |
+
+The MySQL adapter's `recordAlert` at `src/db/mysql-database.ts:224-254` uses `INSERT IGNORE` for atomic dedup, while the SQLite adapter at `src/db/database.ts:246-269` does a check-then-insert. Both are correct for their engines, but the MySQL approach is race-condition-free.

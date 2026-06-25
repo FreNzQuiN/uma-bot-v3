@@ -12,7 +12,7 @@ npm run build        # tsc -> dist/
 npm start            # node dist/index.js
 npm run dev          # ts-node src/index.ts
 npm run dev:watch    # ts-node-dev with hot-reload
-npm test             # jest --forceExit --detectOpenHandles (1580 tests)
+npm test             # all tests
 npm run lint:check   # tsc --noEmit (type-check only, no build)
 npm run fetch        # manually fetch uma.moe data for current month
 ```
@@ -47,7 +47,10 @@ src/
 │   ├── ensure-snapshot.ts  # ensureMonthSnapshot — fetches missing month data (dependency on API layer)
 │   └── daily-fans.ts       # Daily fan array arithmetic
 ├── db/
-│   └── database.ts   # SQLite via sql.js (member history, rank history, alerts)
+│   ├── types.ts             # IDatabase interface — contract for all adapters
+│   ├── factory.ts           # createDatabase(config) — pluggable backend factory
+│   ├── database.ts          # SqliteDatabase — SQLite via sql.js (default)
+│   └── mysql-database.ts    # MysqlDatabase — MySQL/TiDB adapter (mysql2/promise)
 ├── reports/
 │   ├── daily.ts, weekly.ts, monthly.ts, ranks.ts, bottom.ts, stats.ts, members.ts, tier.ts
 │   ├── compare.ts, analyze.ts, combined.ts
@@ -68,7 +71,7 @@ src/
 │   └── access.ts     # Access control (admin vs command group)
 └── utils/
     ├── format.ts     # Pure string utilities (splitMessage)
-    ├── logger.ts     # Pino-based logger with file rotation
+    ├── logger.ts     # Zero-dependency structured logger with file rotation
     ├── timezone.ts   # WIB (Asia/Jakarta) timezone helpers (incl. getTargetMonth)
     └── index.ts      # General utilities
 ```
@@ -78,7 +81,7 @@ src/
 Core data is a `daily_fans` array — cumulative integers, one per day. Every report (daily, weekly, monthly, ranks, bottom, stats) is different arithmetic on this same array.
 
 Snapshots: `data/snapshots/YYYY/MM/DD.json` — immutable once saved.
-Database: `data/bot.db` — SQLite via sql.js (member history, rank history, alert dedup).
+Database: Pluggable via `IDatabase` interface — SQLite (default, `data/bot.db` via sql.js) or MySQL/TiDB.
 Config: `config.yaml` — YAML with Zod validation. Hot-reloaded every 5s via mtime polling.
 
 ### Startup Order
@@ -176,7 +179,7 @@ tests/
 
 All config lives in `config.yaml` (gitignored). Copy from `config.example.yaml`.
 
-Key sections: `circleId`, `admins` (WhatsApp JIDs), `groups` (command/announcement/alertAdmin), `requirements` (fan thresholds), `schedule` (cron times in WIB), `catchUp`, `alerts`, `message` (split settings, language: `id`).
+Key sections: `circleId`, `admins` (WhatsApp JIDs), `groups` (command/announcement/alertAdmin), `requirements` (fan thresholds), `schedule` (cron times in WIB), `catchUp`, `alerts`, `message` (split settings, language: `id`), `database` (backend selection: sqlite or mysql).
 
 Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer token for API auth), `WA_SESSION_DIR` (default `data/auth`).
 
@@ -195,13 +198,20 @@ Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer toke
 - **Playwright in Docker:** Dockerfile installs Playwright chromium + system deps. `PLAYWRIGHT_BROWSERS_PATH` is set.
 - **sql.js not sqlite3:** Uses sql.js (in-memory WASM SQLite). No native compilation needed. DB file is a binary blob.
 - **Config hot-reload:** Polls mtime every 5s. Changing schedule requires full scheduler restart (handled automatically).
+- **Database backend selection:** The `database.backend` config key switches between SQLite (default, zero-config) and MySQL/TiDB. MySQL adapter uses `mysql2/promise` with connection pooling. The `createDatabase()` factory in `src/db/factory.ts` handles instantiation — consumer code depends only on `IDatabase`. Changing `database.backend` at runtime logs a warning; a full restart is required.
+- **mysql2 is an optional runtime dependency:** Listed in `package.json` but only imported dynamically when `backend: mysql`. SQLite works without it. If switching to MySQL, run `npm install` to pull it in.
+- **MySQL version check:** On startup, the MySQL adapter runs `SELECT VERSION()` and compares against minimum 8.0.31. Versions below this throw a clear error with upgrade instructions. TiDB is auto-detected (version string contains "TiDB") and bypasses the version check.
+- **TiDB compatibility:** The adapter auto-detects TiDB at startup and uses the appropriate upsert syntax: `VALUES()` for TiDB (required), `AS new_vals` alias for standard MySQL 8.0.20+ (modern, no deprecation warnings). Detection is automatic — no config needed. Alert dedup uses `INSERT IGNORE` (atomic, no TOCTOU race). `getExistingAlertKeys()` does a single batch query instead of N+1 individual queries.
+- **CREATE INDEX compatibility:** Index creation catches `ER_DUP_KEYNAME` error instead of using `CREATE INDEX IF NOT EXISTS` (which requires MySQL 8.0.31+). Works on any MySQL version.
+- **BIGINT columns:** `viewer_id`, `circle_id`, `monthly_point`, `fans_to_*` use `BIGINT` in MySQL — values exceed `INT` range.
+- **SSL for TiDB Cloud:** Set `mysql.ssl: true` in config. Uses `rejectUnauthorized: true`. TiDB Cloud requires it. Local MySQL doesn't.
+- **Exit handler:** `process.on('exit')` does NOT call `db.close()` — SQLite close is async, can't await in exit handler. Data is safe because sql.js auto-saves periodically.
 - **`scripts/*.js` is gitignored:** The `stop.js` script is checked in but `scripts/*.js` is in `.gitignore`. The `scripts/reverse-engineer.js` is generated.
 
 ---
 
 ## Product Context
 
-See `plans/v4-spec.md` for the full v4 specification (current version in development).
 See `docs/uma-moe-api.md` for the uma.moe API documentation.
 See `docs/game-context.md` for Uma Musume game mechanics.
 See `tests/examples/snapshot-june-12.json` for real snapshot data.

@@ -144,16 +144,16 @@ describe('Bug 3: Empty snapshot.members graceful handling', () => {
     expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
   });
 
-  it('generateMembersReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateMembersReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
+  it('generateMembersReport handles empty members without crash', async () => {
+    await expect(async () => {
+      const result = await generateMembersReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
       expect(typeof result).toBe('string');
       expect(result.length).toBeGreaterThan(0);
     }).not.toThrow();
   });
 
-  it('generateMembersReport returns helpful message for empty members', () => {
-    const result = generateMembersReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
+  it('generateMembersReport returns helpful message for empty members', async () => {
+    const result = await generateMembersReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
     expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
   });
 });

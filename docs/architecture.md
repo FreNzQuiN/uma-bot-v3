@@ -29,8 +29,8 @@ Single Node.js process. No microservices, no cache layer — one process handles
 │              ┌──────────────┼──────────────┐             │
 │              │              │              │             │
 │         ┌────▼────┐  ┌─────▼─────┐  ┌────▼────┐       │
-│         │Snapshot │  │  SQLite   │  │ Config  │       │
-│         │  Store  │  │  (sql.js) │  │ (YAML)  │       │
+│         │Snapshot │  │  Database │  │ Config  │       │
+│         │  Store  │  │(IDatabase)│  │ (YAML)  │       │
 │         └─────────┘  └───────────┘  └─────────┘       │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -115,20 +115,52 @@ Snapshot → detectAlerts() → recordAlert() → formatAlerts() → WhatsApp �
 
 **`ensureMonthSnapshot`** lives in `data/ensure-snapshot.ts` (extracted from `snapshot.ts` to fix a reversed dependency — the data layer should not depend on the API layer). It fetches missing month data from uma.moe when the orchestrator or dispatch layer requests it.
 
-### SQLite Database (`db/database.ts`)
+### Database (`db/`)
 
 **What:** Operational state — schedule runs, alert dedup, member history, rank history.
 
-**Why sql.js:** Pure WASM, no native compilation needed. Works in Docker without system deps. DB file is a binary blob loaded entirely into memory.
+**Why pluggable:** Enables MySQL/TiDB for production deployments while keeping SQLite as the zero-config default. Consumer code depends only on the `IDatabase` interface — adapter details are invisible to callers.
+
+**Interface (`db/types.ts`):** Defines `IDatabase` with 16 async methods organized by domain:
+- Lifecycle: `initialize()`, `close()`, `save()`
+- Schedule runs: `getLastSuccessfulRun()`, `recordRun()`, `updateRunStatus()`
+- Alerts: `isAlertAlreadySent()`, `getExistingAlertKeys()`, `recordAlert()`, `markAlertSent()`
+- Members: `upsertMember()`, `getMembers()`, `getMember()`
+- Rank history: `saveRankHistory()`, `getRankHistory()`
+- Transactions: `transaction()`
+
+**Factory (`db/factory.ts`):** `createDatabase(config)` instantiates the correct adapter based on `database.backend` config. Dynamically imports MySQL adapter to keep SQLite path dependency-free. The factory calls `db.initialize()` before returning — consumers get a ready-to-use adapter.
+
+**Adapters:**
+- **SQLite (`db/database.ts`):** `SqliteDatabase` — sql.js (pure WASM, no native deps). DB file loaded into memory as a binary blob. Writes to disk periodically (default 30s) or on `save()`. Default for development and small deployments.
+- **MySQL (`db/mysql-database.ts`):** `MysqlDatabase` — `mysql2/promise` with connection pooling. Requires MySQL 8.0.31+ (version checked at startup). Supports TiDB and TiDB Cloud (auto-detected). SSL support for cloud deployments. `save()` is a no-op (auto-persists). Upsert syntax branches at runtime: `VALUES()` for TiDB, `AS new_vals` alias for standard MySQL.
 
 **Tables:**
 - `schedule_runs` — tracks every report send attempt (status: pending/sent/failed)
-- `alert_events` — dedup for alerts (event_key uniqueness)
+- `alert_events` — dedup for alerts (event_key uniqueness, `INSERT IGNORE` for atomic dedup)
 - `member_history` — tracks member presence across months
 - `rank_history` — daily rank snapshots for trend analysis
-- `settings` — key-value store for runtime settings
+- `settings` — key-value store (future use, no IDatabase methods yet)
 
-**Auto-save:** DB is written to disk every 30 seconds (only when dirty — changes have occurred), plus on critical events (catch-up completion).
+**Type choices (MySQL):**
+- `BIGINT` for `viewer_id`, `circle_id`, `monthly_point`, `fans_to_*` — values exceed INT range
+- `TEXT` for `error_message` and `settings.value` — not bounded to 255 chars
+- `TINYINT(1)` for `is_catch_up` — MySQL boolean convention
+
+**MySQL compatibility notes:**
+- Minimum MySQL version: 8.0.31 (checked at startup, clear error if below)
+- TiDB auto-detected via version string — no config needed
+- Upsert syntax branches at runtime: `VALUES()` for TiDB, `AS new_vals` for standard MySQL
+- Index creation catches `ER_DUP_KEYNAME` instead of `CREATE INDEX IF NOT EXISTS`
+- `INSERT IGNORE` for alert dedup — atomic, avoids TOCTOU race conditions
+- `getExistingAlertKeys()` does a single batch query instead of N+1 individual lookups
+- SSL connection for TiDB Cloud (`rejectUnauthorized: true`)
+
+**Transactions:** SQLite adapter wraps in `BEGIN`/`COMMIT`/`ROLLBACK` via sql.js. MySQL adapter acquires a dedicated pool connection for the duration of the transaction — all queries within `transaction()` run on the same connection.
+
+**Auto-save:** SQLite adapter writes to disk every 30 seconds (only when dirty). MySQL adapter's `save()` is a no-op (auto-persists).
+
+**Exit behavior:** `process.on('exit')` does NOT call `db.close()` — SQLite's close is async and can't be awaited in an exit handler. Data is safe because sql.js auto-saves periodically.
 
 ### Config (`config.ts`)
 
@@ -231,7 +263,7 @@ See `docs/api-reference.md` for endpoint details.
 
 **Why:** Extracted from `index.ts` to separate business logic from the composition root. The orchestrator owns: snapshot alignment (month-boundary and stale-data handling), month pre-fetch, report generation dispatch, message delivery to WhatsApp groups, and alert detection/recording/delivery.
 
-**Dependencies:** `getConfig`, `getSnapshot`, `UmaMoeClient`, `Database`, `WhatsAppClient` — all injected via constructor.
+**Dependencies:** `getConfig`, `getSnapshot`, `UmaMoeClient`, `db (IDatabase)`, `WhatsAppClient` — all injected via constructor.
 
 ### String Utilities (`utils/format.ts`)
 
@@ -287,7 +319,7 @@ WhatsApp has a 4096-character limit. Long reports are split:
 | uma.moe API down | Logs error, uses existing snapshots |
 | WhatsApp disconnected | Reports generated but not delivered; scheduler marks as `failed` |
 | Config invalid | Bot refuses to start with field-level error messages |
-| Database corrupted | sql.js handles gracefully; can be reset with `npm run db:reset` |
+| Database corrupted | sql.js handles gracefully; can be reset with `npm run db:reset`. MySQL adapter uses connection pooling — errors surface at query time. |
 | Bot crashes mid-report | Scheduler marks run as `failed`; catch-up sends it on restart |
 | Token expired | Auto-refreshes via Playwright (up to 3 retries) |
 
@@ -295,7 +327,7 @@ WhatsApp has a 4096-character limit. Long reports are split:
 
 ## Testing Architecture
 
-Tests mirror `src/` structure in `tests/` (1,599 tests across 47 suites):
+Tests mirror `src/` structure in `tests/`:
 
 ```
 src/reports/daily.ts     →  tests/reports/daily/daily.unit.test.ts

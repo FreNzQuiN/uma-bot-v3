@@ -3,18 +3,18 @@
  */
 
 import { updateMemberHistory, getLeftMembers } from '../../src/data/member-history';
-import { Database } from '../../src/db/database';
+import { SqliteDatabase } from '../../src/db/database';
 import type { Snapshot, MemberData } from '../../src/types';
 
-let db: Database;
+let db: SqliteDatabase;
 
 beforeEach(async () => {
-  db = new Database(':memory:');
+  db = new SqliteDatabase(':memory:');
   await db.initialize();
 });
 
-afterEach(() => {
-  db.close();
+afterEach(async () => {
+  await db.close();
 });
 
 // ============================================================
@@ -84,54 +84,54 @@ function makeSnapshot(memberOverrides?: Partial<MemberData>[]): Snapshot {
 // ============================================================
 
 describe('updateMemberHistory', () => {
-  it('inserts new members', () => {
+  it('inserts new members', async () => {
     const snapshot = makeSnapshot();
-    updateMemberHistory(snapshot, db);
+    await updateMemberHistory(snapshot, db);
 
-    const members = db.getMembers(100);
+    const members = await db.getMembers(100);
     expect(members).toHaveLength(2);
     const names = members.map((m) => m.trainer_name).sort();
     expect(names).toEqual(['Alice', 'Bob']);
   });
 
-  it('updates existing members on re-run', () => {
+  it('updates existing members on re-run', async () => {
     // First run
     const snapshot1 = makeSnapshot([
       { viewer_id: 1001, trainer_name: 'Alice' },
     ]);
-    updateMemberHistory(snapshot1, db);
+    await updateMemberHistory(snapshot1, db);
 
-    const firstSeen = db.getMember(1001)!.first_seen;
+    const firstSeen = (await db.getMember(1001))!.first_seen;
 
     // Second run — same viewer_id, updated name
     const snapshot2 = makeSnapshot([
       { viewer_id: 1001, trainer_name: 'AliceUpdated' },
     ]);
-    updateMemberHistory(snapshot2, db);
+    await updateMemberHistory(snapshot2, db);
 
-    const member = db.getMember(1001);
+    const member = await db.getMember(1001);
     expect(member).not.toBeNull();
     expect(member!.trainer_name).toBe('AliceUpdated');
     // first_seen should be preserved from the first insert
     expect(member!.first_seen).toBe(firstSeen);
   });
 
-  it('marks missing members as left', () => {
+  it('marks missing members as left', async () => {
     // First run: Alice, Bob
     const snapshot1 = makeSnapshot();
-    updateMemberHistory(snapshot1, db);
+    await updateMemberHistory(snapshot1, db);
 
     // Second run: only Alice
     const snapshot2 = makeSnapshot([
       { viewer_id: 1001, trainer_name: 'Alice' },
     ]);
-    updateMemberHistory(snapshot2, db);
+    await updateMemberHistory(snapshot2, db);
 
-    const bob = db.getMember(1002);
+    const bob = await db.getMember(1002);
     expect(bob).not.toBeNull();
     expect(bob!.status).toBe('left');
 
-    const alice = db.getMember(1001);
+    const alice = await db.getMember(1001);
     expect(alice!.status).toBe('active');
   });
 });
@@ -141,22 +141,22 @@ describe('updateMemberHistory', () => {
 // ============================================================
 
 describe('getLeftMembers', () => {
-  it('returns members with status left', () => {
+  it('returns members with status left', async () => {
     // First run: Alice, Bob, Charlie
     const snapshot1 = makeSnapshot([
       { viewer_id: 1001, trainer_name: 'Alice' },
       { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
       { viewer_id: 1003, trainer_name: 'Charlie', id: 3 },
     ]);
-    updateMemberHistory(snapshot1, db);
+    await updateMemberHistory(snapshot1, db);
 
     // Second run: only Alice (Bob and Charlie left)
     const snapshot2 = makeSnapshot([
       { viewer_id: 1001, trainer_name: 'Alice' },
     ]);
-    updateMemberHistory(snapshot2, db);
+    await updateMemberHistory(snapshot2, db);
 
-    const left = getLeftMembers(snapshot2, db);
+    const left = await getLeftMembers(snapshot2, db);
     expect(left).toHaveLength(2);
     const leftNames = left.map((m) => m.trainer_name).sort();
     expect(leftNames).toEqual(['Bob', 'Charlie']);

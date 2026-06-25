@@ -15,13 +15,9 @@ import {
   getDailyGain,
   getLatestDataDay,
 } from '../data/daily-fans';
-import type { Database } from '../db/database';
+import type { IDatabase } from '../db/types';
 import { getDataDate } from '../utils/timezone';
 import { log } from '../utils/logger';
-
-// ============================================================
-// Alert types
-// ============================================================
 
 export interface Alert {
   type:
@@ -36,34 +32,31 @@ export interface Alert {
   reportDate: string;
 }
 
-// ============================================================
-// Detection
-// ============================================================
-
-export function detectAlerts(
+export async function detectAlerts(
   computedMembers: ComputedMember[],
   snapshot: Snapshot,
   config: BotConfig,
-  db: Database
-): Alert[] {
+  db: IDatabase
+): Promise<Alert[]> {
   if (!config.alerts.enabled) return [];
 
   log.debug('Alert', `Running alert detection (performanceDrop=${config.alerts.performanceDrop.enabled}, demotionRisk=${config.alerts.demotionRisk.enabled}, streakBreak=${config.alerts.streakBreak.enabled}, newTransfer=${config.alerts.newTransfer.enabled}, rankDrop=${config.alerts.rankDrop.enabled})`);
 
-  const alerts: Alert[] = [];
   const latestDataDay = getDataDayFromSnapshot(snapshot);
   const reportDate = snapshot.circle.last_updated
     ? snapshot.circle.last_updated.split('T')[0]
     : getDataDate();
 
-  // --- Performance drop ---
+  const candidateKeys: string[] = [];
+  const candidateAlerts: Alert[] = [];
+
   if (config.alerts.performanceDrop.enabled) {
     const minHistory = config.alerts.performanceDrop.minHistoryDays;
     const threshold = config.alerts.performanceDrop.thresholdPercent / 100;
 
     for (const member of computedMembers) {
       if (member.status !== 'active') continue;
-      if (member.isTransfer) continue; // transfer baseline inflates avg
+      if (member.isTransfer) continue;
       const avg7d = computeRollingAverage(
         member.dailyFans,
         latestDataDay,
@@ -75,81 +68,72 @@ export function detectAlerts(
       const todayGain = member.latestDailyGain;
       if (todayGain < avg7d * threshold) {
         const eventKey = `performance_drop:${reportDate}:${member.viewerId}`;
-        if (!db.isAlertAlreadySent(eventKey)) {
-          alerts.push({
-            type: 'performance_drop',
-            eventKey,
-            memberViewerId: String(member.viewerId),
-            message: `${member.trainerName} — gain hari ini ${formatNumber(todayGain)} (rata-rata ${minHistory} hari: ${formatNumber(avg7d)})`,
-            reportDate,
-          });
-        }
+        candidateKeys.push(eventKey);
+        candidateAlerts.push({
+          type: 'performance_drop',
+          eventKey,
+          memberViewerId: String(member.viewerId),
+          message: `${member.trainerName} — gain hari ini ${formatNumber(todayGain)} (rata-rata ${minHistory} hari: ${formatNumber(avg7d)})`,
+          reportDate,
+        });
       }
     }
   }
 
-  // --- Demotion risk ---
   if (config.alerts.demotionRisk.enabled) {
     const tierData = computeTierData(snapshot);
     if (tierData.riskLevel === 'HIGH') {
       const eventKey = `demotion_risk:${reportDate}`;
-      if (!db.isAlertAlreadySent(eventKey)) {
-        alerts.push({
-          type: 'demotion_risk',
-          eventKey,
-          memberViewerId: 'club',
-          message: `Degradasi risk! Buffer ${formatNumber(tierData.demotionBuffer)} — kurang dari ${config.alerts.demotionRisk.bufferDays} hari pace`,
-          reportDate,
-        });
-      }
+      candidateKeys.push(eventKey);
+      candidateAlerts.push({
+        type: 'demotion_risk',
+        eventKey,
+        memberViewerId: 'club',
+        message: `Degradasi risk! Buffer ${formatNumber(tierData.demotionBuffer)} — kurang dari ${config.alerts.demotionRisk.bufferDays} hari pace`,
+        reportDate,
+      });
     }
   }
 
-  // --- Streak break ---
   if (config.alerts.streakBreak.enabled) {
     for (const member of computedMembers) {
       if (member.status !== 'active') continue;
-      if (member.isTransfer) continue; // transfer baselines not a real streak
-      if (member.latestDailyGain > 0) continue; // still gaining
+      if (member.isTransfer) continue;
+      if (member.latestDailyGain > 0) continue;
 
-      // Had gains before (active days > 0) but latest is zero
       const activeDays = countActiveDaysUpTo(member, member.latestPositiveDay);
-      if (activeDays < 3) continue; // not enough history for a streak
+      if (activeDays < 3) continue;
 
       const eventKey = `streak_break:${reportDate}:${member.viewerId}`;
-      if (!db.isAlertAlreadySent(eventKey)) {
-        alerts.push({
-          type: 'streak_break',
-          eventKey,
-          memberViewerId: String(member.viewerId),
-            message: `${member.trainerName} — streak terputus setelah ${activeDays} hari aktif berturut-turut`,
-          reportDate,
-        });
-      }
+      candidateKeys.push(eventKey);
+      candidateAlerts.push({
+        type: 'streak_break',
+        eventKey,
+        memberViewerId: String(member.viewerId),
+        message: `${member.trainerName} — streak terputus setelah ${activeDays} hari aktif berturut-turut`,
+        reportDate,
+      });
     }
   }
 
-  // --- New transfer ---
   if (config.alerts.newTransfer.enabled) {
     for (const member of computedMembers) {
       if (!member.isTransfer) continue;
       const eventKey = `new_transfer:${reportDate}:${member.viewerId}`;
-      if (!db.isAlertAlreadySent(eventKey)) {
-        const from = member.previousCircleName
-          ? ` dari ${member.previousCircleName}`
-          : '';
-        alerts.push({
-          type: 'new_transfer',
-          eventKey,
-          memberViewerId: String(member.viewerId),
-            message: `${member.trainerName} — transfer baru terdeteksi${from}`,
-          reportDate,
-        });
-      }
+      candidateKeys.push(eventKey);
+      const from = member.previousCircleName
+        ? ` dari ${member.previousCircleName}`
+        : '';
+      candidateAlerts.push({
+        type: 'new_transfer',
+        eventKey,
+        memberViewerId: String(member.viewerId),
+        message: `${member.trainerName} — transfer baru terdeteksi${from}`,
+        reportDate,
+      });
     }
   }
 
-  // --- Rank drop ---
   if (config.alerts.rankDrop.enabled) {
     const diff =
       (snapshot.circle.yesterday_rank ?? 0) > 0
@@ -158,19 +142,23 @@ export function detectAlerts(
 
     if (diff > config.alerts.rankDrop.positions) {
       const eventKey = `rank_drop:${reportDate}`;
-      if (!db.isAlertAlreadySent(eventKey)) {
-        alerts.push({
-          type: 'rank_drop',
-          eventKey,
-          memberViewerId: 'club',
-          message: `Rank turun ${diff} posisi — peringatan: pergerakan signifikan (${snapshot.circle.yesterday_rank} → ${snapshot.circle.monthly_rank})`,
-          reportDate,
-        });
-      }
+      candidateKeys.push(eventKey);
+      candidateAlerts.push({
+        type: 'rank_drop',
+        eventKey,
+        memberViewerId: 'club',
+        message: `Rank turun ${diff} posisi — peringatan: pergerakan signifikan (${snapshot.circle.yesterday_rank} → ${snapshot.circle.monthly_rank})`,
+        reportDate,
+      });
     }
   }
 
-  // --- Quiet hours filter ---
+  const existingKeys = candidateKeys.length > 0
+    ? await db.getExistingAlertKeys(candidateKeys)
+    : new Set<string>();
+
+  const alerts = candidateAlerts.filter((a) => !existingKeys.has(a.eventKey));
+
   if (config.alerts.quietHours.enabled && alerts.length > 0) {
     const now = new Date();
     const displayParts = new Intl.DateTimeFormat('en-US', {
@@ -194,8 +182,8 @@ export function detectAlerts(
     if (isQuiet) {
       // Record alerts for dedup so they don't re-fire after quiet hours end
       for (const alert of alerts) {
-        if (!db.isAlertAlreadySent(alert.eventKey)) {
-          db.recordAlert({
+        if (!existingKeys.has(alert.eventKey)) {
+          await db.recordAlert({
             alert_type: alert.type,
             event_key: alert.eventKey,
             member_viewer_id: alert.memberViewerId,
@@ -213,18 +201,6 @@ export function detectAlerts(
 
   return alerts;
 }
-
-// ============================================================
-// Deduplication
-// ============================================================
-
-export function deduplicateAlerts(alerts: Alert[], db: Database): Alert[] {
-  return alerts.filter((a) => !db.isAlertAlreadySent(a.eventKey));
-}
-
-// ============================================================
-// Formatting
-// ============================================================
 
 export function formatAlerts(alerts: Alert[], isCatchUp: boolean): string {
   if (alerts.length === 0) return '';
@@ -261,10 +237,6 @@ export function formatAlerts(alerts: Alert[], isCatchUp: boolean): string {
   return lines.join('\n');
 }
 
-// ============================================================
-// Catch-up alert aggregation
-// ============================================================
-
 const AGGREGATE_LABELS: Record<string, string> = {
   performance_drop: 'penurunan performa',
   demotion_risk: 'hari risiko degradasi',
@@ -299,10 +271,6 @@ export function aggregateAlerts(alerts: Alert[]): string {
 
   return lines.join('\n');
 }
-
-// ============================================================
-// Helpers
-// ============================================================
 
 /**
  * Count the consecutive active days of the streak that just broke.

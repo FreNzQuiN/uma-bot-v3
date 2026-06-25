@@ -18,6 +18,7 @@ import * as path from 'path';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot, BotConfig } from '../../src/types';
 import type { IncomingMessage } from '../../src/whatsapp/client';
+import type { IDatabase } from '../../src/db/types';
 
 // ============================================================
 // Constants
@@ -197,16 +198,24 @@ export function parseFormattedGain(formatted: string): number {
  */
 export function makeMockDb() {
   return {
-    isAlertAlreadySent: jest.fn().mockReturnValue(false),
-    recordAlert: jest.fn(),
-    getMembers: jest.fn().mockReturnValue([]),
-    getMember: jest.fn().mockReturnValue(null),
-    upsertMember: jest.fn(),
-    saveRankHistory: jest.fn(),
-    getLastSuccessfulRun: jest.fn().mockReturnValue(null),
-    recordRun: jest.fn(),
-    updateRunStatus: jest.fn(),
-  };
+    initialize: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined),
+    save: jest.fn().mockResolvedValue(undefined),
+    isAlertAlreadySent: jest.fn().mockResolvedValue(false),
+    getExistingAlertKeys: jest.fn().mockResolvedValue(new Set<string>()),
+    recordAlert: jest.fn().mockResolvedValue(1),
+    getMembers: jest.fn().mockResolvedValue([]),
+    getMember: jest.fn().mockResolvedValue(null),
+    upsertMember: jest.fn().mockResolvedValue(undefined),
+    saveRankHistory: jest.fn().mockResolvedValue(undefined),
+    getRankHistory: jest.fn().mockResolvedValue([]),
+    getLastSuccessfulRun: jest.fn().mockResolvedValue(null),
+    getLastRun: jest.fn().mockResolvedValue(null),
+    recordRun: jest.fn().mockResolvedValue(1),
+    updateRunStatus: jest.fn().mockResolvedValue(undefined),
+    markAlertSent: jest.fn().mockResolvedValue(undefined),
+    transaction: jest.fn().mockImplementation((fn: () => Promise<any>) => fn()),
+  } as unknown as IDatabase;
 }
 
 // ============================================================

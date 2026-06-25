@@ -11,10 +11,6 @@ import { z } from 'zod';
 import type { BotConfig } from './types';
 import { log } from './utils/logger';
 
-// ============================================================
-// Zod schema for validation
-// ============================================================
-
 const timePattern = z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format').refine(
   (val) => {
     const [h, m] = val.split(':').map(Number);
@@ -119,29 +115,38 @@ const ConfigSchema = z.object({
     maxFiles: z.number().int().min(0).default(3),
     console: z.boolean().default(true),
   }).default({}),
-});
 
-// ============================================================
-// Default config
-// ============================================================
+  database: z.object({
+    backend: z.enum(['sqlite', 'mysql']).default('sqlite'),
+    sqlite: z.object({
+      path: z.string().default('data/bot.db'),
+      autoSaveMs: z.number().int().min(1000).default(30_000),
+    }).default({}),
+    mysql: z.object({
+      host: z.string().default('localhost'),
+      port: z.number().int().min(1).max(65535).default(3306),
+      database: z.string().default('uma_club_bot'),
+      user: z.string().default(''),
+      password: z.string().default(''),
+      connectionLimit: z.number().int().min(1).max(100).default(5),
+      ssl: z.boolean().default(false),
+    }).default({}),
+  }).default({}),
+});
 
 export function getDefaultConfig(): BotConfig {
   const result = ConfigSchema.parse({});
-  return result as unknown as BotConfig;
+  // Compile-time check: Zod schema output must match BotConfig
+  const _: BotConfig = result as BotConfig;
+  return _;
 }
-
-// ============================================================
-// Validation
-// ============================================================
 
 export function validateConfig(data: unknown): BotConfig {
   const result = ConfigSchema.parse(data);
-  return result as unknown as BotConfig;
+  // Compile-time check: Zod schema output must match BotConfig
+  const _: BotConfig = result as BotConfig;
+  return _;
 }
-
-// ============================================================
-// Config loading
-// ============================================================
 
 export function loadConfig(filePath?: string): BotConfig {
   const path = filePath ?? 'config.yaml';
@@ -166,10 +171,6 @@ export function loadConfig(filePath?: string): BotConfig {
     throw new Error(`Failed to load config from ${path}: ${msg}`);
   }
 }
-
-// ============================================================
-// Immutable config update
-// ============================================================
 
 function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
   const result = { ...target };
@@ -200,10 +201,6 @@ export function updateConfig(current: BotConfig, updates: Partial<BotConfig>): B
   return validateConfig(merged);
 }
 
-// ============================================================
-// Config persistence (atomic write to config.yaml)
-// ============================================================
-
 /**
  * Save config to disk as YAML, preserving original file formatting.
  * Uses the yaml Document API to preserve block-style, comments, and ordering.
@@ -221,6 +218,7 @@ export function saveConfig(config: BotConfig, filePath?: string): void {
     }
     raw = String(doc);
   } catch {
+    log.debug('Config', 'Could not parse existing config for formatting preservation, using plain YAML');
     raw = stringifyYaml(config);
   }
   const tmpPath = path + '.tmp';

@@ -22,7 +22,6 @@ export { computeTierData, CLUB_TIERS };
  * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateTierReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
-  // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Tier Intelligence*\nData tier belum tersedia.';
   }
@@ -47,7 +46,6 @@ export function generateTierReport(snapshot: Snapshot, config: BotConfig, comput
   lines.push(`🏆 *Tier Intelligence*`);
   lines.push('');
 
-  // Date
   const dataDay = getDataDayFromSnapshot(snapshot);
   const dateStr = buildDateStr(snapshot, dataDay);
   const formattedDate = formatDateWIB(dateStr);
@@ -72,7 +70,6 @@ export function generateTierReport(snapshot: Snapshot, config: BotConfig, comput
     `${riskEmoji[tier.riskLevel]} Proyeksi: ${outcomeText[tier.projectedOutcome]}`
   );
 
-  // Sync footer
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));
   return lines.join('\n');

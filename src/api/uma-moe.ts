@@ -38,7 +38,6 @@ export class UmaMoeClient {
   async ensureSession(): Promise<void> {
     if (this.isSessionValid()) return;
 
-    // Close old browser if any
     await this.closeSession();
 
     const { chromium } = await import('playwright');
@@ -56,15 +55,12 @@ export class UmaMoeClient {
 
       this.page = await context.newPage();
 
-      // Visit the site to trigger Turnstile and get warmup cookie
       await this.page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 30_000 });
 
-      // Wait for Turnstile to solve
       await this.page.waitForTimeout(5000);
 
       this.sessionObtainedAt = Date.now();
     } catch (err) {
-      // Clean up on failure
       await this.closeSession();
       throw err;
     }
@@ -87,14 +83,19 @@ export class UmaMoeClient {
     const page = this.page!;
     try {
       const result = await page.evaluate(async (fetchUrl: string) => {
-        const response = await fetch(fetchUrl);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30_000);
+        try {
+          const response = await fetch(fetchUrl, { signal: controller.signal });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        } finally {
+          clearTimeout(timeout);
         }
-        return response.json();
       }, url);
 
-      // Validate response structure
       const raw = result as Record<string, unknown>;
       if (!raw || typeof raw !== 'object') {
         throw new Error('Invalid response from uma.moe: not an object');

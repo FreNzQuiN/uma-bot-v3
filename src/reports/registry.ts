@@ -6,7 +6,7 @@
  */
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
-import type { Database } from '../db/database';
+import type { IDatabase } from '../db/types';
 import { generateDailyReport } from './daily';
 import { generateWeeklyReport } from './weekly';
 import { generateMonthlyReport } from './monthly';
@@ -22,13 +22,13 @@ export const REPORT_TYPES = ['daily', 'weekly', 'monthly', 'ranks', 'bottom', 's
  * Generate a report string for a given report type.
  * Returns the formatted string, or undefined for unknown types.
  */
-export function generateReportString(
+export async function generateReportString(
   type: string,
   snapshot: Snapshot,
   config: BotConfig,
   computedMembers: ComputedMember[],
-  options?: { offset?: number; db?: Database }
-): string | undefined {
+  options?: { offset?: number; db?: IDatabase }
+): Promise<string | undefined> {
   switch (type) {
     case 'daily': return generateDailyReport(snapshot, config, computedMembers, options?.offset ?? 0);
     case 'weekly': return generateWeeklyReport(snapshot, config, computedMembers, options?.offset ?? 0);
@@ -36,7 +36,7 @@ export function generateReportString(
     case 'ranks': return generateRanksReport(snapshot, config, computedMembers);
     case 'bottom': return generateBottomReport(snapshot, config, computedMembers);
     case 'stats': return generateStatsReport(snapshot, config, computedMembers);
-    case 'members': return generateMembersReport(snapshot, config, computedMembers, options?.db);
+    case 'members': return await generateMembersReport(snapshot, config, computedMembers, options?.db);
     case 'tier': return generateTierReport(snapshot, config, computedMembers);
     default: return undefined;
   }
