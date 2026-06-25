@@ -14,6 +14,43 @@ import { log } from '../utils/logger';
 /** Base directory name under which snapshots are stored (relative to root). */
 const SNAPSHOTS_DIR = 'data/snapshots';
 
+let cachedLatestSnapshot: Snapshot | null = null;
+
+/**
+ * Get the cached latest snapshot (no disk I/O).
+ * Returns null if cache is empty (e.g., before first load).
+ */
+export function getCachedSnapshot(): Snapshot | null {
+  return cachedLatestSnapshot;
+}
+
+/**
+ * Update the in-memory snapshot cache.
+ * Called after every saveSnapshot() and after initial load.
+ */
+export function setCachedSnapshot(snapshot: Snapshot | null): void {
+  if (snapshot) {
+    const prev = cachedLatestSnapshot;
+    const changed = !prev
+      || prev.circle.circle_id !== snapshot.circle.circle_id
+      || prev.circle.last_updated !== snapshot.circle.last_updated;
+    if (changed) {
+      log.debug('Snapshot', `Cache updated: circle=${snapshot.circle.circle_id} updated=${snapshot.circle.last_updated ?? 'unknown'}`);
+    }
+  }
+  cachedLatestSnapshot = snapshot;
+}
+
+/**
+ * Invalidate the snapshot cache. Next getSnapshot() call will re-read from disk.
+ */
+export function invalidateSnapshotCache(): void {
+  if (cachedLatestSnapshot) {
+    log.debug('Snapshot', 'Cache invalidated');
+  }
+  cachedLatestSnapshot = null;
+}
+
 /**
  * Build the full path for a snapshot file.
  * @param dataDay WIB date string e.g. "2026-06-11"

@@ -41,12 +41,11 @@ tests/stats_output.txt
 tests/stats_output2.txt
 
 # Session artifacts (opencode agent working files)
-.omo/
+omo/
 .plans/
 output/
-HANDOFF-TDD.md
-audit-findings.json
-audit-findings.md
+.audit/
+.opencode/
 
 # OS files
 .DS_Store

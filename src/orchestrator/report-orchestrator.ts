@@ -10,7 +10,7 @@ import type { IDatabase } from '../db/types';
 import type { UmaMoeClient } from '../api/uma-moe';
 import type { WhatsAppClient } from '../whatsapp/client';
 import { detectAlerts, formatAlerts, type Alert } from '../alerts/alerts';
-import { saveSnapshot, ensureMonthSnapshot, getDataDayFromSnapshot } from '../data/snapshot';
+import { saveSnapshot, ensureMonthSnapshot, getDataDayFromSnapshot, setCachedSnapshot } from '../data/snapshot';
 import { getDataDate, getDataDateComponents, getTargetMonth } from '../utils/timezone';
 import { computeMembers } from '../reports/compute';
 import { generateCombinedReport } from '../reports/combined';
@@ -113,6 +113,7 @@ export class ReportOrchestrator {
           log.info('Report', `Snapshot is from ${snapYear}-${snapMonth}, fetching current month ${curYear}-${curMonth}`);
           const freshSnapshot = await this.umaMoe.fetchCircleData(config.circleId, curYear, curMonth);
           saveSnapshot(freshSnapshot, getDataDate());
+          setCachedSnapshot(freshSnapshot);
           snapshot = freshSnapshot;
           log.info('Report', `Fresh data fetched for ${type} report`);
         } catch (err) {
@@ -131,6 +132,7 @@ export class ReportOrchestrator {
           log.info('Report', `Snapshot data day ${dataDay} is stale (current day ${curDay}), fetching fresh`);
           const freshSnapshot = await this.umaMoe.fetchCircleData(config.circleId, curYear, curMonth);
           saveSnapshot(freshSnapshot, getDataDate());
+          setCachedSnapshot(freshSnapshot);
           snapshot = freshSnapshot;
         } catch (err) {
           log.warn('Report', `Failed to refresh stale data, using existing snapshot`, err);
@@ -299,7 +301,14 @@ export class ReportOrchestrator {
     // Deliver report first — this is the primary deliverable
     await this.deliverReport(report, type);
 
-    // Detect, record, and deliver alerts
-    return this.processAlertsForReport(type, snapshot, config, computedMembers, options);
+    // Detect, record, and deliver alerts in background — don't block report delivery
+    // for the next user command. collectAlerts mode still returns results for catch-up.
+    if (options?.collectAlerts) {
+      return this.processAlertsForReport(type, snapshot, config, computedMembers, options);
+    }
+    log.debug('Alert', `Deferring alert processing for ${type} report to background`);
+    this.processAlertsForReport(type, snapshot, config, computedMembers, options)
+      .catch((err) => log.error('Alert', `Background alert processing failed for ${type}`, err));
+    return [];
   }
 }

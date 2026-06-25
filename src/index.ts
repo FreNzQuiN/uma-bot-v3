@@ -19,7 +19,7 @@ import { CatchUpManager } from './scheduler/catchup';
 import { WhatsAppClient } from './whatsapp/client';
 import { setupCommandHandler } from './whatsapp/dispatch';
 
-import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, ensureMonthSnapshot, getDataDayFromSnapshot } from './data/snapshot';
+import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, ensureMonthSnapshot, getDataDayFromSnapshot, getCachedSnapshot, setCachedSnapshot } from './data/snapshot';
 import { updateMemberHistory } from './data/member-history';
 import { getDataDate, getDataDateComponents, getTargetMonth } from './utils/timezone';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
@@ -94,7 +94,14 @@ async function main() {
   }
 
   const umaMoe = new UmaMoeClient();
-  const getSnapshot = () => loadLatestSnapshot();
+  const getSnapshot = (): Snapshot | null => {
+    const cached = getCachedSnapshot();
+    if (cached) return cached;
+    log.debug('Snapshot', 'Cache miss — reading from disk');
+    const snapshot = loadLatestSnapshot();
+    if (snapshot) setCachedSnapshot(snapshot);
+    return snapshot;
+  };
   const getConfig = () => config;
 
   const waClient = new WhatsAppClient(getConfig);
@@ -181,6 +188,7 @@ async function main() {
   const { year: currentYear, month: currentMonth, day: currentDay } = getDataDateComponents();
 
   const latestSnap = loadLatestSnapshot();
+  if (latestSnap) setCachedSnapshot(latestSnap);
   let needFetch = true;
   if (latestSnap && latestSnap.members.length > 0) {
     const { year: snapYear, month: snapMonth } = latestSnap.members[0];
@@ -198,6 +206,7 @@ async function main() {
       log.info('Data', `No snapshot for ${todayStr} — fetching from uma.moe...`);
       const snapshot = await umaMoe.fetchCircleData(config.circleId, currentYear, currentMonth);
       saveSnapshot(snapshot, todayStr);
+      setCachedSnapshot(snapshot);
       log.info('Data', `Snapshot saved for ${todayStr}`);
     } catch (error) {
       log.error('Data', 'Failed to fetch fresh data', error);
@@ -224,6 +233,7 @@ async function main() {
   }
 
   const latestSnapshot = loadLatestSnapshot();
+  if (latestSnapshot) setCachedSnapshot(latestSnapshot);
   if (latestSnapshot) {
     try {
       await updateMemberHistory(latestSnapshot, db);
@@ -257,6 +267,7 @@ async function main() {
       const currentConfig = getConfig();
       const snapshot = await umaMoe.fetchCircleData(currentConfig.circleId, currentYear, currentMonth);
       saveSnapshot(snapshot, getDataDate());
+      setCachedSnapshot(snapshot);
       log.info('Data', 'Scheduled data fetch completed');
     } catch (error) {
       log.error('Data', 'Scheduled data fetch failed', error);
@@ -283,9 +294,10 @@ async function main() {
     const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
     await orchestrator.deliverReport(combined, types.join('+'));
 
-    // Detect alerts for each combined report type
+    // Detect alerts for each combined report type — fire in background, don't block
     for (const type of types) {
-      await orchestrator.processAlertsForReport(type, snapshot, currentConfig, computedMembers);
+      orchestrator.processAlertsForReport(type, snapshot, currentConfig, computedMembers)
+        .catch((err) => log.error('Alert', `Background alert processing failed for ${type}`, err));
     }
   }, onDataFetch);
   scheduler.start();
@@ -329,6 +341,12 @@ async function main() {
   const cleanup = async () => {
     log.info('Bot', 'Shutting down...');
     scheduler?.stop();
+    try {
+      await umaMoe.closeSession();
+      log.debug('Bot', 'Playwright browser session closed');
+    } catch (err) {
+      log.warn('Bot', `Failed to close Playwright session: ${err instanceof Error ? err.message : String(err)}`);
+    }
     waClient?.disconnect();
     await db.close();
     try { unlinkSync(PID_FILE); } catch {}

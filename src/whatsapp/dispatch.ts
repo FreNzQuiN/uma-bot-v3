@@ -212,30 +212,27 @@ async function handleReportCommand(
 ): Promise<void> {
   const { command, args, offset } = parsed;
 
-  const snapshot = ctx.getSnapshot();
-  if (!snapshot) {
-    const reply = '⚠️ Belum ada data. Tunggu sync berikutnya atau coba lagi nanti.';
-    await ctx.client.sendOrEdit(chatJid, null, reply);
-    return;
-  }
-
-  // Send loading message (both group and private chat)
-  let loadingMsgId: string | null = null;
-
-  // Validate offset before sending loading message
+  // Validate offset early (before sending loading message)
   if (offset !== null) {
     const maxOffset = command === 'daily' ? ctx.config.commands.maxDailyOffset
       : command === 'weekly' ? ctx.config.commands.maxWeeklyOffset
       : command === 'monthly' ? ctx.config.commands.maxMonthlyOffset
       : null;
     if (maxOffset !== null && Math.abs(offset) > maxOffset) {
-      const reply = `Batas offset untuk /${command} adalah ${maxOffset}.`;
-      await ctx.client.sendOrEdit(chatJid, null, reply);
+      await ctx.client.sendOrEdit(chatJid, null, `Batas offset untuk /${command} adalah ${maxOffset}.`);
       return;
     }
   }
 
-  loadingMsgId = await ctx.client.sendOrEdit(chatJid, null, pickLoadingMessage());
+  // Check snapshot availability before sending loading message
+  const snapshot = ctx.getSnapshot();
+  if (!snapshot) {
+    await ctx.client.sendOrEdit(chatJid, null, '⚠️ Belum ada data. Tunggu sync berikutnya atau coba lagi nanti.');
+    return;
+  }
+
+  // Send loading message — user sees immediate feedback
+  const loadingMsgId = await ctx.client.sendOrEdit(chatJid, null, pickLoadingMessage());
 
   // Pre-fetch target month for /monthly with offset > 0
   if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && ctx.prefetchSnapshot) {
