@@ -8,7 +8,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Snapshot } from '../types';
-import { getLatestDataDay } from './daily-fans';
 import { formatDateWIB } from '../utils/timezone';
 import { log } from '../utils/logger';
 
@@ -179,26 +178,6 @@ export function snapshotExists(
 }
 
 /**
- * Get the latest data day number from a snapshot.
- * Uses getLatestDataDay on each member's daily_fans and returns the MAX.
- *
- * @param snapshot - The snapshot to analyze
- * @returns The latest 1-indexed day number with positive data across all members
- */
-export function getDataDayFromSnapshot(snapshot: Snapshot): number {
-  let maxDay = 0;
-
-  for (const member of snapshot.members) {
-    const day = getLatestDataDay(member.daily_fans);
-    if (day > maxDay) {
-      maxDay = day;
-    }
-  }
-
-  return maxDay;
-}
-
-/**
  * Scan the snapshots directory and return all date strings (YYYY-MM-DD)
  * for which a JSON file exists.
  */
@@ -268,3 +247,6 @@ export function staleSnapshotMessage(snapshotDate: string | null): string {
 // Re-export ensureMonthSnapshot from its dedicated module to preserve the public API.
 // The function itself lives in ./ensure-snapshot.ts to avoid a data → api dependency.
 export { ensureMonthSnapshot } from './ensure-snapshot';
+
+// Re-export for backward compatibility — function now lives in daily-fans.ts
+export { getDataDayFromSnapshot } from './daily-fans';

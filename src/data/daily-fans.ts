@@ -11,7 +11,6 @@
  */
 
 import { Snapshot, WEEK_BLOCKS, TierData, CLUB_TIERS } from '../types';
-import { getDataDayFromSnapshot } from '../data/snapshot';
 
 /**
  * Check if a daily_fans value is positive (usable cumulative data).
@@ -305,6 +304,26 @@ export function isStaleForReport(
 ): boolean {
   if (threshold <= 0) return false;
   return countConsecutiveZeroDaysAtEnd(dailyFans, latestDataDay) >= threshold;
+}
+
+/**
+ * Get the latest data day number from a snapshot.
+ * Uses getLatestDataDay on each member's daily_fans and returns the MAX.
+ *
+ * @param snapshot - The snapshot to analyze
+ * @returns The latest 1-indexed day number with positive data across all members
+ */
+export function getDataDayFromSnapshot(snapshot: Snapshot): number {
+  let maxDay = 0;
+
+  for (const member of snapshot.members) {
+    const day = getLatestDataDay(member.daily_fans);
+    if (day > maxDay) {
+      maxDay = day;
+    }
+  }
+
+  return maxDay;
 }
 
 /**
