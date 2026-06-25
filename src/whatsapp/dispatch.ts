@@ -13,6 +13,8 @@ import { canUseCommand, isAdmin, ADMIN_COMMANDS, ADMIN_COMMAND_HELP } from './ac
 import { handleSetReq, handleConfig, handleStatus, handleCatchUp, handleAlerts } from './admin';
 import { computeMembers } from '../reports/compute';
 import { generateReportString } from '../reports/registry';
+// Two-tier dispatch: registry handles standard types (daily, weekly, etc.)
+// These handle name-resolution types (compare/analyze) that need fuzzy member matching.
 import { generateCompareReport } from '../reports/compare';
 import { generateAnalyzeReport } from '../reports/analyze';
 import { log } from '../utils/logger';

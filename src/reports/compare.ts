@@ -6,8 +6,8 @@
  */
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
-import { WEEK_BLOCKS } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
+import { getWeekForDay } from './weekly';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { formatDateWIB } from '../utils/timezone';
 import { buildDateStr, buildFooter } from './format';
@@ -48,8 +48,7 @@ export function generateCompareReport(
   const avgB = computeRollingAverage(memberB.dailyFans, latestDataDay, 7, config.requirements.includeTransferDataInCalculation);
 
   // Show current week's gain only (not total of all weeks)
-  const currentWeekBlock = WEEK_BLOCKS.find(b => latestDataDay >= b.start && latestDataDay <= b.end);
-  const currentWeekNum = currentWeekBlock ? currentWeekBlock.week : 5;
+  const currentWeekNum = getWeekForDay(latestDataDay);
   const weeklyGainA = memberA.weeklyGains[currentWeekNum - 1] || 0;
   const weeklyGainB = memberB.weeklyGains[currentWeekNum - 1] || 0;
 

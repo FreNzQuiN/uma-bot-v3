@@ -384,38 +384,22 @@ export class WhatsAppClient {
           recordDisconnect(reasonName, errMsg);
           this.stopHeartbeat();
 
-          if (statusCode === DisconnectReason.loggedOut) {
+          if (statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.badSession) {
+            const reasonLabel = statusCode === DisconnectReason.loggedOut ? 'logout' : 'badSession';
             clearTimeout(timeout);
             this.sock = null;
             // Delete stale auth so next connect() shows QR instead of failing
             try {
               if (existsSync(this.authDir)) {
                 rmSync(this.authDir, { recursive: true, force: true });
-                log.info('WhatsApp', 'Deleted stale session — reconnecting for QR scan');
+                log.info('WhatsApp', `Deleted stale session (${reasonLabel}) — reconnecting for QR scan`);
               }
             } catch (error) {
               log.warn('WhatsApp', `Failed to delete stale auth directory: ${error instanceof Error ? error.message : String(error)}`);
             }
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after logout failed: ${err instanceof Error ? err.message : String(err)}`);
-              });
-            }, 2000);
-          } else if (statusCode === DisconnectReason.badSession) {
-            clearTimeout(timeout);
-            this.sock = null;
-            // Delete stale auth so next connect() shows QR instead of failing
-            try {
-              if (existsSync(this.authDir)) {
-                rmSync(this.authDir, { recursive: true, force: true });
-                log.info('WhatsApp', 'Deleted stale session (badSession) — reconnecting for QR scan');
-              }
-            } catch (error) {
-              log.warn('WhatsApp', `Failed to delete stale auth directory: ${error instanceof Error ? error.message : String(error)}`);
-            }
-            setTimeout(() => {
-              this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after badSession failed: ${err instanceof Error ? err.message : String(err)}`);
+                log.error('WhatsApp', `Reconnection after ${reasonLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
               });
             }, 2000);
           } else if (statusCode === DisconnectReason.restartRequired) {

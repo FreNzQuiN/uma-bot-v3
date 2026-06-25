@@ -251,7 +251,6 @@ export class CatchUpManager {
             const result = await onCombinedReport(group);
             if (Array.isArray(result)) alerts.push(...result);
             await this.db.updateRunStatus(runId, 'sent');
-            await this.db.save(); // Persist immediately for crash recovery
             // Record individual runs so scheduled reports don't duplicate
             for (const type of group) {
               await this.db.recordRun({

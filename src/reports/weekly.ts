@@ -26,7 +26,7 @@ interface WeeklyRankedMember {
 /**
  * Determine which week the data day falls into.
  */
-function getWeekForDay(day: number): number {
+export function getWeekForDay(day: number): number {
   for (const block of WEEK_BLOCKS) {
     if (day >= block.start && day <= block.end) {
       return block.week;
