@@ -1,7 +1,7 @@
 /**
  * Compare Report — Dedicated Tests
  *
- * Comprehensive test coverage for generateCompareReport():
+ * full test coverage for generateCompareReport():
  * - Happy path: both members found, formatted output
  * - Error paths: first/second/both members not found
  * - Self-comparison, transfer badges, winner logic
@@ -17,9 +17,6 @@ import { getDataDayFromSnapshot } from '../../src/data/snapshot';
 import type { Snapshot, BotConfig } from '../../src/types';
 import { loadRealSnapshot } from '../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -34,9 +31,6 @@ beforeAll(() => {
   }
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 /**
  * Build a custom snapshot with specific member data for targeted tests.
@@ -90,9 +84,6 @@ function makeCumulativeFans(startValue: number, dailyGain: number, activeDays: n
   return fans;
 }
 
-// ============================================================
-// Section 1: Both Members Found
-// ============================================================
 
 describe('generateCompareReport — both members found', () => {
   it('produces formatted comparison with both member names', () => {
@@ -138,9 +129,6 @@ describe('generateCompareReport — both members found', () => {
   });
 });
 
-// ============================================================
-// Section 2: Error Paths — Members Not Found
-// ============================================================
 
 describe('generateCompareReport — member not found', () => {
   it('returns error when first member is not found', () => {
@@ -187,9 +175,6 @@ describe('generateCompareReport — member not found', () => {
   });
 });
 
-// ============================================================
-// Section 3: Self-Comparison
-// ============================================================
 
 describe('generateCompareReport — self-comparison', () => {
   it('works correctly when comparing member to self', () => {
@@ -214,9 +199,6 @@ describe('generateCompareReport — self-comparison', () => {
   });
 });
 
-// ============================================================
-// Section 4: Winner Logic
-// ============================================================
 
 describe('generateCompareReport — winner determination', () => {
   it('shows first member as winner when their monthly gain is higher', () => {
@@ -249,9 +231,6 @@ describe('generateCompareReport — winner determination', () => {
   });
 });
 
-// ============================================================
-// Section 5: Transfer Member Comparison
-// ============================================================
 
 describe('generateCompareReport — transfer members', () => {
   it('shows transfer badge for transfer member', () => {
@@ -284,9 +263,6 @@ describe('generateCompareReport — transfer members', () => {
   });
 });
 
-// ============================================================
-// Section 6: WhatsApp Formatting Compliance
-// ============================================================
 
 describe('generateCompareReport — WhatsApp formatting', () => {
   it('does not contain Markdown syntax (##, ```, ---)', () => {
@@ -327,9 +303,6 @@ describe('generateCompareReport — WhatsApp formatting', () => {
   });
 });
 
-// ============================================================
-// Section 7: Numerical Accuracy
-// ============================================================
 
 describe('generateCompareReport — numerical accuracy', () => {
   it('formats large numbers with K/M/B suffixes', () => {
@@ -358,9 +331,6 @@ describe('generateCompareReport — numerical accuracy', () => {
   });
 });
 
-// ============================================================
-// Section 8: Edge Cases
-// ============================================================
 
 describe('generateCompareReport — edge cases', () => {
   it('handles members with zero daily fans', () => {

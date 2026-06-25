@@ -25,9 +25,6 @@ import {
   STALE_NAMES,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -39,9 +36,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Section 1: Snapshot Data Verification
-// ============================================================
 
 describe('Snapshot data fundamentals', () => {
   it('has the expected structure', () => {
@@ -80,9 +74,6 @@ describe('Snapshot data fundamentals', () => {
   });
 });
 
-// ============================================================
-// Section 2: Member Classification (active / stale / transfer)
-// ============================================================
 
 describe('Member classification', () => {
   it('correctly identifies 4 stale members', () => {
@@ -156,9 +147,6 @@ describe('Member classification', () => {
   });
 });
 
-// ============================================================
-// Section 4: Individual Member Gains
-// ============================================================
 
 describe('Individual member gains', () => {
   it('Nargi gain = 373937532 - 370852652 = 3084880', () => {
@@ -203,9 +191,6 @@ describe('Individual member gains', () => {
   });
 });
 
-// ============================================================
-// Section 5: Offset Reports
-// ============================================================
 
 describe('Offset reports', () => {
   it('offset=1 shows day 10 data', () => {
@@ -222,9 +207,6 @@ describe('Offset reports', () => {
   });
 });
 
-// ============================================================
-// Section 6: getDailyGain Edge Cases
-// ============================================================
 
 describe('getDailyGain edge cases', () => {
   it('day=0 returns 0', () => {
@@ -248,9 +230,6 @@ describe('getDailyGain edge cases', () => {
   });
 });
 
-// ============================================================
-// Section 13: Complete All-30 Member Gain Verification (Day 11)
-// ============================================================
 
 describe('All positive-gain member gains traced to raw data (day 11)', () => {
   let report: string;
@@ -354,9 +333,6 @@ describe('All positive-gain member gains traced to raw data (day 11)', () => {
   });
 });
 
-// ============================================================
-// Section 26: Negative daily_fans[0] (transfer) handling
-// ============================================================
 
 describe('Transfer members with negative daily_fans[0]', () => {
   it('Zero has negative daily_fans[0] and is correctly classified as transfer', () => {

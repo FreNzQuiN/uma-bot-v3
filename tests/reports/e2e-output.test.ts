@@ -23,7 +23,6 @@ import { computeMembers } from '../../src/reports/compute';
 import { loadConfig } from '../../src/config';
 import { loadRealSnapshot, WHATSAPP_MAX_LENGTH } from '../_helpers';
 
-// Load real snapshot
 let snapshot: Snapshot;
 
 // Load config (uses config.yaml if exists, otherwise defaults)
@@ -34,9 +33,6 @@ beforeAll(() => {
   config = loadConfig();
 });
 
-// ============================================================
-// Cross-report validation (moved from formatters.test.ts)
-// ============================================================
 
 describe('cross-report validation', () => {
   it('all reports produce non-empty output', async () => {
@@ -91,9 +87,6 @@ describe('cross-report validation', () => {
   });
 });
 
-// ============================================================
-// Cross-report consistency
-// ============================================================
 
 describe('E2E: Cross-report consistency', () => {
   it('daily and monthly show same member count', () => {
@@ -131,9 +124,6 @@ describe('E2E: Cross-report consistency', () => {
   });
 });
 
-// ============================================================
-// Data integrity
-// ============================================================
 
 describe('E2E: Data integrity', () => {
   it('snapshot has 34 members (as per AGENTS.md)', () => {

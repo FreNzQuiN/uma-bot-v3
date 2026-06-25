@@ -104,9 +104,6 @@ describe('handleStatus', () => {
   });
 });
 
-// ============================================================
-// handleCatchUp
-// ============================================================
 
 describe('handleCatchUp', () => {
   it('shows current status when no args', () => {
@@ -140,9 +137,6 @@ describe('handleCatchUp', () => {
   });
 });
 
-// ============================================================
-// handleAlerts
-// ============================================================
 
 describe('handleAlerts', () => {
   it('shows current status when no args', () => {

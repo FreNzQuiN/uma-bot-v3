@@ -13,9 +13,6 @@ import {
   getLatestSnapshotDate,
 } from '../../src/data/snapshot';
 
-// ============================================================
-// Helpers
-// ============================================================
 
 /** Create a minimal valid Snapshot for testing. */
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -65,9 +62,6 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   };
 }
 
-// ============================================================
-// Fixtures
-// ============================================================
 
 const realSnapshot: Snapshot = JSON.parse(
   fs.readFileSync(
@@ -86,9 +80,6 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ============================================================
-// saveSnapshot
-// ============================================================
 
 describe('saveSnapshot', () => {
   test('saves snapshot to correct path', () => {
@@ -147,9 +138,6 @@ describe('saveSnapshot', () => {
   });
 });
 
-// ============================================================
-// loadSnapshot
-// ============================================================
 
 describe('loadSnapshot', () => {
   test('loads a saved snapshot', () => {
@@ -221,9 +209,6 @@ describe('loadSnapshot', () => {
   });
 });
 
-// ============================================================
-// loadLatestSnapshot
-// ============================================================
 
 describe('loadLatestSnapshot', () => {
   test('returns null when no snapshots exist', () => {
@@ -276,9 +261,6 @@ describe('loadLatestSnapshot', () => {
   });
 });
 
-// ============================================================
-// loadMonthSnapshots
-// ============================================================
 
 describe('loadMonthSnapshots', () => {
   test('returns empty array when no snapshots exist', () => {
@@ -325,9 +307,6 @@ describe('loadMonthSnapshots', () => {
   });
 });
 
-// ============================================================
-// snapshotExists
-// ============================================================
 
 describe('snapshotExists', () => {
   test('returns true when snapshot exists', () => {
@@ -348,9 +327,6 @@ describe('snapshotExists', () => {
   });
 });
 
-// ============================================================
-// getDataDayFromSnapshot
-// ============================================================
 
 describe('getDataDayFromSnapshot', () => {
   test('returns max data day across all members', () => {
@@ -409,9 +385,6 @@ describe('getDataDayFromSnapshot', () => {
   });
 });
 
-// ============================================================
-// staleSnapshotMessage
-// ============================================================
 
 describe('staleSnapshotMessage', () => {
   test('returns Indonesian message with formatted date', () => {
@@ -436,9 +409,6 @@ describe('staleSnapshotMessage', () => {
   });
 });
 
-// ============================================================
-// getLatestSnapshotDate
-// ============================================================
 
 describe('getLatestSnapshotDate', () => {
   test('returns null when no snapshots exist', () => {

@@ -9,9 +9,6 @@ import {
   INDONESIAN_MONTHS,
 } from '../../src/utils/timezone';
 
-// ──────────────────────────────────────────────────────────────
-// getDataDate — returns YYYY-MM-DD in JST (Asia/Tokyo, UTC+9)
-// ──────────────────────────────────────────────────────────────
 
 describe('getDataDate', () => {
   it('returns 2026-06-12 for June 12 03:00 UTC (12:00 JST)', () => {
@@ -45,9 +42,6 @@ describe('getDataDate', () => {
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// getDataDateComponents — returns { year, month, day } in JST
-// ──────────────────────────────────────────────────────────────
 
 describe('getDataDateComponents', () => {
   it('returns correct components for a known date', () => {
@@ -65,9 +59,6 @@ describe('getDataDateComponents', () => {
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// getDataDay — JST day of month (1-31)
-// ──────────────────────────────────────────────────────────────
 
 describe('getDataDay', () => {
   it('returns the day number in JST', () => {
@@ -83,9 +74,6 @@ describe('getDataDay', () => {
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// getDataMonth — JST month (1-12)
-// ──────────────────────────────────────────────────────────────
 
 describe('getDataMonth', () => {
   it('returns the month number in JST', () => {
@@ -101,9 +89,6 @@ describe('getDataMonth', () => {
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// getDataYear — JST year
-// ──────────────────────────────────────────────────────────────
 
 describe('getDataYear', () => {
   it('returns the year in JST', () => {
@@ -119,9 +104,6 @@ describe('getDataYear', () => {
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// formatForDisplay — "D/M HH:MM" in given timezone
-// ──────────────────────────────────────────────────────────────
 
 describe('formatForDisplay', () => {
   it('formats a known date in Asia/Jakarta (WIB, UTC+7)', () => {
@@ -149,9 +131,6 @@ describe('formatForDisplay', () => {
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// formatDateWIB — ISO date string → Indonesian format
-// ──────────────────────────────────────────────────────────────
 
 describe('formatDateWIB', () => {
   it('formats 2026-06-11 as "11 Juni 2026"', () => {
@@ -171,9 +150,6 @@ describe('formatDateWIB', () => {
   });
 });
 
-// ──────────────────────────────────────────────────────────────
-// INDONESIAN_MONTHS — constant array
-// ──────────────────────────────────────────────────────────────
 
 describe('INDONESIAN_MONTHS', () => {
   it('has length of 12', () => {

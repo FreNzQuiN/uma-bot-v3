@@ -12,9 +12,6 @@ import { generateMembersReport } from '../../src/reports/members';
 
 const config: BotConfig = getDefaultConfig();
 
-// ============================================================
-// Helper: create minimal snapshot with empty members
-// ============================================================
 
 function makeEmptyMembersSnapshot(): Snapshot {
   return {

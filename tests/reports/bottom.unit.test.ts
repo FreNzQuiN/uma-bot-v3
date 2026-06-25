@@ -1,5 +1,5 @@
 /**
- * /bottom Command — Comprehensive Tests
+ * /bottom Command — full Tests
  *
  * Tests the bottom report through unit-level verification.
  * Uses real snapshot (examples/snapshot-june-12.json, 34 members).
@@ -36,9 +36,6 @@ function makeConfig(overrides: Partial<Omit<BotConfig, 'requirements' | 'memberS
   };
 }
 
-// ============================================================
-// Section 1: Full Output Print and Basic Structure
-// ============================================================
 
 describe('Bottom report: full output and basic structure', () => {
   let report: string;
@@ -76,9 +73,6 @@ describe('Bottom report: full output and basic structure', () => {
   });
 });
 
-// ============================================================
-// Section 2: Member Classification
-// ============================================================
 
 describe('Bottom report: member classification', () => {
   it('4 left members (ghosts detected via member_count)', () => {
@@ -125,9 +119,6 @@ describe('Bottom report: member classification', () => {
   });
 });
 
-// ============================================================
-// Section 3: Sort Order
-// ============================================================
 
 describe('Bottom report: sort order', () => {
   it('members sorted by monthlyGain ascending (lowest first)', () => {
@@ -159,9 +150,6 @@ describe('Bottom report: sort order', () => {
   });
 });
 
-// ============================================================
-// Section 4: Individual Member Calculations (traced to raw data)
-// ============================================================
 
 describe('Bottom report: individual member calculations', () => {
   let report: string;
@@ -268,9 +256,6 @@ describe('Bottom report: individual member calculations', () => {
   });
 });
 
-// ============================================================
-// Section 5: Transfer Badges
-// ============================================================
 
 describe('Bottom report: transfer badges', () => {
   it('transfer members in bottom list show badge', () => {
@@ -290,9 +275,6 @@ describe('Bottom report: transfer badges', () => {
   });
 });
 
-// ============================================================
-// Section 7: WhatsApp Formatting
-// ============================================================
 
 describe('Bottom report: WhatsApp formatting', () => {
   let report: string;
@@ -325,9 +307,6 @@ describe('Bottom report: WhatsApp formatting', () => {
   });
 });
 
-// ============================================================
-// Section 8: Edge Cases
-// ============================================================
 
 describe('Bottom report: edge cases', () => {
   it('empty members array returns warning', () => {

@@ -1,9 +1,6 @@
 import { parseCommand, resolveMemberName } from '../../src/whatsapp/commands';
 import type { ComputedMember } from '../../src/types';
 
-// ============================================================
-// Test helpers
-// ============================================================
 
 function makeMember(overrides: Partial<ComputedMember> = {}): ComputedMember {
   return {
@@ -25,9 +22,6 @@ function makeMember(overrides: Partial<ComputedMember> = {}): ComputedMember {
 
 const DEFAULT_PREFIXES = ['/'];
 
-// ============================================================
-// parseCommand
-// ============================================================
 
 describe('parseCommand', () => {
   describe('basic command parsing', () => {
@@ -308,9 +302,6 @@ describe('parseCommand', () => {
   });
 });
 
-// ============================================================
-// resolveMemberName
-// ============================================================
 
 describe('resolveMemberName', () => {
   const members = [

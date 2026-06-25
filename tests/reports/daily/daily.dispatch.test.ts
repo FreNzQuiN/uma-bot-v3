@@ -30,9 +30,6 @@ import {
   makeMockDb,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 const ADMIN_JID = '6281234567890@s.whatsapp.net';
 const NON_ADMIN_JID = '6289999999999@s.whatsapp.net';
@@ -45,9 +42,6 @@ beforeAll(() => {
   snapshot = loadRealSnapshot();
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 function makeConfig(overrides: Record<string, any> = {}): BotConfig {
   return makeConfigBase({
@@ -57,9 +51,6 @@ function makeConfig(overrides: Record<string, any> = {}): BotConfig {
   });
 }
 
-// ============================================================
-// Section 8: Dispatch Integration (full user flow)
-// ============================================================
 
 describe('/daily dispatch integration (real snapshot)', () => {
   let mockDb: any;
@@ -395,9 +386,6 @@ describe('/daily dispatch integration (real snapshot)', () => {
   });
 });
 
-// ============================================================
-// Section 19: Exact Total Gain Verification (Manual Summation)
-// ============================================================
 
 describe('Exact total gain verification', () => {
   let report: string;

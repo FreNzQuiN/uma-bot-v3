@@ -24,9 +24,6 @@ const mockedSave = saveSnapshot as jest.MockedFunction<typeof saveSnapshot>;
 const mockedGetDataDate = getDataDate as jest.MockedFunction<typeof getDataDate>;
 const mockedGetDataDateComponents = getDataDateComponents as jest.MockedFunction<typeof getDataDateComponents>;
 
-// ============================================================
-// Helpers
-// ============================================================
 
 function makeSnapshot(circleId: number = 100): Snapshot {
   return {
@@ -71,9 +68,6 @@ function makeMockUmaMoe(apiSnapshot: Snapshot): UmaMoeClient {
   } as unknown as UmaMoeClient;
 }
 
-// ============================================================
-// Tests
-// ============================================================
 
 beforeEach(() => {
   jest.clearAllMocks();

@@ -13,9 +13,6 @@ const ANNOUNCEMENT_GROUP = 'group-announce@g.us';
 const OTHER_GROUP = 'group-other@g.us';
 const PRIVATE_CHAT = '6281111111111@s.whatsapp.net';
 
-// ============================================================
-// isAdmin
-// ============================================================
 
 describe('isAdmin', () => {
   it('returns true for admin JID', () => {
@@ -40,9 +37,6 @@ describe('isAdmin', () => {
   });
 });
 
-// ============================================================
-// isCommandGroup
-// ============================================================
 
 describe('isCommandGroup', () => {
   it('returns true for registered command group', () => {
@@ -61,9 +55,6 @@ describe('isCommandGroup', () => {
   });
 });
 
-// ============================================================
-// isAnnouncementGroup
-// ============================================================
 
 describe('isAnnouncementGroup', () => {
   it('returns true for registered announcement group', () => {
@@ -82,9 +73,6 @@ describe('isAnnouncementGroup', () => {
   });
 });
 
-// ============================================================
-// canUseCommand
-// ============================================================
 
 describe('canUseCommand', () => {
   const config = makeConfig({
@@ -199,9 +187,6 @@ describe('canUseCommand', () => {
     });
   });
 
-  // ============================================================
-  // help command — follows standard access control
-  // ============================================================
 
   describe('help command (standard access)', () => {
     const cfg = makeConfig({

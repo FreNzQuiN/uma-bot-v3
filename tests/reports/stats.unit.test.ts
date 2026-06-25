@@ -1,5 +1,5 @@
 /**
- * /stats Command — Comprehensive Tests
+ * /stats Command — full Tests
  *
  * Tests the stats report through unit-level verification and edge cases.
  * Uses real snapshot (examples/snapshot-june-12.json, 34 members).
@@ -31,9 +31,6 @@ import {
   parseFormattedGain,
 } from '../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -43,9 +40,6 @@ beforeAll(() => {
   config = getDefaultConfig();
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 function makeAllZeroSnapshot(): Snapshot {
   return {
@@ -64,9 +58,6 @@ function makeSingleMemberSnapshot(): Snapshot {
   };
 }
 
-// ============================================================
-// Section 1: Full Output & Visual Verification
-// ============================================================
 
 describe('Stats report full output', () => {
   it('prints the full report for visual inspection', () => {
@@ -75,9 +66,6 @@ describe('Stats report full output', () => {
   });
 });
 
-// ============================================================
-// Section 2: Snapshot Data Fundamentals
-// ============================================================
 
 describe('Snapshot data fundamentals', () => {
   it('has correct club metadata', () => {
@@ -99,9 +87,6 @@ describe('Snapshot data fundamentals', () => {
   });
 });
 
-// ============================================================
-// Section 3: Member Classification & Contributing Filter
-// ============================================================
 
 describe('Contributing member filter', () => {
   it('contributing = active + transfer = 30', () => {
@@ -142,9 +127,6 @@ describe('Contributing member filter', () => {
   });
 });
 
-// ============================================================
-// Section 4: Total Monthly Gain Verification
-// ============================================================
 
 describe('Total monthly gain', () => {
   it('total = 347,022,758', () => {
@@ -168,9 +150,6 @@ describe('Total monthly gain', () => {
   });
 });
 
-// ============================================================
-// Section 5: Average Monthly Gain
-// ============================================================
 
 describe('Average monthly gain', () => {
   it('average = round(347022758 / 30) = 11,567,425 → "11.6M"', () => {
@@ -183,9 +162,6 @@ describe('Average monthly gain', () => {
   });
 });
 
-// ============================================================
-// Section 6: Median Monthly Gain
-// ============================================================
 
 describe('Median monthly gain', () => {
   it('median = 9,683,217 → "9.7M"', () => {
@@ -209,9 +185,6 @@ describe('Median monthly gain', () => {
   });
 });
 
-// ============================================================
-// Section 7: Average Daily Gain
-// ============================================================
 
 describe('Average daily gain', () => {
   it('average = round(32287438 / 30) = 1,076,248 → "1.1M"', () => {
@@ -231,9 +204,6 @@ describe('Average daily gain', () => {
   });
 });
 
-// ============================================================
-// Section 8: Average Active Days
-// ============================================================
 
 describe('Average active days', () => {
   it('average = 8 hari (sum=254, round(254/30)=8)', () => {
@@ -260,9 +230,6 @@ describe('Average active days', () => {
   });
 });
 
-// ============================================================
-// Section 9: Zero Gain Today
-// ============================================================
 
 describe('Zero gain today', () => {
   it('count = 3 (naku, jgd, Falkrum)', () => {
@@ -301,9 +268,6 @@ describe('Zero gain today', () => {
   });
 });
 
-// ============================================================
-// Section 10: Top Member (Active Only)
-// ============================================================
 
 describe('Top member (active only)', () => {
   it('top = GoldFamily — 27.7M', () => {
@@ -323,9 +287,6 @@ describe('Top member (active only)', () => {
   });
 });
 
-// ============================================================
-// Section 11: Lowest Active Member
-// ============================================================
 
 describe('Lowest active member', () => {
   it('lowest = Yukil — 4.6M', () => {
@@ -354,9 +315,6 @@ describe('Lowest active member', () => {
   });
 });
 
-// ============================================================
-// Section 12: Projection
-// ============================================================
 
 describe('Projection', () => {
   it('projection = 946,425,704 → "946.4M"', () => {
@@ -371,9 +329,6 @@ describe('Projection', () => {
   });
 });
 
-// ============================================================
-// Section 13: Tier Projection
-// ============================================================
 
 describe('Tier projection', () => {
   it('promosion likely (daysToPromote=12 <= daysLeft=19)', () => {
@@ -395,9 +350,6 @@ describe('Tier projection', () => {
   });
 });
 
-// ============================================================
-// Section 14: Requirement Pass Rate
-// ============================================================
 
 describe('Requirement pass rate', () => {
   it('pass rate = 3% (1/30) with default req=20M', () => {
@@ -423,9 +375,6 @@ describe('Requirement pass rate', () => {
   });
 });
 
-// ============================================================
-// Section 15: Status Line Correctness
-// ============================================================
 
 describe('Status line adds up to total', () => {
   it('Keluar + Transfer = Total anggota (Aktif includes transfers)', () => {
@@ -454,9 +403,6 @@ describe('Status line adds up to total', () => {
   });
 });
 
-// ============================================================
-// Section 16: Club Info
-// ============================================================
 
 describe('Club info in report', () => {
   it('shows circle name, tier, and date', () => {
@@ -472,9 +418,6 @@ describe('Club info in report', () => {
   });
 });
 
-// ============================================================
-// Section 17: WhatsApp Formatting Compliance
-// ============================================================
 
 describe('WhatsApp formatting compliance', () => {
   it('uses no Markdown bold (**)', () => {
@@ -515,9 +458,6 @@ describe('WhatsApp formatting compliance', () => {
   });
 });
 
-// ============================================================
-// Section 18: Empty Snapshot Edge Case
-// ============================================================
 
 describe('Empty snapshot edge case', () => {
   it('returns warning when members array is empty', () => {
@@ -527,9 +467,6 @@ describe('Empty snapshot edge case', () => {
   });
 });
 
-// ============================================================
-// Section 19: All-Zero Gains Edge Case
-// ============================================================
 
 describe('All-zero gains edge case', () => {
   it('handles all-zero daily_fans gracefully', () => {
@@ -550,9 +487,6 @@ describe('All-zero gains edge case', () => {
   });
 });
 
-// ============================================================
-// Section 20: Single Member Edge Case
-// ============================================================
 
 describe('Single member edge case', () => {
   it('handles single member snapshot', () => {
@@ -564,9 +498,6 @@ describe('Single member edge case', () => {
   });
 });
 
-// ============================================================
-// Section 21: Stale Data Warning
-// ============================================================
 
 describe('Stale data warning', () => {
   afterEach(() => {
@@ -613,9 +544,6 @@ describe('Stale data warning', () => {
   });
 });
 
-// ============================================================
-// Section 22: Output Line Structure
-// ============================================================
 
 describe('Output line structure', () => {
   let report: string;
@@ -681,9 +609,6 @@ describe('Output line structure', () => {
   });
 });
 
-// ============================================================
-// Section 23: Stale Warning Placement
-// ============================================================
 
 describe('Stale warning placement', () => {
   afterEach(() => {
@@ -703,9 +628,6 @@ describe('Stale warning placement', () => {
   });
 });
 
-// ============================================================
-// Section 24: Transfer Member Impact on Averages
-// ============================================================
 
 describe('Transfer members included in averages', () => {
   it('transfer members are in the contributing set for averages', () => {
@@ -731,9 +653,6 @@ describe('Transfer members included in averages', () => {
   });
 });
 
-// ============================================================
-// Section 25: Daily Gain Calculation Tracing
-// ============================================================
 
 describe('Daily gain tracing', () => {
   it('Nargi day 11 gain = 3,084,880', () => {
@@ -755,9 +674,6 @@ describe('Daily gain tracing', () => {
   });
 });
 
-// ============================================================
-// Section 26: Monthly Gain Calculation Tracing
-// ============================================================
 
 describe('Monthly gain tracing', () => {
   it('GoldFamily monthlyGain = 317726222 - 290016517 = 27,709,705', () => {
@@ -790,9 +706,6 @@ describe('Monthly gain tracing', () => {
   });
 });
 
-// ============================================================
-// Section 27: Edge Case - Fans to Next Tier = 0
-// ============================================================
 
 describe('Tier projection: max tier reached', () => {
   it('shows "sudah di tier maksimal" when fans_to_next_tier = 0', () => {
@@ -805,9 +718,6 @@ describe('Tier projection: max tier reached', () => {
   });
 });
 
-// ============================================================
-// Section 28: Edge Case - Promotion Not Likely
-// ============================================================
 
 describe('Tier projection: promotion not likely', () => {
   it('shows "butuh X lagi" when daysToPromote > daysLeft', () => {
@@ -821,9 +731,6 @@ describe('Tier projection: promotion not likely', () => {
   });
 });
 
-// ============================================================
-// Section 29: Days Elapsed = 0 Edge Case
-// ============================================================
 
 describe('Days elapsed = 0 edge case', () => {
   it('projection is 0 when dataDay = 0', () => {
@@ -839,9 +746,6 @@ describe('Days elapsed = 0 edge case', () => {
   });
 });
 
-// ============================================================
-// Section 30: Active Members Section (Top/Lowest)
-// ============================================================
 
 describe('Top/Lowest active section', () => {
   it('does not show top/lowest when no active members (all left)', () => {

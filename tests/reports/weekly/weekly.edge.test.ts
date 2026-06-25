@@ -15,9 +15,6 @@ import {
   makeConfig,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -29,9 +26,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Section 6: Offset Equivalence (negative offset)
-// ============================================================
 
 describe('Negative offset equivalence', () => {
   it('/weekly -1 produces same output as /weekly 1', () => {
@@ -47,9 +41,6 @@ describe('Negative offset equivalence', () => {
   });
 });
 
-// ============================================================
-// Section 7: Offset Clamping
-// ============================================================
 
 describe('Offset clamping (targetWeek clamped to 1)', () => {
   it('offset=2 → W1 (2-1=1, which is valid)', () => {
@@ -73,9 +64,6 @@ describe('Offset clamping (targetWeek clamped to 1)', () => {
   });
 });
 
-// ============================================================
-// Section 8: Below-Requirement Section
-// ============================================================
 
 describe('Below-requirement section', () => {
   it('does NOT appear when weeklyFans = 0 (default config)', () => {
@@ -148,9 +136,6 @@ describe('Below-requirement section', () => {
   });
 });
 
-// ============================================================
-// Section 9: Empty Snapshot Guard
-// ============================================================
 
 describe('Empty snapshot guard', () => {
   it('returns warning for empty members array', () => {
@@ -184,9 +169,6 @@ describe('Empty snapshot guard', () => {
   });
 });
 
-// ============================================================
-// Section 15: Cross-Week Consistency
-// ============================================================
 
 describe('Cross-week consistency', () => {
   it('W1 total + W2 total ≠ monthly total (different baselines)', () => {

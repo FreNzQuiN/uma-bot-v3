@@ -20,9 +20,6 @@ import {
   WHATSAPP_MAX_LENGTH,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -34,9 +31,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Section 3: Full Output — Print and Verify
-// ============================================================
 
 describe('Full weekly report output (offset=0, W2)', () => {
   let report: string;
@@ -137,9 +131,6 @@ describe('Full weekly report output (offset=0, W2)', () => {
   });
 });
 
-// ============================================================
-// Section 4: Transfer Badges
-// ============================================================
 
 describe('Transfer badges in weekly report', () => {
   let report: string;
@@ -164,9 +155,6 @@ describe('Transfer badges in weekly report', () => {
   });
 });
 
-// ============================================================
-// Section 5: Offset=1 → W1 Report
-// ============================================================
 
 describe('Offset=1 shows W1 (days 1-7)', () => {
   let report: string;
@@ -216,9 +204,6 @@ describe('Offset=1 shows W1 (days 1-7)', () => {
   });
 });
 
-// ============================================================
-// Section 10: WhatsApp Formatting Compliance
-// ============================================================
 
 describe('WhatsApp formatting compliance', () => {
   let report: string;
@@ -255,9 +240,6 @@ describe('WhatsApp formatting compliance', () => {
   });
 });
 
-// ============================================================
-// Section 12: Header Format and Metadata
-// ============================================================
 
 describe('Header format and metadata', () => {
   it('header always starts with 📈 *Weekly Report — (bold)', () => {
@@ -292,9 +274,6 @@ describe('Header format and metadata', () => {
   });
 });
 
-// ============================================================
-// Section 14: No Report Exceeds WhatsApp Message Limit
-// ============================================================
 
 describe('Report size within WhatsApp limits', () => {
   it('weekly report (offset=0) does not exceed 4096 chars', () => {
@@ -314,9 +293,6 @@ describe('Report size within WhatsApp limits', () => {
   });
 });
 
-// ============================================================
-// Section 16: Special Characters in Names
-// ============================================================
 
 describe('Special characters in trainer names', () => {
   it('Dyy\u201D with right double quotation mark renders correctly', () => {
@@ -344,9 +320,6 @@ describe('Special characters in trainer names', () => {
   });
 });
 
-// ============================================================
-// Section 18: Full Report Line-by-Line Verification (W2)
-// ============================================================
 
 describe('Line-by-line verification of W2 report', () => {
   let report: string;

@@ -14,9 +14,6 @@ import { loadRealSnapshot, WHATSAPP_MAX_LENGTH } from '../_helpers';
 const snapshot: Snapshot = loadRealSnapshot();
 const config: BotConfig = getDefaultConfig();
 
-// ============================================================
-// Tier Report E2E
-// ============================================================
 
 describe('E2E: Tier Report', () => {
   let report: string;

@@ -3,9 +3,6 @@ import * as path from 'path';
 import * as os from 'os';
 import { log, LogLevel, LoggerConfig } from '../../src/utils/logger';
 
-// ============================================================
-// Helpers
-// ============================================================
 
 let tmpDir: string;
 
@@ -22,9 +19,6 @@ function readFileLines(filePath: string): string[] {
   return content.split('\n').filter((line) => line.length > 0);
 }
 
-// ============================================================
-// Setup / Teardown
-// ============================================================
 
 beforeEach(() => {
   tmpDir = createTmpDir();
@@ -51,9 +45,6 @@ afterEach(() => {
   }
 });
 
-// ============================================================
-// configure()
-// ============================================================
 
 describe('Logger configure()', () => {
   test('updates config values', () => {
@@ -104,9 +95,6 @@ describe('Logger configure()', () => {
   });
 });
 
-// ============================================================
-// getConfig()
-// ============================================================
 
 describe('Logger getConfig()', () => {
   test('returns a copy — mutation does not affect internal state', () => {
@@ -120,9 +108,6 @@ describe('Logger getConfig()', () => {
   });
 });
 
-// ============================================================
-// Log level filtering
-// ============================================================
 
 describe('Logger level filtering', () => {
   test('debug() writes nothing when level is info', () => {
@@ -217,9 +202,6 @@ describe('Logger level filtering', () => {
   });
 });
 
-// ============================================================
-// Log file writing
-// ============================================================
 
 describe('Logger file writing', () => {
   test('configure() + info() creates log directory and file', () => {
@@ -276,9 +258,6 @@ describe('Logger file writing', () => {
   });
 });
 
-// ============================================================
-// Log rotation
-// ============================================================
 
 describe('Logger rotation', () => {
   test('rotation triggers when file exceeds maxSizeMB and creates rotated file', async () => {
@@ -377,9 +356,6 @@ describe('Logger rotation', () => {
   });
 });
 
-// ============================================================
-// Error handling (err parameter)
-// ============================================================
 
 describe('Logger error parameter', () => {
   test('error() with Error object logs the message and stack', () => {
@@ -462,9 +438,6 @@ describe('Logger error parameter', () => {
   });
 });
 
-// ============================================================
-// Tag handling
-// ============================================================
 
 describe('Logger tags', () => {
   test('empty tag omits tag brackets', () => {

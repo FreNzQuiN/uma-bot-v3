@@ -21,9 +21,6 @@ jest.mock('../../src/config', () => {
   return { ...actual, saveConfig: jest.fn() };
 });
 
-// ============================================================
-// Test helpers
-// ============================================================
 
 const ADMIN_JID = '6281234567890@s.whatsapp.net';
 const NON_ADMIN_JID = '6289999999999@s.whatsapp.net';
@@ -111,9 +108,6 @@ function makeMockDb(): any {
   };
 }
 
-// ============================================================
-// Tests
-// ============================================================
 
 describe('setupCommandHandler', () => {
   let mockDb: any;
@@ -515,9 +509,6 @@ describe('setupCommandHandler', () => {
     expect(sentMessages[1].text).toContain('Cara pakai');
   });
 
-  // --------------------------------------------------------
-  // Violation 2: Offset max validation
-  // --------------------------------------------------------
 
   it('rejects /daily offset exceeding maxDailyOffset', async () => {
     const cfg = makeConfig({
@@ -591,9 +582,6 @@ describe('setupCommandHandler', () => {
     expect(sentMessages[0].text).toMatch(/maksimal|max|Offset/i);
   });
 
-  // --------------------------------------------------------
-  // Violation 3: Member name resolution through dispatch
-  // --------------------------------------------------------
 
   it('resolves case-insensitive name for /analyze via dispatch', async () => {
     const getSnapshot = () => snapshot;
@@ -648,9 +636,6 @@ describe('setupCommandHandler', () => {
     expect(sentMessages[1].text).toContain('Bob');
   });
 
-  // --------------------------------------------------------
-  // Gap 2: Config changes applied after admin commands
-  // --------------------------------------------------------
 
   it('applies config change from /setreq monthly and uses it in subsequent reports', async () => {
     const cfg = makeConfig();
@@ -729,9 +714,6 @@ describe('setupCommandHandler', () => {
     expect(sentMessages[0].text).toMatch(/Alerts.*no|Alerts.*off|Enabled.*no/i);
   });
 
-  // --------------------------------------------------------
-  // Help command — standard access control
-  // --------------------------------------------------------
 
   it('dispatches /help for admin in command group', async () => {
     const getSnapshot = () => snapshot;

@@ -1,7 +1,7 @@
 /**
  * Analyze Report — Dedicated Tests
  *
- * Comprehensive test coverage for generateAnalyzeReport():
+ * full test coverage for generateAnalyzeReport():
  * - Happy path: valid member found, full analysis output
  * - Error path: member not found
  * - Transfer members, trend detection, projection math
@@ -18,9 +18,6 @@ import { getDataDayFromSnapshot } from '../../src/data/snapshot';
 import type { Snapshot, BotConfig } from '../../src/types';
 import { loadRealSnapshot } from '../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -34,9 +31,6 @@ beforeAll(() => {
   }
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 function buildSnapshotWithMembers(members: Snapshot['members']): Snapshot {
   return { ...snapshot, members };
@@ -76,9 +70,6 @@ function makeCumulativeFans(startValue: number, dailyGain: number, activeDays: n
   return fans;
 }
 
-// ============================================================
-// Section 1: Valid Member Found
-// ============================================================
 
 describe('generateAnalyzeReport — valid member found', () => {
   it('produces analysis with member name in header', () => {
@@ -140,9 +131,6 @@ describe('generateAnalyzeReport — valid member found', () => {
   });
 });
 
-// ============================================================
-// Section 2: Member Not Found
-// ============================================================
 
 describe('generateAnalyzeReport — member not found', () => {
   it('returns error message when member does not exist', () => {
@@ -172,9 +160,6 @@ describe('generateAnalyzeReport — member not found', () => {
   });
 });
 
-// ============================================================
-// Section 3: Transfer Members
-// ============================================================
 
 describe('generateAnalyzeReport — transfer members', () => {
   it('shows transfer info for transfer member', () => {
@@ -206,9 +191,6 @@ describe('generateAnalyzeReport — transfer members', () => {
   });
 });
 
-// ============================================================
-// Section 4: Trend Detection
-// ============================================================
 
 describe('generateAnalyzeReport — trend detection', () => {
   it('shows upward trend when recent days are significantly higher than 7-day avg', () => {
@@ -261,9 +243,6 @@ describe('generateAnalyzeReport — trend detection', () => {
   });
 });
 
-// ============================================================
-// Section 5: Consistency Calculation
-// ============================================================
 
 describe('generateAnalyzeReport — consistency', () => {
   it('shows 100% consistency when member was active every day', () => {
@@ -319,9 +298,6 @@ describe('generateAnalyzeReport — consistency', () => {
   });
 });
 
-// ============================================================
-// Section 6: Requirement Status
-// ============================================================
 
 describe('generateAnalyzeReport — requirement status', () => {
   it('shows checkmark when member meets monthly requirement', () => {
@@ -352,9 +328,6 @@ describe('generateAnalyzeReport — requirement status', () => {
   });
 });
 
-// ============================================================
-// Section 7: Projection
-// ============================================================
 
 describe('generateAnalyzeReport — projection', () => {
   it('projects month-end based on current pace', () => {
@@ -386,9 +359,6 @@ describe('generateAnalyzeReport — projection', () => {
   });
 });
 
-// ============================================================
-// Section 8: WhatsApp Formatting Compliance
-// ============================================================
 
 describe('generateAnalyzeReport — WhatsApp formatting', () => {
   it('does not contain Markdown syntax (##, ```, ---)', () => {
@@ -427,9 +397,6 @@ describe('generateAnalyzeReport — WhatsApp formatting', () => {
   });
 });
 
-// ============================================================
-// Section 9: Numerical Accuracy
-// ============================================================
 
 describe('generateAnalyzeReport — numerical accuracy', () => {
   it('formats large numbers with K/M/B suffixes', () => {
@@ -475,9 +442,6 @@ describe('generateAnalyzeReport — numerical accuracy', () => {
   });
 });
 
-// ============================================================
-// Section 10: Edge Cases
-// ============================================================
 
 describe('generateAnalyzeReport — edge cases', () => {
   it('handles member with all-zero daily fans', () => {
@@ -541,9 +505,6 @@ describe('generateAnalyzeReport — edge cases', () => {
   });
 });
 
-// ============================================================
-// Section 11: Weekly Gains Display
-// ============================================================
 
 describe('generateAnalyzeReport — weekly gains', () => {
   it('shows all 5 weeks in the weekly section', () => {

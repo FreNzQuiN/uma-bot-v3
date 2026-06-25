@@ -21,9 +21,6 @@ import {
   WHATSAPP_MAX_LENGTH,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -43,9 +40,6 @@ afterAll(() => {
   loadMonthSnapshotsSpy.mockRestore();
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 /**
  * Build the expected gains for all members from raw snapshot data.
@@ -67,9 +61,6 @@ function buildExpectedGains(): { name: string; gain: number; isTransfer: boolean
   return gains;
 }
 
-// ============================================================
-// Section 3: Full Output — Print and Verify
-// ============================================================
 
 describe('Full monthly report output (offset=0)', () => {
   let report: string;
@@ -153,9 +144,6 @@ describe('Full monthly report output (offset=0)', () => {
   });
 });
 
-// ============================================================
-// Section 4: Transfer Badges
-// ============================================================
 
 describe('Transfer badges in monthly report', () => {
   let report: string;
@@ -180,9 +168,6 @@ describe('Transfer badges in monthly report', () => {
   });
 });
 
-// ============================================================
-// Section 5: Active / Inactive / Transfer Counts
-// ============================================================
 
 describe('Member counts', () => {
   it('summary shows contributor count and total', () => {
@@ -216,9 +201,6 @@ describe('Member counts', () => {
   });
 });
 
-// ============================================================
-// Section 6: Projected Month-End
-// ============================================================
 
 describe('Projected month-end calculation', () => {
   it('projection = (totalGain / 11) * 30 rounded', () => {
@@ -240,9 +222,6 @@ describe('Projected month-end calculation', () => {
   });
 });
 
-// ============================================================
-// Section 7: Requirement Pass/Fail
-// ============================================================
 
 describe('Requirement section', () => {
   it('shows requirement line with formatted monthlyFans', () => {
@@ -281,9 +260,6 @@ describe('Requirement section', () => {
   });
 });
 
-// ============================================================
-// Section 11: WhatsApp Formatting Compliance
-// ============================================================
 
 describe('WhatsApp formatting compliance', () => {
   let report: string;
@@ -323,9 +299,6 @@ describe('WhatsApp formatting compliance', () => {
   });
 });
 
-// ============================================================
-// Section 13: Header Format and Metadata
-// ============================================================
 
 describe('Header format and metadata', () => {
   it('header always starts with 📅 *Monthly Report —', () => {
@@ -364,9 +337,6 @@ describe('Header format and metadata', () => {
   });
 });
 
-// ============================================================
-// Section 15: No Report Exceeds WhatsApp Message Limit
-// ============================================================
 
 describe('Report size within WhatsApp limits', () => {
   it('monthly report (offset=0) does not exceed 4096 chars', () => {
@@ -386,9 +356,6 @@ describe('Report size within WhatsApp limits', () => {
   });
 });
 
-// ============================================================
-// Section 16b: Special Characters in Names
-// ============================================================
 
 describe('Special characters in trainer names', () => {
   it('Dyy\u201D with right double quotation mark renders correctly', () => {

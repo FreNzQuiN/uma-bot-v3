@@ -20,9 +20,6 @@ import type { Snapshot, BotConfig } from '../../src/types';
 import type { IncomingMessage } from '../../src/whatsapp/client';
 import type { IDatabase } from '../../src/db/types';
 
-// ============================================================
-// Constants
-// ============================================================
 
 /** Path to the real snapshot fixture */
 export const SNAPSHOT_PATH = path.join(__dirname, '..', 'examples', 'snapshot-june-12.json');
@@ -38,9 +35,6 @@ export const STALE_NAMES = ['DOA IBU', 'Kuro', 'Rowking', 'Lebowski'] as const;
 /** WhatsApp message character limit */
 export const WHATSAPP_MAX_LENGTH = 4096;
 
-// ============================================================
-// Snapshot & Config Loading
-// ============================================================
 
 /** Load the real snapshot from the fixture file (parsed from JSON) */
 export function loadRealSnapshot(): Snapshot {
@@ -130,9 +124,6 @@ export function makeConfig(overrides: Record<string, any> = {}): BotConfig {
   };
 }
 
-// ============================================================
-// Date Mocking
-// ============================================================
 
 /**
  * Mock the current date/time using Jest fake timers.
@@ -149,9 +140,6 @@ export function restoreDateMocks(): void {
   jest.useRealTimers();
 }
 
-// ============================================================
-// Snapshot Builders
-// ============================================================
 
 /**
  * Build an empty snapshot (members: []) using the real snapshot's metadata.
@@ -169,9 +157,6 @@ export function makeEmptySnapshot(realSnapshot: Snapshot): Snapshot {
   };
 }
 
-// ============================================================
-// Gain String Parsing
-// ============================================================
 
 /**
  * Parse a formatted gain string like "+2.7M", "+215.4K", "+1.5B", "-3.1M"
@@ -187,9 +172,6 @@ export function parseFormattedGain(formatted: string): number {
   return formatted.startsWith('-') ? -num : num;
 }
 
-// ============================================================
-// Mock Database
-// ============================================================
 
 /**
  * Create a mock database object with common jest.fn() stubs.
@@ -217,9 +199,6 @@ export function makeMockDb() {
   } as unknown as IDatabase;
 }
 
-// ============================================================
-// Message Builders
-// ============================================================
 
 /**
  * Build a mock IncomingMessage with sensible defaults.

@@ -13,9 +13,6 @@ import {
   loadRealSnapshot,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -35,9 +32,6 @@ afterAll(() => {
   loadMonthSnapshotsSpy.mockRestore();
 });
 
-// ============================================================
-// Section 8: Offset Handling
-// ============================================================
 
 describe('Offset handling', () => {
   // loadMonthSnapshots is already mocked globally to return []
@@ -68,9 +62,6 @@ describe('Offset handling', () => {
   });
 });
 
-// ============================================================
-// Section 8b: Calendar-Month Offset Calculation (Step 1b fix)
-// ============================================================
 
 describe('Calendar-month offset calculation', () => {
   let dataComponentsSpy: jest.SpyInstance;
@@ -126,9 +117,6 @@ describe('Calendar-month offset calculation', () => {
   });
 });
 
-// ============================================================
-// Section 9: Empty Snapshot Guard
-// ============================================================
 
 describe('Empty snapshot guard', () => {
   it('returns warning for empty members array', () => {

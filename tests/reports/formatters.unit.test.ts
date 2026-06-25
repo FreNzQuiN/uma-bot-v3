@@ -16,14 +16,10 @@ import { formatDateWIB } from '../../src/utils/timezone';
 import { getStaleDataWarning } from '../../src/reports/format';
 import { loadRealSnapshot } from '../_helpers';
 
-// Load real snapshot
 const snapshot: Snapshot = loadRealSnapshot();
 
 const config: BotConfig = getDefaultConfig();
 
-// ============================================================
-// format.ts helpers
-// ============================================================
 
 describe('formatNumber', () => {
   it('formats billions with 1 decimal', () => {
@@ -228,9 +224,6 @@ describe('splitMessage', () => {
   });
 });
 
-// ============================================================
-// getStaleDataWarning
-// ============================================================
 
 describe('getStaleDataWarning', () => {
   function makeNowJST(year: number, month: number, day: number): Date {

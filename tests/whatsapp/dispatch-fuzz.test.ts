@@ -80,9 +80,6 @@ const ADVERSARIAL_INPUTS: string[] = [
   'NaN', 'Infinity', '\u0000\u0000\u0000', '/daily' + '\u0000'.repeat(50),
 ];
 
-// ============================================================
-// parseCommand fuzzing
-// ============================================================
 describe('parseCommand fuzzing', () => {
   it.each(ADVERSARIAL_INPUTS.map((input, i) => [i, input]))(
     'does not crash on input #%#: %j',
@@ -127,9 +124,6 @@ describe('parseCommand fuzzing', () => {
   });
 });
 
-// ============================================================
-// Dispatch handler fuzzing
-// ============================================================
 describe('Dispatch handler fuzzing', () => {
   let messageHandler: ((msg: IncomingMessage) => Promise<void>) | null;
   let mockClient: WhatsAppClient;

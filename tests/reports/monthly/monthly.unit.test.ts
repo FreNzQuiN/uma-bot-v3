@@ -19,9 +19,6 @@ import {
   STALE_NAMES,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -41,9 +38,6 @@ afterAll(() => {
   loadMonthSnapshotsSpy.mockRestore();
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 /**
  * Build the expected gains for all members from raw snapshot data.
@@ -65,9 +59,6 @@ function buildExpectedGains(): { name: string; gain: number; isTransfer: boolean
   return gains;
 }
 
-// ============================================================
-// Section 1: Snapshot Data Verification
-// ============================================================
 
 describe('Snapshot data for monthly tests', () => {
   it('has correct latest data day = 11', () => {
@@ -90,9 +81,6 @@ describe('Snapshot data for monthly tests', () => {
   });
 });
 
-// ============================================================
-// Section 2: Monthly Gain Calculation (Manual Verification)
-// ============================================================
 
 describe('Monthly gain calculation — manual verification from raw data', () => {
   it('Ryu: first=316,856,492 (day1), latest=332,207,534 (day11) → gain=15,351,042 → 15.4M', () => {
@@ -193,9 +181,6 @@ describe('Monthly gain calculation — manual verification from raw data', () =>
   });
 });
 
-// ============================================================
-// Section 13: Complete Member Verification (All 30 Contributors)
-// ============================================================
 
 describe('All 30 monthly contributors verified against raw data', () => {
   let report: string;
@@ -244,9 +229,6 @@ describe('All 30 monthly contributors verified against raw data', () => {
   });
 });
 
-// ============================================================
-// Section 16: Line-by-Line Verification
-// ============================================================
 
 describe('Line-by-line verification of monthly report', () => {
   let report: string;
@@ -329,9 +311,6 @@ describe('Line-by-line verification of monthly report', () => {
   });
 });
 
-// ============================================================
-// Section 17: Top 5 Members — Detailed Verification
-// ============================================================
 
 describe('Top 5 members verified against raw snapshot data', () => {
   it('1. GoldFamily — 27.7M', () => {
@@ -370,9 +349,6 @@ describe('Top 5 members verified against raw snapshot data', () => {
   });
 });
 
-// ============================================================
-// Section 18: getMonthlyGain Edge Cases
-// ============================================================
 
 describe('getMonthlyGain edge cases', () => {
   it('returns 0 for all-zero daily_fans', () => {
@@ -416,9 +392,6 @@ describe('getMonthlyGain edge cases', () => {
   });
 });
 
-// ============================================================
-// Section 19: Total Gain Summation
-// ============================================================
 
 describe('Total gain summation', () => {
   it('total gain = sum of all member monthlyGain values (including zero-gain members)', () => {

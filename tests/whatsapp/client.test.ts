@@ -11,9 +11,6 @@ import { WhatsAppClient } from '../../src/whatsapp/client';
 import { getDefaultConfig } from '../../src/config';
 import type { BotConfig } from '../../src/types';
 
-// ============================================================
-// Mocks
-// ============================================================
 
 jest.mock('../../src/runtime', () => ({
   recordReconnect: jest.fn(),
@@ -51,9 +48,6 @@ const mockSplitMessage = splitMessage as jest.MockedFunction<typeof splitMessage
 
 const getConfig = () => getDefaultConfig();
 
-// ============================================================
-// Test helpers
-// ============================================================
 
 function makeMockSock(overrides: Record<string, unknown> = {}): any {
   return {
@@ -79,9 +73,6 @@ function makeClient(overrides: Record<string, unknown> = {}): {
   return { client, sock };
 }
 
-// ============================================================
-// isConnected
-// ============================================================
 
 describe('WhatsAppClient', () => {
   describe('isConnected', () => {
@@ -111,9 +102,6 @@ describe('WhatsAppClient', () => {
     });
   });
 
-  // ============================================================
-  // getConnectionState
-  // ============================================================
 
   describe('getConnectionState', () => {
     it('returns disconnected by default', () => {
@@ -134,9 +122,6 @@ describe('WhatsAppClient', () => {
     });
   });
 
-  // ============================================================
-  // cacheSentMessage (private — accessed via `as any`)
-  // ============================================================
 
   describe('cacheSentMessage', () => {
     it('caches message when result has key.id and message', () => {
@@ -208,9 +193,6 @@ describe('WhatsAppClient', () => {
     });
   });
 
-  // ============================================================
-  // sendMessage
-  // ============================================================
 
   describe('sendMessage', () => {
     it('throws when sock is null', async () => {
@@ -261,9 +243,6 @@ describe('WhatsAppClient', () => {
     });
   });
 
-  // ============================================================
-  // sendOrEdit
-  // ============================================================
 
   describe('sendOrEdit', () => {
     it('throws when sock is null', async () => {
@@ -381,9 +360,6 @@ describe('WhatsAppClient', () => {
     });
   });
 
-  // ============================================================
-  // sendMessageWithRetry (private)
-  // ============================================================
 
   describe('sendMessageWithRetry', () => {
     it('calls sock.sendMessage and caches result', async () => {
@@ -445,9 +421,6 @@ describe('WhatsAppClient', () => {
     });
   });
 
-  // ============================================================
-  // disconnect
-  // ============================================================
 
   describe('disconnect', () => {
     it('sets connectionState to disconnected', () => {

@@ -123,9 +123,6 @@ describe('ReportOrchestrator — deliverReport', () => {
   });
 });
 
-// ============================================================
-// Slice 2: deliverAlerts
-// ============================================================
 
 describe('ReportOrchestrator — deliverAlerts', () => {
   const sampleAlerts: Alert[] = [{
@@ -202,9 +199,6 @@ describe('ReportOrchestrator — deliverAlerts', () => {
   });
 });
 
-// ============================================================
-// Slice 3: alignSnapshotToMonth
-// ============================================================
 
 describe('ReportOrchestrator — alignSnapshotToMonth', () => {
   afterEach(() => restoreDateMocks());
@@ -280,9 +274,6 @@ describe('ReportOrchestrator — alignSnapshotToMonth', () => {
   });
 });
 
-// ============================================================
-// Slice 4: generateReportString + generateCombinedReportString
-// ============================================================
 
 describe('ReportOrchestrator — generateReportString', () => {
   it('returns report string for known type', async () => {
@@ -357,9 +348,6 @@ describe('ReportOrchestrator — generateCombinedReportString', () => {
   });
 });
 
-// ============================================================
-// Slice 5: processAlertsForReport
-// ============================================================
 
 // Module-level mock for detectAlerts — controlled per test via mockReturnValue
 const mockDetectAlerts = jest.fn().mockResolvedValue([]);
@@ -445,9 +433,6 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
   });
 });
 
-// ============================================================
-// Slice 5.5: sendCombinedCatchUp — combined report alert gap
-// ============================================================
 
 describe('ReportOrchestrator — sendCombinedCatchUp', () => {
   it('calls processAlertsForReport for each type in the combined set', async () => {
@@ -492,9 +477,6 @@ describe('ReportOrchestrator — sendCombinedCatchUp', () => {
   });
 });
 
-// ============================================================
-// Slice 6: sendReport (full pipeline)
-// ============================================================
 
 describe('ReportOrchestrator — sendReport', () => {
   it('throws when no snapshot available', async () => {

@@ -15,9 +15,6 @@ import {
   restoreDateMocks,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -29,9 +26,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Section 11: Stale Data Warning
-// ============================================================
 
 describe('Stale data warning in weekly report', () => {
   afterEach(() => {

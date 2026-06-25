@@ -17,9 +17,6 @@ import { updateMemberHistory } from '../../src/data/member-history';
 import type { Snapshot, BotConfig, MemberData } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 
-// ============================================================
-// Test helpers
-// ============================================================
 
 const ROOT = join(__dirname, '..');
 
@@ -139,9 +136,6 @@ afterEach(() => {
   db.close();
 });
 
-// ============================================================
-// Basic members report
-// ============================================================
 
 describe('generateMembersReport', () => {
   it('includes club name and tier in header', async () => {
@@ -183,9 +177,6 @@ describe('generateMembersReport', () => {
     expect(report).not.toMatch(/🚪|keluar/i);
   });
 
-  // ============================================================
-  // Edge cases
-  // ============================================================
 
   it('returns warning for empty members array', async () => {
     const snapshot = makeSnapshot({ members: [] });
@@ -276,9 +267,6 @@ describe('generateMembersReport', () => {
     expect(report).toContain('• *ZeroGain* — 0');
   });
 
-  // ============================================================
-  // Badge logic
-  // ============================================================
 
   describe('badge logic', () => {
     it('active member has no badge', async () => {
@@ -388,9 +376,6 @@ describe('generateMembersReport', () => {
     });
   });
 
-  // ============================================================
-  // Sort order
-  // ============================================================
 
   describe('sort order', () => {
     it('active members sorted by monthlyGain descending', async () => {
@@ -510,9 +495,6 @@ describe('generateMembersReport', () => {
     });
   });
 
-  // ============================================================
-  // Left members with DB
-  // ============================================================
 
   describe('left members with DB', () => {
     it('shows left members section when db is provided and left members exist', async () => {
@@ -654,9 +636,6 @@ describe('generateMembersReport', () => {
     });
   });
 
-  // ============================================================
-  // Real snapshot verification
-  // ============================================================
 
   describe('real snapshot verification', () => {
     const snapshot: Snapshot = JSON.parse(

@@ -15,9 +15,6 @@ import {
   restoreDateMocks,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -37,9 +34,6 @@ afterAll(() => {
   loadMonthSnapshotsSpy.mockRestore();
 });
 
-// ============================================================
-// Section 12: Stale Data Warning
-// ============================================================
 
 describe('Stale data warning in monthly report', () => {
   afterEach(() => {

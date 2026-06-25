@@ -19,9 +19,6 @@ import {
 import { UmaMoeClient } from '../../src/api/uma-moe';
 import * as timezone from '../../src/utils/timezone';
 
-// ============================================================
-// Helpers
-// ============================================================
 
 /** Create a minimal valid Snapshot for testing. */
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -80,9 +77,6 @@ function createFilledFans(lastPositiveDay: number): number[] {
   return fans;
 }
 
-// ============================================================
-// Fixtures
-// ============================================================
 
 let tmpDir: string;
 
@@ -95,9 +89,6 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ============================================================
-// ensureMonthSnapshot
-// ============================================================
 
 describe('ensureMonthSnapshot', () => {
   test('cacheHit_returnsCachedSnapshot', async () => {

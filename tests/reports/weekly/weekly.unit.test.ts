@@ -18,9 +18,6 @@ import {
   TRANSFER_NAMES,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -32,9 +29,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 /**
  * Manually compute weekly gain for a member in a given week block.
@@ -71,9 +65,6 @@ function manualWeeklyGain(dailyFans: number[], weekNumber: number): number {
   return lastPositiveInBlock - baseline;
 }
 
-// ============================================================
-// Section 1: Snapshot Data Verification
-// ============================================================
 
 describe('Snapshot data for weekly tests', () => {
   it('has correct latest data day = 11', () => {
@@ -101,9 +92,6 @@ describe('Snapshot data for weekly tests', () => {
   });
 });
 
-// ============================================================
-// Section 2: Weekly Gain Calculation (Manual Verification)
-// ============================================================
 
 describe('Weekly gain calculation — manual verification from raw data', () => {
   describe('W2 gains (offset=0)', () => {
@@ -235,9 +223,6 @@ describe('Weekly gain calculation — manual verification from raw data', () => 
   });
 });
 
-// ============================================================
-// Section 13: Complete Member Verification (All 30 W2 Contributors)
-// ============================================================
 
 describe('All 30 W2 contributors verified against raw data', () => {
   let report: string;
@@ -299,9 +284,6 @@ describe('All 30 W2 contributors verified against raw data', () => {
   });
 });
 
-// ============================================================
-// Section 17: getWeeklyGain Edge Cases
-// ============================================================
 
 describe('getWeeklyGain edge cases', () => {
   it('returns 0 for week number not in WEEK_BLOCKS', () => {

@@ -15,9 +15,6 @@ import {
   restoreDateMocks,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -29,9 +26,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 function makeSnapshotWithLatestDay(latestDay: number): Snapshot {
   return {
@@ -50,9 +44,6 @@ function makeSnapshotWithLatestDay(latestDay: number): Snapshot {
   };
 }
 
-// ============================================================
-// Section 9: Stale Data Warning Behavior
-// ============================================================
 
 describe('Stale data warning: snapshot freshness vs offset', () => {
   afterEach(() => {
@@ -191,9 +182,6 @@ describe('Stale data warning: snapshot freshness vs offset', () => {
   });
 });
 
-// ============================================================
-// Section 10: Stale Warning — Cross-month & Offset Independence
-// ============================================================
 
 describe('Stale data warning: cross-month & offset independence', () => {
   afterEach(() => {
@@ -238,9 +226,6 @@ describe('Stale data warning: cross-month & offset independence', () => {
   });
 });
 
-// ============================================================
-// Section 11: Stale Warning — Report Structure & Edge Cases
-// ============================================================
 
 describe('Stale data warning: report structure & edge cases', () => {
   afterEach(() => {
@@ -310,9 +295,6 @@ describe('Stale data warning: report structure & edge cases', () => {
   });
 });
 
-// ============================================================
-// Section 12: Stale Warning — Bug Fix Behavioral Contract
-// ============================================================
 
 describe('Stale data warning: bug fix behavioral contract', () => {
   afterEach(() => {

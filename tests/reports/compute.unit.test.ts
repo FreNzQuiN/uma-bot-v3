@@ -11,14 +11,10 @@ import { computeMembers } from '../../src/reports/compute';
 import { SqliteDatabase } from '../../src/db/database';
 import { loadRealSnapshot } from '../_helpers';
 
-// Load real snapshot
 const snapshot: Snapshot = loadRealSnapshot();
 
 const config: BotConfig = getDefaultConfig();
 
-// ============================================================
-// Helpers
-// ============================================================
 
 function findMember(members: ComputedMember[], name: string): ComputedMember {
   const m = members.find((m) => m.trainerName === name);
@@ -26,9 +22,6 @@ function findMember(members: ComputedMember[], name: string): ComputedMember {
   return m;
 }
 
-// ============================================================
-// Tests
-// ============================================================
 
 describe('computeMembers', () => {
   let members: ComputedMember[];
@@ -37,9 +30,6 @@ describe('computeMembers', () => {
     members = computeMembers(snapshot, config);
   });
 
-  // ----------------------------------------------------------
-  // Basic structure
-  // ----------------------------------------------------------
 
   describe('basic structure', () => {
     it('returns one ComputedMember per snapshot member', () => {
@@ -67,9 +57,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Active members
-  // ----------------------------------------------------------
 
   describe('active members', () => {
     it('classifies Ryu as active', () => {
@@ -133,9 +120,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Transfer members
-  // ----------------------------------------------------------
 
   describe('transfer members', () => {
     it('classifies Zero as active with isTransfer flag', () => {
@@ -206,9 +190,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Stale members
-  // ----------------------------------------------------------
 
   describe('stale/left members', () => {
     it('classifies DOA IBU as left (ghost, member_count gap)', () => {
@@ -246,9 +227,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Active status count
-  // ----------------------------------------------------------
 
   describe('active status count', () => {
     it('has correct active count (total - left)', () => {
@@ -259,9 +237,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Edge cases
-  // ----------------------------------------------------------
 
   describe('edge cases', () => {
     it('handles member with all-zero daily_fans', () => {
@@ -345,9 +320,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Custom staleAfterDays config
-  // ----------------------------------------------------------
 
   describe('custom staleAfterDays', () => {
     it('uses config staleAfterDays value', () => {
@@ -367,9 +339,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // DB cross-check: left member detection
-  // ----------------------------------------------------------
 
   describe('DB cross-check: left member detection', () => {
     let db: SqliteDatabase;
@@ -492,9 +461,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Transfer + stale priority
-  // ----------------------------------------------------------
 
   describe('transfer member with no data', () => {
     it('transfer member with no positive data has status "stale" (latestPositiveDay=0)', () => {
@@ -533,9 +499,6 @@ describe('computeMembers', () => {
     });
   });
 
-  // ----------------------------------------------------------
-  // Real data snapshot validation
-  // ----------------------------------------------------------
 
   describe('real snapshot data validation', () => {
     it('snapshot has 34 members but member_count=30 (4 ghosts)', () => {

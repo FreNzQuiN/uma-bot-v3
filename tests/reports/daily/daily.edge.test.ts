@@ -29,9 +29,6 @@ import {
   makeMockDb,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 const ADMIN_JID = '6281234567890@s.whatsapp.net';
 const NON_ADMIN_JID = '6289999999999@s.whatsapp.net';
@@ -48,9 +45,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Test Helpers
-// ============================================================
 
 function makeConfig(overrides: Record<string, any> = {}): BotConfig {
   return makeConfigBase({
@@ -77,9 +71,6 @@ function makeSnapshotWithLatestDay(latestDay: number): Snapshot {
   };
 }
 
-// ============================================================
-// Section 7: Empty Snapshot
-// ============================================================
 
 describe('Empty snapshot', () => {
   it('returns warning when members array is empty', () => {
@@ -97,9 +88,6 @@ describe('Empty snapshot', () => {
   });
 });
 
-// ============================================================
-// Section 15: Left Members Section (DB integration)
-// ============================================================
 
 describe('Left members section', () => {
   it('shows NO left members section (left only in /members)', () => {
@@ -141,9 +129,6 @@ describe('Left members section', () => {
   });
 });
 
-// ============================================================
-// Section 16: Offset Clamping at Report Level
-// ============================================================
 
 describe('Offset clamping at report level', () => {
   it('offset=100 clamps dataDay to 1, shows day 1 data', () => {
@@ -173,9 +158,6 @@ describe('Offset clamping at report level', () => {
   });
 });
 
-// ============================================================
-// Section 17: Offset=2 Verification (Day 9 Gains)
-// ============================================================
 
 describe('Offset=2 shows day 9 gains', () => {
   let report: string;
@@ -237,9 +219,6 @@ describe('Offset=2 shows day 9 gains', () => {
   });
 });
 
-// ============================================================
-// Section 18: Stale Warning — Integration Through Dispatch
-// ============================================================
 
 describe('Stale warning through dispatch (date-mocked)', () => {
   let mockDb: any;
@@ -328,9 +307,6 @@ describe('Stale warning through dispatch (date-mocked)', () => {
   });
 });
 
-// ============================================================
-// Section 22: Offset=1 Complete Line Verification
-// ============================================================
 
 describe('Offset=1 complete line verification', () => {
   let report: string;
@@ -422,9 +398,6 @@ describe('Offset=1 complete line verification', () => {
   });
 });
 
-// ============================================================
-// Section 23: Stale Section Order Verification
-// ============================================================
 
 describe('Report section ordering', () => {
 
@@ -450,9 +423,6 @@ describe('Report section ordering', () => {
   });
 });
 
-// ============================================================
-// Section 24: Transfer Members Always in Contributing
-// ============================================================
 
 describe('Transfer members always appear in ranking', () => {
   it('transfer members with 0 gain appear in stale section', () => {
@@ -477,9 +447,6 @@ describe('Transfer members always appear in ranking', () => {
   });
 });
 
-// ============================================================
-// Section 25: Config Edge Cases
-// ============================================================
 
 describe('Config edge cases for daily report', () => {
   it('config.requirements.monthlyFans=0 does not break daily report', () => {

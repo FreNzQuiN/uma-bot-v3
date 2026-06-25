@@ -162,9 +162,6 @@ describe('formatAlerts', () => {
   });
 });
 
-// ============================================================
-// aggregateAlerts
-// ============================================================
 
 describe('aggregateAlerts', () => {
   it('returns empty string for empty alerts', () => {
@@ -260,9 +257,6 @@ describe('aggregateAlerts', () => {
   });
 });
 
-// ============================================================
-// Quiet hours edge cases
-// ============================================================
 
 describe('quiet hours edge cases', () => {
   const OriginalDate = global.Date;
@@ -441,9 +435,6 @@ describe('quiet hours edge cases', () => {
   });
 });
 
-// ============================================================
-// Detection edge cases
-// ============================================================
 
 describe('detection edge cases', () => {
   function makeEmptySnapshot(): Snapshot {

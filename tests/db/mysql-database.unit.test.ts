@@ -77,9 +77,6 @@ beforeEach(async () => {
   mockPoolEnd.mockClear();
 });
 
-// ============================================================
-// 1. initialize()
-// ============================================================
 
 describe('initialize()', () => {
   it('creates pool with correct config and verifies connection', async () => {
@@ -201,9 +198,6 @@ describe('initialize()', () => {
   });
 });
 
-// ============================================================
-// 2. getLastSuccessfulRun()
-// ============================================================
 
 describe('getLastSuccessfulRun()', () => {
   it('returns null when no rows match', async () => {
@@ -273,9 +267,6 @@ describe('getLastSuccessfulRun()', () => {
   });
 });
 
-// ============================================================
-// 3. recordRun()
-// ============================================================
 
 describe('recordRun()', () => {
   it('inserts row then calls LAST_INSERT_ID() and returns id', async () => {
@@ -320,9 +311,6 @@ describe('recordRun()', () => {
   });
 });
 
-// ============================================================
-// 4. upsertMember()
-// ============================================================
 
 describe('upsertMember()', () => {
   it('uses AS new_vals alias syntax for standard MySQL', async () => {
@@ -409,9 +397,6 @@ describe('upsertMember()', () => {
   });
 });
 
-// ============================================================
-// 5. saveRankHistory()
-// ============================================================
 
 describe('saveRankHistory()', () => {
   it('uses REPLACE INTO (not INSERT OR REPLACE INTO)', async () => {
@@ -450,9 +435,6 @@ describe('saveRankHistory()', () => {
   });
 });
 
-// ============================================================
-// 6. getMembers()
-// ============================================================
 
 describe('getMembers()', () => {
   it('queries by circle_id and maps rows', async () => {
@@ -491,9 +473,6 @@ describe('getMembers()', () => {
   });
 });
 
-// ============================================================
-// 7. getMember()
-// ============================================================
 
 describe('getMember()', () => {
   it('returns null when no member found', async () => {
@@ -528,9 +507,6 @@ describe('getMember()', () => {
   });
 });
 
-// ============================================================
-// 8. getRankHistory()
-// ============================================================
 
 describe('getRankHistory()', () => {
   it('queries with circle_id and days limit, returns mapped rows', async () => {
@@ -561,9 +537,6 @@ describe('getRankHistory()', () => {
   });
 });
 
-// ============================================================
-// 9. updateRunStatus()
-// ============================================================
 
 describe('updateRunStatus()', () => {
   it('includes sent_at when status is "sent"', async () => {
@@ -592,9 +565,6 @@ describe('updateRunStatus()', () => {
   });
 });
 
-// ============================================================
-// 10. Alert events
-// ============================================================
 
 describe('getExistingAlertKeys()', () => {
   it('returns empty set for empty input', async () => {
@@ -711,9 +681,6 @@ describe('markAlertSent()', () => {
   });
 });
 
-// ============================================================
-// 11. transaction()
-// ============================================================
 
 describe('transaction()', () => {
   it('acquires connection, begins, commits, and releases', async () => {
@@ -792,9 +759,6 @@ describe('transaction()', () => {
   });
 });
 
-// ============================================================
-// 12. save() — no-op
-// ============================================================
 
 describe('save()', () => {
   it('does nothing — no pool interaction', async () => {
@@ -809,9 +773,6 @@ describe('save()', () => {
   });
 });
 
-// ============================================================
-// 13. close()
-// ============================================================
 
 describe('close()', () => {
   it('calls pool.end()', async () => {
@@ -826,9 +787,6 @@ describe('close()', () => {
   });
 });
 
-// ============================================================
-// 14. MySQL-specific SQL verification
-// ============================================================
 
 describe('MySQL-specific SQL patterns', () => {
   it('upsertMember does not use SQLite ON CONFLICT syntax', async () => {

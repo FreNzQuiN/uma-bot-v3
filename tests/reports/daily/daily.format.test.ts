@@ -20,9 +20,6 @@ import {
   STALE_NAMES,
 } from '../../_helpers';
 
-// ============================================================
-// Constants & Loaders
-// ============================================================
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -34,9 +31,6 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-// ============================================================
-// Section 3: Output Structure Verification (unit-level)
-// ============================================================
 
 describe('Output structure', () => {
   let report: string;
@@ -112,9 +106,6 @@ describe('Output structure', () => {
   });
 });
 
-// ============================================================
-// Section 14: WhatsApp Formatting Compliance
-// ============================================================
 
 describe('WhatsApp formatting compliance', () => {
   let report: string;
@@ -156,9 +147,6 @@ describe('WhatsApp formatting compliance', () => {
   });
 });
 
-// ============================================================
-// Section 20: Ghost Member Awareness
-// ============================================================
 
 describe('Ghost member awareness (members.length vs member_count)', () => {
   it('snapshot has 34 members but member_count=30, extras are stale', () => {
@@ -206,9 +194,6 @@ describe('Ghost member awareness (members.length vs member_count)', () => {
   });
 });
 
-// ============================================================
-// Section 21: Single Member Snapshot
-// ============================================================
 
 describe('Single member snapshot', () => {
   it('works correctly with one member', () => {

@@ -1,5 +1,5 @@
 /**
- * /ranks Report - Comprehensive Tests
+ * /ranks Report - full Tests
  *
  * Tests the ranks (monthly leaderboard) report.
  * Uses real snapshot (examples/snapshot-june-12.json, 34 members).
@@ -39,9 +39,6 @@ beforeAll(() => {
   snapshot = loadRealSnapshot();
 });
 
-// ============================================================
-// Helper: parse formatted gain string back to number
-// ============================================================
 
 function parseFormattedGain(formatted: string): number {
   const numStr = formatted.replace(/[KMB]/g, '');
@@ -52,9 +49,6 @@ function parseFormattedGain(formatted: string): number {
   return num;
 }
 
-// ============================================================
-// Section 1: Snapshot Data Fundamentals
-// ============================================================
 
 describe('Snapshot data fundamentals', () => {
   it('has correct club metadata', () => {
@@ -64,9 +58,6 @@ describe('Snapshot data fundamentals', () => {
   });
 });
 
-// ============================================================
-// Section 2: Member Classification
-// ============================================================
 
 describe('Member classification for ranks', () => {
   it('identifies 4 stale non-transfer members (excluded from ranks)', () => {
@@ -104,9 +95,6 @@ describe('Member classification for ranks', () => {
   });
 });
 
-// ============================================================
-// Section 3: Monthly Gain Calculation (raw data verification)
-// ============================================================
 
 describe('Monthly gain verification for top 10', () => {
   const expectedTop10 = [
@@ -159,9 +147,6 @@ describe('Monthly gain verification for top 10', () => {
   });
 });
 
-// ============================================================
-// Section 4: Full Report Output & Header Structure
-// ============================================================
 
 describe('Report header structure', () => {
   let report: string;
@@ -205,9 +190,6 @@ describe('Report header structure', () => {
   });
 });
 
-// ============================================================
-// Section 5: Medal Positions (Top 3)
-// ============================================================
 
 describe('Medal positions (top 3)', () => {
   let lines: string[];
@@ -244,9 +226,6 @@ describe('Medal positions (top 3)', () => {
   });
 });
 
-// ============================================================
-// Section 6: Numbered Positions (4-10)
-// ============================================================
 
 describe('Numbered positions (4-10)', () => {
   let lines: string[];
@@ -294,9 +273,6 @@ describe('Numbered positions (4-10)', () => {
   });
 });
 
-// ============================================================
-// Section 7: Sorting Order
-// ============================================================
 
 describe('Sorting order (monthlyGain descending)', () => {
   it('gains are strictly non-increasing from top to bottom', () => {
@@ -322,9 +298,6 @@ describe('Sorting order (monthlyGain descending)', () => {
   });
 });
 
-// ============================================================
-// Section 8: Transfer Badge
-// ============================================================
 
 describe('Transfer badge', () => {
   it('Sairen has badge in report', () => {
@@ -356,9 +329,6 @@ describe('Transfer badge', () => {
   });
 });
 
-// ============================================================
-// Section 9: Stale Members Exclusion
-// ============================================================
 
 describe('Stale members excluded from report', () => {
   it('no stale member appears in report', () => {
@@ -370,9 +340,6 @@ describe('Stale members excluded from report', () => {
   });
 });
 
-// ============================================================
-// Section 10: Empty Snapshot
-// ============================================================
 
 describe('Empty snapshot', () => {
   it('returns warning when members array is empty', () => {
@@ -390,9 +357,6 @@ describe('Empty snapshot', () => {
   });
 });
 
-// ============================================================
-// Section 11: WhatsApp Formatting Compliance
-// ============================================================
 
 describe('WhatsApp formatting compliance', () => {
   it('no Markdown bold (**...**)', () => {
@@ -419,9 +383,6 @@ describe('WhatsApp formatting compliance', () => {
   });
 });
 
-// ============================================================
-// Section 12: Complete Line-by-Line Report Verification
-// ============================================================
 
 describe('Complete line-by-line verification against raw data', () => {
   it('every report line matches expected raw data calculation', () => {
@@ -472,9 +433,6 @@ describe('Complete line-by-line verification against raw data', () => {
   });
 });
 
-// ============================================================
-// Section 13: Number formatting edge cases
-// ============================================================
 
 describe('formatNumber for ranks display', () => {
   it('formats gains in millions correctly', () => {

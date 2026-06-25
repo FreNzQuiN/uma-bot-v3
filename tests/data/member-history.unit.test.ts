@@ -17,9 +17,6 @@ afterEach(async () => {
   await db.close();
 });
 
-// ============================================================
-// Helpers
-// ============================================================
 
 function makeMember(overrides: Partial<MemberData> = {}): MemberData {
   return {
@@ -79,9 +76,6 @@ function makeSnapshot(memberOverrides?: Partial<MemberData>[]): Snapshot {
   };
 }
 
-// ============================================================
-// updateMemberHistory
-// ============================================================
 
 describe('updateMemberHistory', () => {
   it('inserts new members', async () => {
@@ -136,9 +130,6 @@ describe('updateMemberHistory', () => {
   });
 });
 
-// ============================================================
-// getLeftMembers
-// ============================================================
 
 describe('getLeftMembers', () => {
   it('returns members with status left', async () => {
