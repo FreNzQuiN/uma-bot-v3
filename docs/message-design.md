@@ -4,6 +4,8 @@
 > A cyborg who processes club data with machine precision — and unexpected care.
 > Canonically breaks electronics. Running a WhatsApp bot. Nobody tell her.
 
+**Why Bourbon?** The bot delivers performance data — gains, losses, requirements, rankings. A cheerful or casual persona would feel wrong when telling a leader "3 members are below requirement." Bourbon's analytical voice matches the content: data-driven, precise, no fluff. The hidden warmth means error messages feel helpful, not cold. The persona was chosen to make data feel like mission intelligence, not a spreadsheet.
+
 ---
 
 ## 1. Core Persona: Mihono Bourbon

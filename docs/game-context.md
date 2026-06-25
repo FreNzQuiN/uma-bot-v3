@@ -1,35 +1,26 @@
-# Uma Musume: Pretty Derby — Game Context for Bot Development
-
-> What agents need to know about the game to build this bot correctly.
-
----
+# Uma Musume: Pretty Derby — Game Context
 
 ## What Is This Game?
 
-Uma Musume: Pretty Derby is a mobile game by Cygames where players raise anthropomorphized racehorses ("horse girls") and compete in races. The game has a social component where players form clubs called **circles**.
+A mobile game by Cygames where players raise anthropomorphized racehorses and compete in races. Players form clubs called **circles**. Circles are ranked by total monthly fan count. Higher rank = better tier = better rewards.
+
+The bot exists because tracking ~30 members' fan progress manually is tedious and error-prone. Leaders check uma.moe daily, mentally compare numbers, and decide who's meeting requirements. The bot automates this.
 
 ## What Is a Circle?
 
-A circle (team/club) is a group of up to 30 players who compete together. Circles have:
-- A leader and optional sub-leader
-- A custom name and description
-- A combined fan count that determines their ranking
-- A tier (D through SS) based on ranking position
+A team of up to 30 players. Has a leader, a name, a combined fan count, and a tier (D through SS) based on ranking position.
+
+**What the bot tracks:** Member count, rank, tier, promotion/demotion thresholds, daily fan totals.
 
 ## What Are Fans?
 
-Fans are the primary metric. Players earn fans by:
-- Running career training sessions
-- Winning races (G1 races earn the most)
-- Participating in team events
+The primary metric. Players earn fans by training, racing, and participating in events. Fan count is cumulative — it only goes up (unless a member transfers out).
 
-Fan count is cumulative across all of a player's trained characters. The circle's total is the sum of all members' individual fan counts.
-
-The `daily_fans` array we track is a member's cumulative fan count for each day of the month. It's not "fans earned today" — it's "total fans as of today."
+**What the bot does with this:** The `daily_fans` array is a member's cumulative fan count for each day. The bot computes daily gain (today minus yesterday), weekly gain (sum of daily gains in a week block), and monthly gain (today minus day 1). Every report is different arithmetic on this array.
 
 ## How Do Circles Compete?
 
-Circles are ranked by total monthly fan count. The ranking determines their tier:
+Ranked by total monthly fan count. The ranking determines their tier:
 
 | Tier | Ranking Position |
 |------|-----------------|
@@ -45,17 +36,15 @@ Circles are ranked by total monthly fan count. The ranking determines their tier
 | D+ | 10001+ |
 | D | Unranked |
 
-Each tier has promotion and demotion thresholds. The API provides `fans_to_next_tier` (how many fans needed to promote) and `fans_to_lower_tier` (how many fans above demotion threshold).
+Each tier has promotion and demotion thresholds. The API provides `fans_to_next_tier` and `fans_to_lower_tier`.
+
+**What the bot does with this:** The tier report shows promotion gap, demotion buffer, required daily pace, and projected outcome. Alerts fire when the club is at risk of demoting.
 
 ## What Is the Requirement System?
 
-Circle leaders set monthly fan requirements for members. If a member doesn't meet the requirement, they may be kicked.
+Circle leaders set monthly fan requirements. Members who don't meet them may be kicked. Example: "7 Days Not do Req = K1CK. Req. 7-20m Weekly Fans!"
 
-From the example circle: "7 Days Not do Req = K1CK. Req. 7-20m Weekly Fans!"
-
-This means: if a member doesn't meet the requirement for 7 consecutive days, they get kicked. The weekly requirement is 7-20 million fans.
-
-Leaders track this manually or with bots. Our bot automates this tracking.
+**What the bot does with this:** Reports show which members are below requirement. The `/bottom` command lists members needing attention. The weekly report includes a below-requirement section when `weeklyFans` is configured.
 
 ## What Data Is Available?
 
@@ -66,20 +55,12 @@ uma.moe is a third-party platform that scrapes game data once daily at 00:00 JST
 - Club rankings among all tracked circles
 - Tier thresholds (exact fans needed for promotion/demotion)
 
-See `docs/uma-moe-api.md` for the API documentation (not official, reverse engineered and may be outdated).
+**Why once daily:** The game updates player stats once per day. uma.moe scrapes after the update. The bot fetches after that (22:05 WIB — 5-minute buffer for data to settle).
+
+See `docs/uma-moe-api.md` for the full API documentation (reverse-engineered, may be outdated).
 See `tests/examples/snapshot-june-12.json` for real data.
 
-## What Is the Bot's Job?
-
-The bot helps circle leaders by:
-1. Tracking member fan progress automatically
-2. Sending daily/weekly/monthly reports to WhatsApp
-3. Identifying members below requirement
-4. Tracking tier promotion/demotion risk
-5. Detecting performance drops early
-6. Providing competitive context (how the circle ranks)
-
-## Key Concepts for Development
+## Key Concepts
 
 - **Circle**: The club/team. Up to 30 members.
 - **Member**: A player in the circle. Has a trainer name and viewer ID.
