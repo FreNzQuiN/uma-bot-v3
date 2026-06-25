@@ -114,7 +114,13 @@ export class ApiServer {
       return;
     }
 
-    if (this.apiToken && path !== '/health') {
+    // Minimal liveness probe — always unauthenticated, no operational data
+    if (path === '/healthz') {
+      createResponse(res, 200, { success: true, data: { status: 'ok', timestamp: new Date().toISOString() } });
+      return;
+    }
+
+    if (this.apiToken) {
       const authHeader = req.headers.authorization;
       if (authHeader !== `Bearer ${this.apiToken}`) {
         createResponse(res, 401, { success: false, error: 'Unauthorized' });

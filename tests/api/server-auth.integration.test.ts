@@ -67,8 +67,8 @@ describe('API Auth & Rate Limiting', () => {
       expect(res.body.success).toBe(true);
     });
 
-    it('exempts /health from auth — works without token', async () => {
-      const res = await fetchWithAuth('/health');
+    it('exempts /healthz from auth — works without token', async () => {
+      const res = await fetchWithAuth('/healthz');
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
