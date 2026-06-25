@@ -34,20 +34,16 @@ data/bot.pid
 
 # Compiled scripts
 scripts/*.js
+scripts/*.ts
 !scripts/patch-baileys.js
 
 # Test output artifacts
 tests/stats_output.txt
 tests/stats_output2.txt
 
-# Session artifacts (opencode agent working files)
-omo/
+# Others
 .plans/
-output/
 .audit/
-.opencode/
-
-# OS files
 .DS_Store
 Thumbs.db
 nul
