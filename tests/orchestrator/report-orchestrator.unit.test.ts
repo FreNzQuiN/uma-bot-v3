@@ -275,7 +275,7 @@ describe('ReportOrchestrator — alignSnapshotToMonth', () => {
 });
 
 
-describe('ReportOrchestrator — generateReportString', () => {
+describe('ReportOrchestrator — buildReportString', () => {
   it('returns report string for known type', async () => {
     const { orch } = makeOrchestrator();
     const snapshot = loadRealSnapshot();
@@ -283,7 +283,7 @@ describe('ReportOrchestrator — generateReportString', () => {
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = await orch.generateReportString('daily', snapshot, config, members);
+    const result = await orch.buildReportString('daily', snapshot, config, members);
 
     expect(result).toBeDefined();
     expect(typeof result).toBe('string');
@@ -297,7 +297,7 @@ describe('ReportOrchestrator — generateReportString', () => {
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = await orch.generateReportString('nonexistent', snapshot, config, members);
+    const result = await orch.buildReportString('nonexistent', snapshot, config, members);
 
     expect(result).toBeUndefined();
   });
@@ -309,7 +309,7 @@ describe('ReportOrchestrator — generateReportString', () => {
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = await orch.generateReportString('daily', snapshot, config, members, { isCatchUp: true });
+    const result = await orch.buildReportString('daily', snapshot, config, members, { isCatchUp: true });
 
     expect(result).toBeDefined();
     expect(result).toContain('*⚠️ Catch-up*');
@@ -326,7 +326,7 @@ describe('ReportOrchestrator — generateReportString', () => {
     const { computeMembers } = require('../../src/reports/compute');
     const members = computeMembers(snapshot, config);
 
-    const result = await orch.generateReportString('daily', snapshot, config, members, { isCatchUp: false });
+    const result = await orch.buildReportString('daily', snapshot, config, members, { isCatchUp: false });
 
     expect(result).toBeDefined();
     expect(result).not.toContain('Catch-up');

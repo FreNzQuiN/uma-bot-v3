@@ -49,6 +49,7 @@ const DEFAULT_CONFIG: LoggerConfig = {
 class Logger {
   private config: LoggerConfig;
   private initialized = false;
+  private cachedFormatter: Intl.DateTimeFormat | null = null;
 
   constructor() {
     this.config = { ...DEFAULT_CONFIG };
@@ -60,6 +61,9 @@ class Logger {
   configure(config: Partial<LoggerConfig>): void {
     if (config.logFile && config.logFile !== this.config.logFile) {
       this.initialized = false;
+    }
+    if (config.timezone && config.timezone !== this.config.timezone) {
+      this.cachedFormatter = null;
     }
     this.config = { ...this.config, ...config };
     this.ensureLogDir();
@@ -105,16 +109,19 @@ class Logger {
    */
   private formatLine(level: LogLevel, tag: string, message: string): string {
     const now = new Date();
-    const ts = new Intl.DateTimeFormat('sv-SE', {
-      timeZone: this.config.timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    }).format(now);
+    if (!this.cachedFormatter) {
+      this.cachedFormatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: this.config.timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+      });
+    }
+    const ts = this.cachedFormatter.format(now);
     const ms = String(now.getMilliseconds()).padStart(3, '0');
     const tagStr = tag ? ` [${tag}]` : '';
     return `[${ts}.${ms}] [${level.toUpperCase()}]${tagStr} ${message}`;

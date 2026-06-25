@@ -117,7 +117,7 @@ describe('initialize()', () => {
       (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('CREATE INDEX')
     );
 
-    expect(tableCalls).toHaveLength(5);
+    expect(tableCalls).toHaveLength(4);
     expect(indexCalls).toHaveLength(3);
   });
 

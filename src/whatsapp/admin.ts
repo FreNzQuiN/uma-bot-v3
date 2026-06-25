@@ -6,7 +6,7 @@
  */
 
 import type { BotConfig } from '../types';
-import { getDefaultConfig, saveConfig } from '../config';
+import { getDefaultConfig, validateConfig, saveConfig } from '../config';
 import { formatNumber } from '../utils/format';
 
 export function handleSetReq(
@@ -45,10 +45,11 @@ export function handleSetReq(
     },
   };
 
+  const validated = validateConfig(updated);
   const label = sub === 'monthly' ? 'Monthly' : 'Weekly';
-  saveConfig(updated);
+  saveConfig(validated);
   return {
-    config: updated,
+    config: validated,
     message: `${label} requirement diubah ke ${formatNumber(value)} fans.`,
   };
 }

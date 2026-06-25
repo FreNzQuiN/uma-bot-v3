@@ -103,6 +103,8 @@ export class ReportOrchestrator {
     snapshot: Snapshot,
     config: BotConfig
   ): Promise<Snapshot> {
+    if (snapshot.members.length === 0) return snapshot;
+
     if (type === 'daily' || type === 'weekly') {
       const { year: snapYear, month: snapMonth } = snapshot.members[0];
       const { year: curYear, month: curMonth } = getDataDateComponents();
@@ -143,7 +145,7 @@ export class ReportOrchestrator {
    * Generate a report string for a single report type.
    * Returns the formatted report string, or undefined for unknown types.
    */
-  async generateReportString(
+  async buildReportString(
     type: string,
     snapshot: Snapshot,
     config: BotConfig,
@@ -295,7 +297,7 @@ export class ReportOrchestrator {
 
     // Compute once, use everywhere
     const computedMembers = computeMembers(snapshot, config);
-    const report = await this.generateReportString(type, snapshot, config, computedMembers, options);
+    const report = await this.buildReportString(type, snapshot, config, computedMembers, options);
     if (report === undefined) return [];
     log.info('Report', `${type} report generated (${report.length} chars)`);
 

@@ -248,7 +248,7 @@ describe('REST API', () => {
 
 describe('Health endpoint with DB failure', () => {
   let failingDbServer: ApiServer;
-  const FAIL_DB_PORT = 18767;
+  const FAIL_DB_PORT = 18769;
 
   beforeAll(async () => {
     const mockDb = {

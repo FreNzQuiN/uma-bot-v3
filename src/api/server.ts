@@ -7,6 +7,7 @@
  */
 
 import http from 'http';
+import crypto from 'crypto';
 import type { Snapshot, BotConfig } from '../types';
 import type { IDatabase } from '../db/types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
@@ -84,6 +85,9 @@ export class ApiServer {
       // Bind to localhost only (security requirement from spec)
       this.server.listen(this.port, '127.0.0.1', () => {
         log.info('API', `Server listening on http://127.0.0.1:${this.port}`);
+        if (!this.apiToken) {
+          log.warn('API', 'No API_TOKEN set — API endpoints are unauthenticated. This is acceptable for localhost-only use.');
+        }
         resolve();
       });
     });
@@ -122,7 +126,8 @@ export class ApiServer {
 
     if (this.apiToken) {
       const authHeader = req.headers.authorization;
-      if (authHeader !== `Bearer ${this.apiToken}`) {
+      const expected = `Bearer ${this.apiToken}`;
+      if (!authHeader || authHeader.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
         createResponse(res, 401, { success: false, error: 'Unauthorized' });
         return;
       }

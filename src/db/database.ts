@@ -102,15 +102,6 @@ export class SqliteDatabase implements IDatabase {
   }
 
   private createTables(): void {
-    // NOTE: settings table exists for future use — no IDatabase methods read/write it yet
-    this.runSql(`
-      CREATE TABLE IF NOT EXISTS settings (
-        \`key\` TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `);
-
     this.runSql(`
       CREATE TABLE IF NOT EXISTS schedule_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -460,7 +451,3 @@ private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): Sc
     );
   }
 }
-
-// Backward-compat aliases — will be removed once all consumers migrate to IDatabase
-export type Database = SqliteDatabase;
-export const Database = SqliteDatabase;

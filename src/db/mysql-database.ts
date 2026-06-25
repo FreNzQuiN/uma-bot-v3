@@ -130,15 +130,6 @@ export class MysqlDatabase implements IDatabase {
   private async createTables(): Promise<void> {
     const conn = this.getConn();
 
-    // NOTE: settings table exists for future use — no IDatabase methods read/write it yet
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS settings (
-        \`key\` VARCHAR(255) PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at VARCHAR(255) NOT NULL
-      )
-    `);
-
     await conn.query(`
       CREATE TABLE IF NOT EXISTS schedule_runs (
         id INT AUTO_INCREMENT PRIMARY KEY,
