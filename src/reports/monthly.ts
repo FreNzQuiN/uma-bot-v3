@@ -13,6 +13,7 @@ import { formatDateWIB } from '../utils/timezone';
 import { getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
 import { INDONESIAN_MONTHS } from '../utils/timezone';
 import { isStaleForReport } from '../data/daily-fans';
+import { computeMembers } from './compute';
 import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
 
 /**
@@ -57,13 +58,19 @@ export function generateMonthlyReport(
     }
   }
 
+  // When viewing a historical month, recompute gains from that snapshot
+  let effectiveMembers = computedMembers;
+  if (activeSnapshot !== snapshot) {
+    effectiveMembers = computeMembers(activeSnapshot, config);
+  }
+
   if (activeSnapshot.members.length === 0) {
     return 'ℹ️ *Monthly Report*\nData bulan ini belum tersedia.';
   }
 
   const { year, month } = activeSnapshot.members[0];
 
-  const ranked: RankedMember[] = computedMembers
+  const ranked: RankedMember[] = effectiveMembers
     .map((m) => ({
       rank: 0,
       trainerName: m.trainerName,
@@ -81,7 +88,7 @@ export function generateMonthlyReport(
   );
 
   const contributorCount = ranked.filter((m) => m.monthlyGain > 0).length;
-  const activeCount = computedMembers.filter((m) => m.status === 'active').length;
+  const activeCount = effectiveMembers.filter((m) => m.status === 'active').length;
 
   const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } = activeSnapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
@@ -137,13 +144,13 @@ export function generateMonthlyReport(
 
   const monthlyReq = config.requirements.monthlyFans;
   if (monthlyReq > 0) {
-    const activeMembers = computedMembers.filter((m) => m.status === 'active');
-    const passCount = activeMembers.filter((m) => m.monthlyGain >= monthlyReq).length;
-    const failCount = activeMembers.length - passCount;
+    const reqActiveMembers = effectiveMembers.filter((m) => m.status === 'active');
+    const passCount = reqActiveMembers.filter((m) => m.monthlyGain >= monthlyReq).length;
+    const failCount = reqActiveMembers.length - passCount;
     lines.push('');
     lines.push(`*🎯 Requirement: ${monthlyReq >= 1_000_000 ? formatNumber(monthlyReq) : monthlyReq}/bulan*`);
     lines.push(`✅ ${passCount} pass | ❌ ${failCount} kurang`);
-    const failingMembers = activeMembers.filter((m) => m.monthlyGain < monthlyReq);
+    const failingMembers = reqActiveMembers.filter((m) => m.monthlyGain < monthlyReq);
     if (failingMembers.length > 0) {
       for (const m of failingMembers) {
         const deficit = monthlyReq - m.monthlyGain;
@@ -155,7 +162,7 @@ export function generateMonthlyReport(
 
   // Stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
-  const staleMembers = computedMembers.filter((m) =>
+  const staleMembers = effectiveMembers.filter((m) =>
     m.status === 'active' && isStaleForReport(m.dailyFans, adjustedDataDay, staleThreshold)
   );
   if (staleMembers.length > 0) {
