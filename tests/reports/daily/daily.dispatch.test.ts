@@ -13,7 +13,7 @@ import {
   getDailyGain,
   getLatestDataDay,
   isTransferMember,
-  isStaleMember,
+  isStaleForReport,
 } from '../../../src/data/daily-fans';
 import { formatNumber } from '../../../src/utils/format';
 import { setupCommandHandler } from '../../../src/whatsapp/dispatch';
@@ -402,7 +402,7 @@ describe('Exact total gain verification', () => {
     for (const member of snapshot.members) {
       const isT = isTransferMember(member);
       const latestPositiveDay = getLatestDataDay(member.daily_fans);
-      const stale = isStaleMember(latestPositiveDay, latestDataDay, 3);
+      const stale = isStaleForReport(member.daily_fans, latestDataDay, 3);
       const status = isT ? 'transfer' : (latestPositiveDay === 0 || stale) ? 'stale' : 'active';
 
       if (status === 'active' || status === 'transfer') {
@@ -412,7 +412,7 @@ describe('Exact total gain verification', () => {
       }
     }
 
-    expect(contributingGains.length).toBe(30);
+    expect(contributingGains.length).toBe(29);
     expect(totalGain).toBe(32287438);
     expect(formatNumber(totalGain)).toBe('32.3M');
 
@@ -429,7 +429,7 @@ describe('Exact total gain verification', () => {
     for (const member of snapshot.members) {
       const isT = isTransferMember(member);
       const latestPositiveDay = getLatestDataDay(member.daily_fans);
-      const stale = isStaleMember(latestPositiveDay, latestDataDay, 3);
+      const stale = isStaleForReport(member.daily_fans, latestDataDay, 3);
       const status = isT ? 'transfer' : (latestPositiveDay === 0 || stale) ? 'stale' : 'active';
 
       if (status === 'active' || status === 'transfer') {
@@ -438,7 +438,7 @@ describe('Exact total gain verification', () => {
       }
     }
 
-    expect(count).toBe(30);
+    expect(count).toBe(29);
     const gainLine = report1.split('\n').find((l) => l.includes('Total:'));
     expect(gainLine).toContain(formatNumber(totalGain));
   });

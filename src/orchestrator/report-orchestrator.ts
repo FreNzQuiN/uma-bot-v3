@@ -195,26 +195,21 @@ export class ReportOrchestrator {
       alerts = await detectAlerts(computedMembers, snapshot, config, this.db);
       if (alerts.length > 0) {
         log.info('Alert', `${alerts.length} alerts detected for ${type} report`);
-        const alertIds: number[] = [];
-        for (const alert of alerts) {
-          const alertId = await this.db.recordAlert({
-            alert_type: alert.type,
-            event_key: alert.eventKey,
-            member_viewer_id: alert.memberViewerId,
-            report_date: alert.reportDate,
-            created_at: new Date().toISOString(),
-            status: 'pending',
-            message: alert.message,
-          });
-          alertIds.push(alertId);
-        }
+
+        const alertIds = await this.db.recordAlerts(alerts.map((a) => ({
+          alert_type: a.type,
+          event_key: a.eventKey,
+          member_viewer_id: a.memberViewerId,
+          report_date: a.reportDate,
+          created_at: new Date().toISOString(),
+          status: 'pending',
+          message: a.message,
+        })));
 
         if (!options?.collectAlerts) {
           await this.deliverAlerts(alerts, options?.isCatchUp ?? false);
         }
-        for (const alertId of alertIds) {
-          await this.db.markAlertSent(alertId);
-        }
+        await this.db.markAlertsSent(alertIds);
       }
     } catch (err) {
       log.error('Alert', `Alert processing failed for ${type} report (report was delivered)`, err);

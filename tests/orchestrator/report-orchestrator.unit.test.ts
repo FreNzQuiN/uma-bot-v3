@@ -381,16 +381,16 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
   });
 
   it('records each alert in DB when alerts exist', async () => {
-    const mockRecordAlert = jest.fn().mockResolvedValue(1);
-    const mockMarkAlertSent = jest.fn().mockResolvedValue(undefined);
+    const mockRecordAlerts = jest.fn().mockResolvedValue([1]);
+    const mockMarkAlertsSent = jest.fn().mockResolvedValue(undefined);
     const { orch } = makeOrchestrator();
-    (orch as any).db = { recordAlert: mockRecordAlert, markAlertSent: mockMarkAlertSent };
+    (orch as any).db = { recordAlerts: mockRecordAlerts, markAlertsSent: mockMarkAlertsSent };
     mockDetectAlerts.mockResolvedValue([sampleAlert]);
 
     await orch.processAlertsForReport('daily', loadRealSnapshot(), makeConfig(), [] as any);
 
-    expect(mockRecordAlert).toHaveBeenCalled();
-    expect(mockMarkAlertSent).toHaveBeenCalled();
+    expect(mockRecordAlerts).toHaveBeenCalled();
+    expect(mockMarkAlertsSent).toHaveBeenCalled();
   });
 
   it('does not deliver alerts when collectAlerts is true', async () => {
@@ -404,7 +404,7 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
       waClient: makeWaClient({ sendMessage: mockSendMessage }),
       config,
     });
-    (orch as any).db = { recordAlert: jest.fn().mockResolvedValue(1), markAlertSent: jest.fn().mockResolvedValue(undefined) };
+    (orch as any).db = { recordAlerts: jest.fn().mockResolvedValue([1]), markAlertsSent: jest.fn().mockResolvedValue(undefined) };
     mockDetectAlerts.mockResolvedValue([sampleAlert]);
 
     const result = await orch.processAlertsForReport('daily', loadRealSnapshot(), config, [] as any, { collectAlerts: true });
@@ -423,7 +423,7 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
 
   it('continues when alert processing encounters an error', async () => {
     const { orch } = makeOrchestrator();
-    (orch as any).db = { recordAlert: jest.fn().mockImplementation(async () => { throw new Error('DB error'); }), markAlertSent: jest.fn().mockResolvedValue(undefined) };
+    (orch as any).db = { recordAlerts: jest.fn().mockImplementation(async () => { throw new Error('DB error'); }), markAlertsSent: jest.fn().mockResolvedValue(undefined) };
     mockDetectAlerts.mockResolvedValue([sampleAlert]);
 
     // Should not throw — error is caught internally

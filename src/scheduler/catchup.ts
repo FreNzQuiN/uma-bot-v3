@@ -169,6 +169,39 @@ export class CatchUpManager {
   }
 
   /**
+   * Execute a single report: record the run, send it, update status.
+   */
+  private async executeSingleReport(
+    reportType: string,
+    sendReport: (type: string, options?: { isCatchUp: boolean; offset?: number }) => Promise<unknown>,
+    today: string,
+    scheduledAt: string,
+    targetJid: string
+  ): Promise<{ success: boolean; alerts: unknown[] }> {
+    const runId = await this.db.recordRun({
+      report_type: reportType,
+      report_date: today,
+      scheduled_at: scheduledAt,
+      status: 'pending',
+      is_catch_up: true,
+      target_jid: targetJid,
+    });
+
+    try {
+      const result = await sendReport(reportType, { isCatchUp: true });
+      const alerts = Array.isArray(result) ? result : [];
+      await this.db.updateRunStatus(runId, 'sent');
+      await this.db.save();
+      return { success: true, alerts };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      await this.db.updateRunStatus(runId, 'failed', errorMsg);
+      log.error('CatchUp', `Failed to send ${reportType} report`, error);
+      return { success: false, alerts: [] };
+    }
+  }
+
+  /**
    * Execute catch-up by sending missed reports.
    *
    * Sends reports oldest-first (daily → weekly → monthly).
@@ -211,90 +244,60 @@ export class CatchUpManager {
 
       if (group.length === 1) {
         // Single report — send individually
-        const reportType = group[0];
-        const runId = await this.db.recordRun({
-          report_type: reportType,
-          report_date: today,
-          scheduled_at: scheduledAt,
-          status: 'pending',
-          is_catch_up: true,
-          target_jid: targetJid,
-        });
-
-        try {
-          const result = await sendReport(reportType, { isCatchUp: true });
-          if (Array.isArray(result)) alerts.push(...result);
-          await this.db.updateRunStatus(runId, 'sent');
-          await this.db.save(); // Persist immediately for crash recovery
+        const result = await this.executeSingleReport(group[0], sendReport, today, scheduledAt, targetJid);
+        if (result.success) {
+          alerts.push(...result.alerts);
           sent++;
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          await this.db.updateRunStatus(runId, 'failed', errorMsg);
+        } else {
           failed++;
-          log.error('CatchUp', `Failed to send ${reportType} report`, error);
         }
-      } else {
+      } else if (onCombinedReport) {
         // Combined reports — send as one message
         const combinedKey = group.join('+');
-
-        if (onCombinedReport) {
-          let runId: number | undefined;
-          try {
-            runId = await this.db.recordRun({
-              report_type: combinedKey,
+        let runId: number | undefined;
+        try {
+          runId = await this.db.recordRun({
+            report_type: combinedKey,
+            report_date: today,
+            scheduled_at: scheduledAt,
+            status: 'pending',
+            is_catch_up: true,
+            target_jid: targetJid,
+          });
+          const result = await onCombinedReport(group);
+          if (Array.isArray(result)) alerts.push(...result);
+          await this.db.updateRunStatus(runId, 'sent');
+          // Record individual runs so scheduled reports don't duplicate
+          for (const type of group) {
+            await this.db.recordRun({
+              report_type: type,
               report_date: today,
               scheduled_at: scheduledAt,
-              status: 'pending',
+              status: 'sent',
               is_catch_up: true,
               target_jid: targetJid,
             });
-            const result = await onCombinedReport(group);
-            if (Array.isArray(result)) alerts.push(...result);
-            await this.db.updateRunStatus(runId, 'sent');
-            // Record individual runs so scheduled reports don't duplicate
-            for (const type of group) {
-              await this.db.recordRun({
-                report_type: type,
-                report_date: today,
-                scheduled_at: scheduledAt,
-                status: 'sent',
-                is_catch_up: true,
-                target_jid: targetJid,
-              });
-            }
-            await this.db.save(); // Persist individual records for crash recovery
-            sent++;
-            log.info('CatchUp', `Sent combined report: ${combinedKey}`);
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            if (runId !== undefined) {
-              await this.db.updateRunStatus(runId, 'failed', errorMsg);
-            }
-            failed++;
-            log.error('CatchUp', `Failed to send combined report ${combinedKey}`, error);
           }
-        } else {
-          for (const reportType of group) {
-            const runId = await this.db.recordRun({
-              report_type: reportType,
-              report_date: today,
-              scheduled_at: scheduledAt,
-              status: 'pending',
-              is_catch_up: true,
-              target_jid: targetJid,
-            });
-            try {
-              const result = await sendReport(reportType, { isCatchUp: true });
-              if (Array.isArray(result)) alerts.push(...result);
-              await this.db.updateRunStatus(runId, 'sent');
-              await this.db.save(); // Persist immediately for crash recovery
-              sent++;
-            } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              await this.db.updateRunStatus(runId, 'failed', errorMsg);
-              failed++;
-              log.error('CatchUp', `Failed to send ${reportType} report`, error);
-            }
+          await this.db.save();
+          sent++;
+          log.info('CatchUp', `Sent combined report: ${combinedKey}`);
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          if (runId !== undefined) {
+            await this.db.updateRunStatus(runId, 'failed', errorMsg);
+          }
+          failed++;
+          log.error('CatchUp', `Failed to send combined report ${combinedKey}`, error);
+        }
+      } else {
+        // No combined handler — send each in the group individually
+        for (const reportType of group) {
+          const result = await this.executeSingleReport(reportType, sendReport, today, scheduledAt, targetJid);
+          if (result.success) {
+            alerts.push(...result.alerts);
+            sent++;
+          } else {
+            failed++;
           }
         }
       }

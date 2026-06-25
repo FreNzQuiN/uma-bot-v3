@@ -1,23 +1,26 @@
 import { CatchUpManager } from '../../src/scheduler/catchup';
 import { SqliteDatabase } from '../../src/db/database';
-import { makeConfig } from '../_helpers';
+import { makeConfig, mockCurrentDate, restoreDateMocks } from '../_helpers';
 
 describe('Bug 1: Catch-up detects missed reports across days', () => {
   let db: SqliteDatabase;
 
   beforeEach(async () => {
+    mockCurrentDate(2026, 6, 15);
     db = new SqliteDatabase(':memory:');
     await db.initialize();
   });
 
   afterEach(() => {
     db.close();
+    restoreDateMocks();
   });
 
   it('detects missed weekly from day 7 when bot restarts on day 8', async () => {
     // Weekly scheduled on days [7, 14, 21, 28]
-    // Last successful weekly was on day 7 of previous month or before
-    // Today is day 8 — the weekly from day 7 should be caught
+    // Mocked date: June 15, 2026 (day 15)
+    // Last successful weekly was on day 7 of previous month
+    // Weekly from day 7 or day 14 should be caught
     const config = makeConfig({
       catchUp: { enabled: true, maxReportsPerStartup: 10 },
       schedule: {
@@ -27,15 +30,8 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
       },
     });
 
-    // Record last weekly run as day 7 (today is day 8)
-    const today = new Date();
-    const todayDay = today.getDate();
-    const todayMonth = today.getMonth();
-    const todayYear = today.getFullYear();
-
-    // Last weekly run was from previous month
-    const lastMonth = new Date(todayYear, todayMonth - 1, 7);
-    const lastMonthStr = lastMonth.toISOString().split('T')[0];
+    // Last weekly run was from previous month (May 2026)
+    const lastMonthStr = '2026-05-07';
 
     await db.recordRun({
       report_type: 'weekly',
@@ -64,39 +60,24 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
       },
     });
 
-    // Record weekly run for today's most recent scheduled day
-    const today = new Date();
-    const todayDay = today.getDate();
-    const weeklyDays = [7, 14, 21, 28];
+    // Mocked date: June 15, 2026
+    // Weekly scheduled on [7, 14, 21, 28]
+    // Most recent scheduled day <= 15 is day 14
+    const scheduledDate = '2026-06-14';
 
-    // Find the most recent scheduled day that is <= today
-    let mostRecentDay = 0;
-    for (const day of [...weeklyDays].sort((a, b) => b - a)) {
-      if (day <= todayDay) {
-        mostRecentDay = day;
-        break;
-      }
-    }
+    await db.recordRun({
+      report_type: 'weekly',
+      report_date: scheduledDate,
+      scheduled_at: `${scheduledDate}T22:05:00.000Z`,
+      sent_at: `${scheduledDate}T22:05:01.000Z`,
+      status: 'sent',
+      is_catch_up: false,
+      target_jid: 'test@g.us',
+    });
 
-    if (mostRecentDay > 0) {
-      const todayYear = today.getFullYear();
-      const todayMonth = today.getMonth();
-      const scheduledDate = `${todayYear}-${String(todayMonth + 1).padStart(2, '0')}-${String(mostRecentDay).padStart(2, '0')}`;
-
-      await db.recordRun({
-        report_type: 'weekly',
-        report_date: scheduledDate,
-        scheduled_at: `${scheduledDate}T22:05:00.000Z`,
-        sent_at: `${scheduledDate}T22:05:01.000Z`,
-        status: 'sent',
-        is_catch_up: false,
-        target_jid: 'test@g.us',
-      });
-
-      const catchUp = new CatchUpManager(db, () => config);
-      const missed = await catchUp.detectMissedReports();
-      expect(missed).not.toContain('weekly');
-    }
+    const catchUp = new CatchUpManager(db, () => config);
+    const missed = await catchUp.detectMissedReports();
+    expect(missed).not.toContain('weekly');
   });
 
   it('detects missed monthly when bot restarts after monthly day has passed', async () => {
@@ -109,13 +90,9 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
       },
     });
 
-    const today = new Date();
-    const todayDay = today.getDate();
-
-    // Only test if today >= day 1 (which is always true)
-    // Record last monthly from previous month
-    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastMonthStr = lastMonth.toISOString().split('T')[0];
+    // Mocked date: June 15, 2026 — well past monthly day (day 1)
+    // Record last monthly from previous month (May 2026)
+    const lastMonthStr = '2026-05-01';
 
     await db.recordRun({
       report_type: 'monthly',
@@ -127,11 +104,9 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
       target_jid: 'test@g.us',
     });
 
-    // If today >= 1 (always true), monthly should be detected
-    if (todayDay >= 1) {
-      const catchUp = new CatchUpManager(db, () => config);
-      const missed = await catchUp.detectMissedReports();
-      expect(missed).toContain('monthly');
-    }
+    // Monthly should always be detected since we're past day 1
+    const catchUp = new CatchUpManager(db, () => config);
+    const missed = await catchUp.detectMissedReports();
+    expect(missed).toContain('monthly');
   });
 });

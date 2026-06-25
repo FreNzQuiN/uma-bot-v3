@@ -321,7 +321,29 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     );
   }
 
-async upsertMember(member: MemberHistoryInsert): Promise<void> {
+  async recordAlerts(alerts: AlertEventInsert[]): Promise<number[]> {
+    if (alerts.length === 0) return [];
+    return this.transaction(async () => {
+      const ids: number[] = [];
+      for (const alert of alerts) {
+        ids.push(await this.recordAlert(alert));
+      }
+      return ids;
+    });
+  }
+
+  async markAlertsSent(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+    const conn = this.getConn();
+    const now = new Date().toISOString();
+    const placeholders = ids.map(() => '?').join(',');
+    await conn.query(
+      `UPDATE alert_events SET status = ?, sent_at = ? WHERE id IN (${placeholders})`,
+      ['sent', now, ...ids]
+    );
+  }
+
+  async upsertMember(member: MemberHistoryInsert): Promise<void> {
     const conn = this.getConn();
     const params = [
       member.viewer_id,
@@ -359,6 +381,15 @@ async upsertMember(member: MemberHistoryInsert): Promise<void> {
           status = new_vals.status`;
 
     await conn.query(sql, params);
+  }
+
+  async upsertMembers(members: MemberHistoryInsert[]): Promise<void> {
+    if (members.length === 0) return;
+    await this.transaction(async () => {
+      for (const member of members) {
+        await this.upsertMember(member);
+      }
+    });
   }
 
   async getMembers(circleId: number): Promise<MemberHistoryRow[]> {

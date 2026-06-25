@@ -40,10 +40,6 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-function arraysEqual(a: unknown[], b: unknown[]): boolean {
-  return a.length === b.length && a.every((v, i) => v === b[i]);
-}
-
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === null || b === null) return false;
@@ -57,28 +53,11 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 function configChanged(oldCfg: BotConfig, newCfg: BotConfig): { changed: boolean; scheduleChanged: boolean } {
-  const scheduleChanged = (
-    oldCfg.schedule.daily.time !== newCfg.schedule.daily.time ||
-    oldCfg.schedule.daily.enabled !== newCfg.schedule.daily.enabled ||
-    oldCfg.schedule.weekly.time !== newCfg.schedule.weekly.time ||
-    oldCfg.schedule.weekly.enabled !== newCfg.schedule.weekly.enabled ||
-    !arraysEqual(oldCfg.schedule.weekly.days, newCfg.schedule.weekly.days) ||
-    oldCfg.schedule.monthly.time !== newCfg.schedule.monthly.time ||
-    oldCfg.schedule.monthly.enabled !== newCfg.schedule.monthly.enabled ||
-    oldCfg.schedule.monthly.day !== newCfg.schedule.monthly.day
-  );
-  const anyChanged = scheduleChanged ||
-    !deepEqual(oldCfg.groups, newCfg.groups) ||
-    !deepEqual(oldCfg.admins, newCfg.admins) ||
-    !deepEqual(oldCfg.alerts, newCfg.alerts) ||
-    !deepEqual(oldCfg.requirements, newCfg.requirements) ||
-    !deepEqual(oldCfg.catchUp, newCfg.catchUp) ||
-    !deepEqual(oldCfg.message, newCfg.message) ||
-    !deepEqual(oldCfg.memberStatus, newCfg.memberStatus) ||
-    !deepEqual(oldCfg.commands, newCfg.commands) ||
-    oldCfg.timezone !== newCfg.timezone ||
-    oldCfg.circleId !== newCfg.circleId;
-  return { changed: anyChanged, scheduleChanged };
+  const changed = JSON.stringify(oldCfg) !== JSON.stringify(newCfg);
+  if (!changed) return { changed: false, scheduleChanged: false };
+
+  const scheduleChanged = JSON.stringify(oldCfg.schedule) !== JSON.stringify(newCfg.schedule);
+  return { changed: true, scheduleChanged };
 }
 
 async function main() {

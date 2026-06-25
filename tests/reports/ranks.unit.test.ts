@@ -23,7 +23,7 @@ import {
   getFirstPositiveDay,
   getMonthlyGain,
   isTransferMember,
-  isStaleMember,
+  isStaleForReport,
 } from '../../src/data/daily-fans';
 import { computeMembers } from '../../src/reports/compute';
 import { formatNumber } from '../../src/utils/format';
@@ -65,11 +65,11 @@ describe('Member classification for ranks', () => {
     const staleNames: string[] = [];
     for (const member of snapshot.members) {
       const day = getLatestDataDay(member.daily_fans);
-      if (!isTransferMember(member) && isStaleMember(day, latestDataDay, 3)) {
+      if (!isTransferMember(member) && isStaleForReport(member.daily_fans, latestDataDay, 3)) {
         staleNames.push(member.trainer_name);
       }
     }
-    expect(staleNames.sort()).toEqual([...STALE_NAMES].sort());
+    expect(staleNames.sort()).toEqual([...STALE_NAMES, 'jgd'].sort());
   });
 
   it('identifies 6 transfer members', () => {
@@ -86,12 +86,12 @@ describe('Member classification for ranks', () => {
     for (const m of snapshot.members) {
       const day = getLatestDataDay(m.daily_fans);
       if (isTransferMember(m)) { transfer++; }
-      else if (day === 0 || isStaleMember(day, latestDataDay, 3)) { stale++; }
+      else if (day === 0 || isStaleForReport(m.daily_fans, latestDataDay, 3)) { stale++; }
       else { active++; }
     }
-    expect(active).toBe(24);
+    expect(active).toBe(23);
     expect(transfer).toBe(6);
-    expect(stale).toBe(4);
+    expect(stale).toBe(5);
   });
 });
 
@@ -395,7 +395,7 @@ describe('Complete line-by-line verification against raw data', () => {
     for (const m of snapshot.members) {
       const day = getLatestDataDay(m.daily_fans);
       const isT = isTransferMember(m);
-      const stale = !isT && isStaleMember(day, latestDataDay, 3);
+      const stale = !isT && isStaleForReport(m.daily_fans, latestDataDay, 3);
       if (!stale) {
         candidates.push({
           name: m.trainer_name,

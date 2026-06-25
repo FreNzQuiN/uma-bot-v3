@@ -8,7 +8,7 @@ import {
   computeRollingAverage,
   countActiveDays,
   getMonthlyGain,
-  isStaleMember,
+  isStaleForReport,
   getWeeklyGain,
   getDailyGain,
 } from '../../src/data/daily-fans';
@@ -39,10 +39,9 @@ describe('Additional edge cases', () => {
     });
   });
 
-  describe('isStaleMember: both inputs are 0', () => {
-    it('returns false when both latestPositiveDay and latestDataDay are 0', () => {
-      // 0 <= 0 - 3 → 0 <= -3 → false
-      expect(isStaleMember(0, 0, 3)).toBe(false);
+  describe('isStaleForReport: both inputs are 0', () => {
+    it('returns false when latestDataDay is 0', () => {
+      expect(isStaleForReport([], 0, 3)).toBe(false);
     });
   });
 

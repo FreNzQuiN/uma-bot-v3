@@ -1,120 +1,94 @@
 # Adversarial Validation
 
 ## Summary
-
-- Total findings reviewed: 26
-- CONFIRMED (kept as-is): 14
-- DOWNGRADED (severity reduced): 4
+- Total findings reviewed: 38
+- CONFIRMED (kept as-is): 32
+- DOWNGRADED (severity reduced): 1
 - REJECTED (false positive): 5
-- UNVERIFIABLE: 0
-- POSITIVE kept: 3
+- UNVERIFIABLE (can't confirm or deny): 0
 
----
+## Rejected Findings (False Positives)
 
-## Rejected Findings
+### [HIGH] Weekly report stale detection uses wrong zero-day window with offset
+- Original file: `.audit/correctness.md` finding #1 (src/reports/weekly.ts:127-129 + src/data/daily-fans.ts:281-306)
+- Original severity: HIGH
+- Reason for rejection: The audit claims `countConsecutiveZeroDaysAtEnd` "counts from the snapshot's latest data day backward, not from the passed day." This is factually wrong. The function iterates from `latestDataDay` (its parameter), which receives `viewedEndDay` from the caller. The chain is: `weekly.ts:129` → `buildStaleSection(computedMembers, viewedEndDay, ...)` → `isStaleForReport(m.dailyFans, dataDay, ...)` → `countConsecutiveZeroDaysAtEnd(dailyFans, latestDataDay)`. The parameter name `latestDataDay` in `countConsecutiveZeroDaysAtEnd` is misleading, but the value flowing through is `viewedEndDay` (= `Math.min(block.end, latestDataDay)`). The code correctly counts zero-gain days from the end of the viewed week backward. Both weekly and monthly reports follow the same pattern (compare `weekly.ts:129` with `monthly.ts:148` — both pass their period's effective end day). No bug exists.
+- Evidence: `daily-fans.ts:286` — `for (let day = latestDataDay; day >= 2; day--)` iterates from the parameter, which is `viewedEndDay`. The `weekly.ts:127` comment confirms: "rolling window: consecutive zero-gain days at end of target week."
 
-### [MEDIUM] MySQL mock doesn't simulate INSERT IGNORE returning affectedRows: 0
-- File: `tests/db/mysql-database.unit.test.ts:542-565`
+### [MEDIUM] Daily report stale warning ignores offset — may show false staleness for historical reports
+- Original file: `.audit/correctness.md` finding #2 (src/reports/daily.ts:120-125)
 - Original severity: MEDIUM
-- Reason: **Factually wrong about the code path.** The finding claims "The adapter code at `src/db/mysql-database.ts:232-254` checks `result.affectedRows > 0`" — but `affectedRows` is NEVER referenced in `mysql-database.ts` (confirmed via grep). The actual code at line 243-246 uses `SELECT LAST_INSERT_ID() as id` and checks `lastId > 0`. The mock at line 547-549 correctly exercises this path: INSERT IGNORE → LAST_INSERT_ID returns 0 → fallback SELECT returns existing ID. The mock's `[{}, undefined]` for INSERT IGNORE is fine because the adapter never reads properties from that result set.
+- Reason for rejection: The audit suggests using `adjustedDataDay` instead of `latestDataDay`, but the code's existing comment at line 118-119 explicitly states the intent: "Stale data warning: check if the SNAPSHOT is stale, not the viewed day. Use latestDataDay (snapshot's actual latest) instead of offset-adjusted adjustedDataDay." This is a deliberate design choice — the warning indicates whether the snapshot data is current overall, not whether the specific historical day is complete. When a user views `/daily -3` and the snapshot is 2+ days old, the warning correctly tells them the snapshot hasn't been refreshed recently. Suppressing the warning for historical queries would be misleading — users would think data freshness is fine when the snapshot is genuinely stale. This is the same pattern used in `weekly.ts:132` and `monthly.ts:150`, which also pass `latestDataDay` (not the offset-adjusted day) to `getStaleDataWarning`.
+- Evidence: `daily.ts:118-119` — explicit comment explaining the design choice. `weekly.ts:132` and `monthly.ts:150` follow the same pattern.
 
-### [LOW] No test verifies `compute.unit.test.ts` Database import is used
-- File: `tests/reports/compute.unit.test.ts:11`
-- Original severity: LOW
-- Reason: **Non-finding.** The finding itself acknowledges "the import IS used" and then says "Already covered by the broader alias finding." This adds zero new information beyond the existing [LOW] Database alias finding. Duplicate.
+### [HIGH] No regression test for weekly/monthly stale detection offset bug
+- Original file: `.audit/testing.md` finding #2
+- Original severity: HIGH
+- Reason for rejection: This finding depends on the correctness finding #1 (weekly stale offset bug), which is a false positive (see above). Since the code correctly handles the offset case, no regression test is needed. The existing tests in `weekly.stale.test.ts` adequately cover the stale detection behavior. Writing a test for a non-existent bug would be wasted effort.
+- Evidence: See rejection of correctness finding #1 above.
 
-### [LOW] Health endpoint test doesn't pass `db` parameter
-- File: `tests/api/server.integration.test.ts:30`
-- Original severity: LOW
-- Reason: **Acknowledged duplicate.** The finding's own "How" section says "Covered by the DB-failure path finding above." This is the same issue as the [MEDIUM] finding about missing 503 test coverage.
-
-### [MEDIUM] SQLite `getExistingAlertKeys()` has zero test coverage (sql-correctness.md)
-- File: `src/db/database.ts:235-243`
+### [MEDIUM] No regression test for daily stale warning showing false alarm on offset reports
+- Original file: `.audit/testing.md` finding #3
 - Original severity: MEDIUM
-- Reason: **Duplicate of testing.md finding #1.** Identical finding, same file reference, same recommendation. Should not be a separate finding.
-
-### [LOW] SQLite `recordAlert` check-then-insert is not atomic (sql-correctness.md)
-- File: `src/db/database.ts:246-268`
-- Original severity: LOW
-- Reason: **Duplicate of correctness.md finding #6.** Identical observation, same file reference, same conclusion ("safe only in single-process mode"). Should not be a separate finding.
-
----
+- Reason for rejection: This finding depends on the correctness finding #2 (daily stale warning offset), which is a false positive (see above). The daily stale warning uses `latestDataDay` by design — it warns about snapshot freshness, not historical data completeness. No "false alarm" exists because the warning is correctly reporting snapshot staleness. Writing a test to assert the audit's preferred behavior would conflict with the intentional design.
+- Evidence: See rejection of correctness finding #2 above.
 
 ## Downgraded Findings
 
-### [HIGH] `process.on('exit')` calls async `db.close()` without await
-- File: `src/index.ts:362`
-- Original: HIGH → New: MEDIUM
-- Reason: The code at line 362 does call `db.close()` synchronously in an exit handler, and this IS technically wrong for MySQL's async `pool.end()`. However, the `exit` handler only fires after `process.exit(1)` from the `uncaughtException` handler (line 41). The `cleanup` function (lines 352-358) properly `await`s `db.close()` for SIGINT/SIGTERM. The audit's own low-confidence notes acknowledge "data loss is already acceptable" for the uncaughtException path. On an exceptional crash path where the process is already dying, the OS reclaims sockets. This is a code hygiene issue, not a production data-loss risk.
-
-### [MEDIUM] `ts-node` may not load `qrcode-terminal.d.ts` ambient declaration
-- File: `src/types/qrcode-terminal.d.ts:1-3`
-- Original: MEDIUM → New: LOW
-- Reason: The finding is speculative — it depends on an unknown `ts-node` version. The `tsconfig.json` has `include: ["src/**/*"]` which covers the declaration file. The `await import('qrcode-terminal')` at `client.ts:217` is a dynamic import, and `ts-node` (≥10.7.0) respects `include` patterns. The `npm run dev:watch` command uses `--transpile-only` which skips type-checking entirely. Without being able to verify the installed `ts-node` version, this is a theoretical concern, not a confirmed bug.
-
-### [HIGH] `afterEach` does not `await` `db.close()` in 3 test files
-- Files: `scheduler.unit.test.ts:15-17`, `catchup-regression.test.ts:13-15`, `members.unit.test.ts:138-140`
-- Original: HIGH → New: LOW
-- Reason: The finding's core claim — "the auto-save `setInterval` timer inside `SqliteDatabase.close()` is async" — is incorrect for `:memory:` databases. Evidence: (1) The timer is only created for file-based databases (`database.ts:55`: `if (this.dbPath !== ':memory:')`), so `:memory:` databases have NO timer to be "stale." (2) `close()` at line 393-405 runs `clearInterval` synchronously, then for `:memory:` databases, skips `save()` entirely and calls `this.db.close()` (WASM, synchronous) then `this.db = null`. ALL operations in `close()` are synchronous for `:memory:` databases — the `async` keyword is purely for interface conformance. (3) Not awaiting a synchronous operation inside an `async` wrapper has zero functional impact. The finding's reasoning about "stale timer" and "write on a closed DB" is invalid for the test files in question. The suboptimal `afterEach` pattern is worth noting for correctness hygiene but carries no actual risk.
-
-### [HIGH] MySQL `VALUES()` function removed in MySQL 8.0.29+
-- File: `src/db/mysql-database.ts:276-281`
-- Original: HIGH → New: MEDIUM
-- Reason: The finding is technically correct — `VALUES()` was removed in MySQL 8.0.29. However, the project explicitly supports TiDB (AGENTS.md: "MySQL/TiDB adapter"), and TiDB still supports `VALUES()`. The docs at `docs/architecture.md:130` say "Supports MySQL 5.7+ and TiDB." MySQL 5.7 is EOL, but the `VALUES()` deprecation only affects MySQL 8.0.29+ (April 2023). For TiDB deployments, this is a non-issue. The severity should reflect that the impact depends on the deployment target. HIGH implies it's broken for everyone; MEDIUM accurately reflects that it's broken only for standard MySQL 8.0.29+ (not TiDB).
-
----
+### Non-newline message splitting underestimates marker overhead
+- Original severity: MEDIUM
+- New severity: LOW
+- Reason: The issue is real but affects only the non-default `splitAtNewline: false` path. The default newline-splitting path uses a fixed 20-char overhead estimate (`FIXED_MARKER_OVERHEAD`) and doesn't have this problem. The maximum overshoot is ~6 characters (marker digit difference). No WhatsApp message is likely to be a single line >4096 chars. The audit itself rates confidence as "MEDIUM (low practical impact; default config uses newline splitting)."
 
 ## Confirmed Findings
 
-### correctness.md
+### Security (3/3 confirmed)
+- `src/api/server.ts:123` — MEDIUM: API auth skipped when API_TOKEN unset (documented as accepted, but no startup warning)
+- `src/api/server.ts:125` — LOW: Bearer token non-constant-time comparison (localhost mitigates, but best-practice gap)
+- `src/whatsapp/admin.ts:40-49` — LOW: /setreq bypasses Zod validation before saveConfig (next hot-reload catches it, but disk corruption possible)
 
-| # | Severity | Title | File:line | Notes |
-|---|----------|-------|-----------|-------|
-| 1 | MEDIUM | `AlertEventRow.status` type says `'deduped'` but code uses `'suppressed'` | `src/types/index.ts:301` | Type is factually wrong. Code uses `'suppressed'` everywhere (alerts.ts:209, database.ts:229,240, mysql-database.ts:208,219). Latent — `AlertEventRow` isn't returned by `IDatabase`. |
-| 2 | MEDIUM | `config.ts` double-cast `as unknown as BotConfig` | `src/config.ts:147,156` | Both `getDefaultConfig()` and `validateConfig()` bypass type checking. Zod schema and `BotConfig` interface can drift silently. |
-| 3 | MEDIUM | `deduplicateAlerts` is dead code | `src/alerts/alerts.ts:226-234` | Zero callers confirmed via grep. Replaced by batch `getExistingAlertKeys` at line 171-173. |
-| 4 | LOW | SQLite `recordAlert` check-then-insert (TOCTOU) | `src/db/database.ts:246-268` | SELECT then INSERT without transaction. Safe in single-process mode. The audit's recommendation (add a documenting comment) is appropriate. |
+### Correctness (6/8 confirmed, 2 rejected)
+- `src/utils/format.ts:57-67` — LOW (downgraded from MEDIUM): Non-newline splitting marker overhead underestimate
+- `src/data/daily-fans.ts:335-336` — MEDIUM: computeTierData unguarded `snapshot.members[0]` access (callers guard, but function is unprotected)
+- `src/orchestrator/report-orchestrator.ts:107,125` — MEDIUM: alignSnapshotToMonth unguarded `snapshot.members[0]` access (caller guards at line 273)
+- `src/reports/stats.ts:87` — LOW: staleCount uses `status === 'stale'` which differs from rolling-window stale definition
+- `src/data/daily-fans.ts:259-273` + `src/reports/analyze.ts:39-45` — LOW: countActiveDays includes day 1 baseline as "active"
 
-### testing.md
+### Performance (4/4 confirmed)
+- `src/data/member-history.ts:30-63` — MEDIUM: N+1 queries in updateMemberHistory (startup-only, but real pattern)
+- `src/orchestrator/report-orchestrator.ts:197-214` — MEDIUM: Individual recordAlert + markAlertSent per alert in loop
+- `src/data/snapshot.ts:131-162` — LOW: loadMonthSnapshots reads all files when only latest needed
+- `src/utils/logger.ts:108-117` — LOW: Intl.DateTimeFormat recreated every log line
 
-| # | Severity | Title | File:line | Notes |
-|---|----------|-------|-----------|-------|
-| 5 | HIGH | SQLite `getExistingAlertKeys()` has no integration test | `tests/db/database.integration.test.ts` | grep confirms zero matches. Only tested via MySQL mocks and `makeMockDb`. Dynamic `IN` clause construction is untested for SQLite. |
-| 6 | MEDIUM | Health endpoint DB-failure path is not tested | `tests/api/server.integration.test.ts:30` | Server created without `db` param. No test exercises the 503 path when `getLastSuccessfulRun` throws. |
-| 7 | MEDIUM | MySQL tests don't cover pool connection failure | `tests/db/mysql-database.unit.test.ts` | `mockGetConnection` always resolves. No test for pool exhaustion or connection timeout. |
-| 8 | MEDIUM | `makeMockDb` does not type-check against `IDatabase` | `tests/_helpers/index.ts:198-217` | Returns plain object without `as unknown as IDatabase` assertion. Missing methods silently return `undefined`. |
-| 9 | LOW | 4 test files import `Database` alias | `scheduler.unit.test.ts:4`, `catchup-regression.test.ts:2`, `members.unit.test.ts:15`, `compute.unit.test.ts:11` | Alias at `database.ts:486-488` is marked for removal. These files will break when removed. |
-| 10 | LOW | MySQL tests use shared mock objects | `tests/db/mysql-database.unit.test.ts:3-27` | Module-level mocks shared across tests, reset in `beforeEach`. Current approach works but is fragile. |
-| 11 | LOW | No transaction test for concurrent callers | `database.integration.test.ts:456-493`, `mysql-database.unit.test.ts:636-698` | Both adapters test single transaction only. Low priority for current usage (only `updateMemberHistory` calls `transaction()`). |
+### Maintainability (10/10 confirmed)
+- `src/reports/registry.ts` + 5 other files — MEDIUM: Report type knowledge scattered across 6+ files
+- `src/db/database.ts:389-461` + `src/db/mysql-database.ts:202-447` — MEDIUM: Database adapter row mapping duplicated
+- `src/alerts/alerts.ts:35-203` — MEDIUM: detectAlerts 200 lines with repeated structural patterns
+- `src/whatsapp/dispatch.ts:54-61,88-96,273-282` — MEDIUM: Parameter threading explosion (7-9 params through 3 levels)
+- `src/scheduler/catchup.ts:179-304` — MEDIUM: executeCatchUp 125 lines with 3 divergent paths
+- `src/index.ts:59-82` — MEDIUM: configChanged manually compares schedule fields
+- `src/orchestrator/report-orchestrator.ts:146-166` — MEDIUM: generateReportString method name shadows imported function
+- `src/db/database.ts:105-112` + `src/db/mysql-database.ts:133-140` — LOW: settings table DDL exists with no IDatabase methods
+- `src/db/database.ts:464-466` — LOW: Database backward-compat aliases unused
+- `src/data/daily-fans.ts:211-220` — LOW: isStaleMember deprecated but still exported
 
-### sql-correctness.md
+### Testing (6/10 confirmed, 2 rejected, 2 downgraded already counted)
+- `tests/api/server.integration.test.ts:251` + `tests/api/server-auth.integration.test.ts:9` — HIGH: Port 18767 collision causes flaky test
+- `tests/scheduler/catchup-regression.test.ts:31,68,112` — MEDIUM: Unmocked `new Date()` makes tests date-dependent
+- `src/index.ts:132-198` — MEDIUM: Config hot-reload watcher untested (67 lines of branching logic)
+- `tests/orchestrator/report-orchestrator.unit.test.ts:353-357` — MEDIUM: Module-level detectAlerts mock masks behavior
+- `tests/scheduler/scheduler.unit.test.ts:226,244,331,374,399` — LOW: `as any` casts access private internals
+- `src/runtime.ts` — LOW: No dedicated test file for runtime.ts module
+- `tests/reports/e2e-output.test.ts:33` — LOW: Depends on config.yaml on disk
 
-| # | Severity | Title | File:line | Notes |
-|---|----------|-------|-----------|-------|
-| 12 | MEDIUM | MySQL `error_message VARCHAR(255)` truncation risk | `src/db/mysql-database.ts:89` | SQLite uses `TEXT`. MySQL strict mode rejects >255 char error messages, which would mask the original failure and break catch-up detection. |
-| 13 | MEDIUM | MySQL `settings.value VARCHAR(255)` latent truncation | `src/db/mysql-database.ts:74` | Table is unused but schema drift exists. If settings are ever implemented, MySQL strict mode truncation would be discovered only in production. |
-| 14 | LOW | `CREATE INDEX IF NOT EXISTS` fails on MySQL < 8.0.31 | `src/db/mysql-database.ts:133-135` | Added in MySQL 8.0.31 (Oct 2022). 3+ years old, widely deployed. TiDB supports it. Low risk unless targeting older MySQL. |
+## Unverifiable
 
-### POSITIVE (kept)
+None. All file:line references verified against actual source code.
 
-| # | Title | File:line |
-|---|-------|-----------|
-| P1 | Dynamic IN clause construction is correct and injection-safe | `database.ts:237-240`, `mysql-database.ts:216-219` |
-| P2 | UPSERT semantics are correctly mapped between engines | `database.ts:283-306`, `mysql-database.ts:269-293` |
-| P3 | Test suite has excellent DB lifecycle hygiene | `database.integration.test.ts:8-15` and others |
+## Notes on Over-Correction Filter
 
----
+The two rejected HIGH/MEDIUM correctness findings (weekly stale offset + daily stale warning) are classic examples of LLM over-correction bias:
 
-## Severity Distribution
+1. **Weekly stale offset**: The audit misread the parameter flow. The function `countConsecutiveZeroDaysAtEnd` iterates from its parameter (not from a hardcoded value). The parameter name `latestDataDay` is misleading, but the value flowing through is `viewedEndDay`. An LLM reading the parameter name without tracing the call chain concluded the code was wrong.
 
-| Severity | Original | After Challenge |
-|----------|----------|-----------------|
-| HIGH | 4 | 1 |
-| MEDIUM | 11 | 10 |
-| LOW | 8 | 7 |
-| POSITIVE | 3 | 3 |
-| REJECTED | 0 | 5 |
-
-The original audit over-reported severity. Four HIGH findings were downgraded:
-- Two (exit handler, VALUES()) are real issues but with limited blast radius
-- Two (afterEach, ts-node) have flawed reasoning or are speculative
+2. **Daily stale warning**: The audit proposed a behavioral change (suppress stale warning for historical queries) and framed it as a bug. The code has an explicit comment explaining the design choice. This is a preference difference, not a defect. The 26-73% over-correction rate documented in arXiv 2025 is visible here — the LLM "corrected" intentionally correct code.

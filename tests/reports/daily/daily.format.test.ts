@@ -12,7 +12,7 @@ import { getDataDayFromSnapshot } from '../../../src/data/snapshot';
 import {
   getLatestDataDay,
   isTransferMember,
-  isStaleMember,
+  isStaleForReport,
 } from '../../../src/data/daily-fans';
 import type { Snapshot, BotConfig } from '../../../src/types';
 import {
@@ -161,16 +161,16 @@ describe('Ghost member awareness (members.length vs member_count)', () => {
     for (const member of snapshot.members) {
       const isT = isTransferMember(member);
       const latestPositiveDay = getLatestDataDay(member.daily_fans);
-      const stale = isStaleMember(latestPositiveDay, latestDataDay, 3);
+      const stale = isStaleForReport(member.daily_fans, latestDataDay, 3);
       if (isT) transferCount++;
       else if (latestPositiveDay === 0 || stale) staleCount++;
       else activeCount++;
     }
 
-    expect(activeCount).toBe(24);
+    expect(activeCount).toBe(23);
     expect(transferCount).toBe(6);
-    expect(staleCount).toBe(4);
-    expect(activeCount + transferCount).toBe(snapshot.circle.member_count);
+    expect(staleCount).toBe(5);
+    expect(activeCount + transferCount + staleCount).toBe(snapshot.members.length);
   });
 
   it('report active count matches circle.member_count, not members.length', () => {

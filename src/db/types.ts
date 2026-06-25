@@ -71,10 +71,13 @@ export interface IDatabase {
   /** Check which of the given event keys already exist (batch query). */
   getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>>;
   recordAlert(alert: AlertEventInsert): Promise<number>;
+  recordAlerts(alerts: AlertEventInsert[]): Promise<number[]>;
   markAlertSent(id: number): Promise<void>;
+  markAlertsSent(ids: number[]): Promise<void>;
 
   // Members
   upsertMember(member: MemberHistoryInsert): Promise<void>;
+  upsertMembers(members: MemberHistoryInsert[]): Promise<void>;
   getMembers(circleId: number): Promise<MemberHistoryRow[]>;
   getMember(viewerId: number): Promise<MemberHistoryRow | null>;
 

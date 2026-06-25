@@ -22,6 +22,15 @@ import { getRuntimeStats, getUptimeMs, recordMessageParsed, recordMessageRespond
 import { getTargetMonth, getDataDateComponents } from '../utils/timezone';
 import { preFetchMonthlySnapshot } from '../scheduler/helpers';
 
+interface DispatchContext {
+  client: WhatsAppClient;
+  config: BotConfig;
+  db: IDatabase;
+  getSnapshot: () => Snapshot | null;
+  prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>;
+  onConfigUpdate?: (config: BotConfig) => void;
+}
+
 const REPORT_COMMANDS = new Set([
   'daily', 'weekly', 'monthly', 'ranks', 'bottom',
   'stats', 'members', 'tier', 'compare', 'analyze',
@@ -68,14 +77,21 @@ export function setupCommandHandler(
 
   client.onMessage(async (msg: IncomingMessage) => {
     try {
-      const config = getConfig();
-      await dispatchMessage(client, config, db, getSnapshot, msg, prefetchSnapshot, (updated) => {
-        if (isGetter) {
-          onConfigUpdate?.(updated);
-        } else {
-          localConfig = updated;
-        }
-      });
+      const ctx: DispatchContext = {
+        client,
+        config: getConfig(),
+        db,
+        getSnapshot,
+        prefetchSnapshot,
+        onConfigUpdate: (updated) => {
+          if (isGetter) {
+            onConfigUpdate?.(updated);
+          } else {
+            localConfig = updated;
+          }
+        },
+      };
+      await dispatchMessage(ctx, msg);
     } catch (error) {
       log.error('Dispatch', 'Error handling message', error);
     }
@@ -86,13 +102,8 @@ export function setupCommandHandler(
  * Core dispatch logic — extracted for testability.
  */
 async function dispatchMessage(
-  client: WhatsAppClient,
-  config: BotConfig,
-  db: IDatabase,
-  getSnapshot: () => Snapshot | null,
-  msg: IncomingMessage,
-  prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>,
-  onConfigUpdate?: (config: BotConfig) => void
+  ctx: DispatchContext,
+  msg: IncomingMessage
 ): Promise<void> {
   // Use || not ?? — protobuf-decoded messages have conversation:"" (empty string),
   // which ?? treats as non-nullish, short-circuiting before reaching extendedTextMessage.text
@@ -107,7 +118,7 @@ async function dispatchMessage(
     return;
   }
 
-  const parsed = parseCommand(text, config.commands.prefixes);
+  const parsed = parseCommand(text, ctx.config.commands.prefixes);
   if (!parsed) {
     log.debug('Dispatch', `No command prefix match for: "${text.slice(0, 80)}"`);
     return;
@@ -123,13 +134,13 @@ async function dispatchMessage(
   const chatJid = msg.key.remoteJid;
 
   // Access control — silently ignore unauthorized sources
-  if (!canUseCommand(parsed.command, senderJid, chatJid, config)) {
+  if (!canUseCommand(parsed.command, senderJid, chatJid, ctx.config)) {
     log.debug('Dispatch', `Access denied: /${parsed.command} sender=${senderJid} chat=${chatJid}`);
     return;
   }
 
   // Dispatch to report generator or admin handler
-  await generateAndSend(client, config, db, getSnapshot, parsed, chatJid, senderJid, prefetchSnapshot, onConfigUpdate);
+  await generateAndSend(ctx, parsed, chatJid, senderJid);
 }
 
 async function handlePingCommand(
@@ -195,20 +206,16 @@ async function handleAdminReferenceCommand(
 }
 
 async function handleReportCommand(
-  client: WhatsAppClient,
-  config: BotConfig,
-  db: IDatabase,
-  getSnapshot: () => Snapshot | null,
+  ctx: DispatchContext,
   parsed: { command: string; args: string[]; offset: number | null; raw: string },
-  chatJid: string,
-  prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>
+  chatJid: string
 ): Promise<void> {
   const { command, args, offset } = parsed;
 
-  const snapshot = getSnapshot();
+  const snapshot = ctx.getSnapshot();
   if (!snapshot) {
     const reply = '⚠️ Belum ada data. Tunggu sync berikutnya atau coba lagi nanti.';
-    await client.sendOrEdit(chatJid, null, reply);
+    await ctx.client.sendOrEdit(chatJid, null, reply);
     return;
   }
 
@@ -217,80 +224,72 @@ async function handleReportCommand(
 
   // Validate offset before sending loading message
   if (offset !== null) {
-    const maxOffset = command === 'daily' ? config.commands.maxDailyOffset
-      : command === 'weekly' ? config.commands.maxWeeklyOffset
-      : command === 'monthly' ? config.commands.maxMonthlyOffset
+    const maxOffset = command === 'daily' ? ctx.config.commands.maxDailyOffset
+      : command === 'weekly' ? ctx.config.commands.maxWeeklyOffset
+      : command === 'monthly' ? ctx.config.commands.maxMonthlyOffset
       : null;
     if (maxOffset !== null && Math.abs(offset) > maxOffset) {
       const reply = `Batas offset untuk /${command} adalah ${maxOffset}.`;
-      await client.sendOrEdit(chatJid, null, reply);
+      await ctx.client.sendOrEdit(chatJid, null, reply);
       return;
     }
   }
 
-  loadingMsgId = await client.sendOrEdit(chatJid, null, pickLoadingMessage());
+  loadingMsgId = await ctx.client.sendOrEdit(chatJid, null, pickLoadingMessage());
 
   // Pre-fetch target month for /monthly with offset > 0
-  if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && prefetchSnapshot) {
-    await preFetchMonthlySnapshot(prefetchSnapshot, offset, `/monthly ${offset}`);
+  if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && ctx.prefetchSnapshot) {
+    await preFetchMonthlySnapshot(ctx.prefetchSnapshot, offset, `/monthly ${offset}`);
   }
 
   let report: string;
   try {
-    report = await generateReport(command, args, offset, snapshot, config, db);
+    report = await generateReport(command, args, offset, snapshot, ctx.config, ctx.db);
   } catch (err) {
     log.error('Dispatch', `Report generation failed for /${command}`, err);
-    await client.sendOrEdit(chatJid, loadingMsgId, '⚠️ Gagal memproses laporan. Coba lagi.');
+    await ctx.client.sendOrEdit(chatJid, loadingMsgId, '⚠️ Gagal memproses laporan. Coba lagi.');
     return;
   }
-  await client.sendOrEdit(chatJid, loadingMsgId, report);
+  await ctx.client.sendOrEdit(chatJid, loadingMsgId, report);
 }
 
 async function handleAdminCommand(
-  client: WhatsAppClient,
+  ctx: DispatchContext,
   command: string,
   args: string[],
-  config: BotConfig,
-  db: IDatabase,
-  chatJid: string,
-  onConfigUpdate?: (config: BotConfig) => void
+  chatJid: string
 ): Promise<void> {
-  const result = await processAdminCommand(command, args, config, db);
+  const result = await processAdminCommand(command, args, ctx.config, ctx.db);
 
   // Admin commands that modify config already wrote to config.yaml via saveConfig().
   // Update in-memory config immediately; the watcher will also detect the file change.
-  if (typeof result === 'object' && 'config' in result && onConfigUpdate) {
-    onConfigUpdate(result.config);
+  if (typeof result === 'object' && 'config' in result && ctx.onConfigUpdate) {
+    ctx.onConfigUpdate(result.config);
   }
 
   const message = typeof result === 'string' ? result : result.message;
-  await client.sendOrEdit(chatJid, null, message);
+  await ctx.client.sendOrEdit(chatJid, null, message);
 }
 
 /**
  * Route a parsed command to the appropriate handler.
  */
 async function generateAndSend(
-  client: WhatsAppClient,
-  config: BotConfig,
-  db: IDatabase,
-  getSnapshot: () => Snapshot | null,
+  ctx: DispatchContext,
   parsed: { command: string; args: string[]; offset: number | null; raw: string },
   chatJid: string,
-  senderJid: string,
-  prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>,
-  onConfigUpdate?: (config: BotConfig) => void
+  senderJid: string
 ): Promise<void> {
   const { command, args } = parsed;
 
-  if (command === 'ping') return handlePingCommand(client, chatJid);
-  if (command === 'help') return handleHelpCommand(client, chatJid, senderJid, config);
-  if (command === 'admin') return handleAdminReferenceCommand(client, chatJid);
-  if (REPORT_COMMANDS.has(command)) return handleReportCommand(client, config, db, getSnapshot, parsed, chatJid, prefetchSnapshot);
-  if (ADMIN_COMMANDS.has(command)) return handleAdminCommand(client, command, args, config, db, chatJid, onConfigUpdate);
+  if (command === 'ping') return handlePingCommand(ctx.client, chatJid);
+  if (command === 'help') return handleHelpCommand(ctx.client, chatJid, senderJid, ctx.config);
+  if (command === 'admin') return handleAdminReferenceCommand(ctx.client, chatJid);
+  if (REPORT_COMMANDS.has(command)) return handleReportCommand(ctx, parsed, chatJid);
+  if (ADMIN_COMMANDS.has(command)) return handleAdminCommand(ctx, command, args, chatJid);
 
   // Unknown command
-  await client.sendOrEdit(chatJid, null, `❌ Perintah /${command} tidak dikenal. Coba /help untuk lihat daftar.`);
+  await ctx.client.sendOrEdit(chatJid, null, `❌ Perintah /${command} tidak dikenal. Coba /help untuk lihat daftar.`);
 }
 
 /**

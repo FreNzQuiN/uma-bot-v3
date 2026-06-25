@@ -1,51 +1,61 @@
 /**
- * Tests for isStaleMember.
+ * Tests for isStaleForReport.
  *
  * Split from tests/data/daily-fans.unit.test.ts
  */
 
-import { isStaleMember } from '../../src/data/daily-fans';
+import { isStaleForReport } from '../../src/data/daily-fans';
 
-describe('isStaleMember', () => {
-  it('returns false when latestPositiveDay equals latestDataDay', () => {
-    expect(isStaleMember(11, 11, 3)).toBe(false);
+describe('isStaleForReport', () => {
+  it('returns false when threshold is 0 (disabled)', () => {
+    expect(isStaleForReport([100, 200, 300], 3, 0)).toBe(false);
   });
 
-  it('returns false when latestPositiveDay is 1 less than latestDataDay', () => {
-    expect(isStaleMember(10, 11, 3)).toBe(false);
+  it('returns false when threshold is negative', () => {
+    expect(isStaleForReport([100, 200, 300], 3, -1)).toBe(false);
   });
 
-  it('returns false when gap is less than staleAfterDays', () => {
-    // latestPositiveDay=9, latestDataDay=11, staleAfterDays=3 → gap=2 < 3
-    expect(isStaleMember(9, 11, 3)).toBe(false);
+  it('returns false when latestDataDay is 0', () => {
+    expect(isStaleForReport([], 0, 3)).toBe(false);
   });
 
-  it('returns true when gap equals staleAfterDays', () => {
-    // latestPositiveDay=8, latestDataDay=11, staleAfterDays=3 → gap=3 >= 3
-    expect(isStaleMember(8, 11, 3)).toBe(true);
+  it('returns false when all days have positive gain', () => {
+    // Day 3: 300-200=100 > 0 → break, count=0
+    expect(isStaleForReport([100, 200, 300], 3, 3)).toBe(false);
   });
 
-  it('returns true when gap exceeds staleAfterDays', () => {
-    // latestPositiveDay=5, latestDataDay=11, staleAfterDays=3 → gap=6 >= 3
-    expect(isStaleMember(5, 11, 3)).toBe(true);
+  it('returns true when consecutive zero-gain days equal threshold', () => {
+    // Days: [100, 200, 200, 200]
+    // Day 4 gain: 200-200=0, day 3 gain: 200-200=0, day 2 gain: 200-100=100 > 0 → break
+    // count=2, threshold=2
+    expect(isStaleForReport([100, 200, 200, 200], 4, 2)).toBe(true);
   });
 
-  it('returns true when latestPositiveDay is 0 (no positive data)', () => {
-    expect(isStaleMember(0, 11, 3)).toBe(true);
+  it('returns true when consecutive zero-gain days exceed threshold', () => {
+    // Days: [100, 200, 200, 200, 200]
+    // Day 5: 0, day 4: 0, day 3: 0, day 2: 100 > 0 → break
+    // count=3, threshold=2
+    expect(isStaleForReport([100, 200, 200, 200, 200], 5, 2)).toBe(true);
   });
 
-  it('uses default staleAfterDays=3 when not provided', () => {
-    expect(isStaleMember(8, 11)).toBe(true); // gap=3
-    expect(isStaleMember(9, 11)).toBe(false); // gap=2
+  it('handles gap with non-positive previous value', () => {
+    // Days: [100, 200, 0, 300]
+    // Day 4 current=300 positive, previous=0 not positive → gain=0
+    // Day 3 current=0 not positive → gain=0
+    // Day 2 gain=200-100=100 > 0 → break
+    // count=2, threshold=2
+    expect(isStaleForReport([100, 200, 0, 300], 4, 2)).toBe(true);
   });
 
-  it('returns true when staleAfterDays is 0 (any gap or same-day is stale)', () => {
-    // staleAfterDays=0 → latestPositiveDay <= latestDataDay - 0 → always stale
-    expect(isStaleMember(11, 11, 0)).toBe(true);  // 11 <= 11
-    expect(isStaleMember(10, 11, 0)).toBe(true);  // 10 <= 11
+  it('returns false when gap is smaller than threshold', () => {
+    // Days: [100, 200, 200, 300]
+    // Day 4 gain=300-200=100 > 0 → break, count=0
+    expect(isStaleForReport([100, 200, 200, 300], 4, 3)).toBe(false);
   });
 
-  it('returns false when staleAfterDays is very large', () => {
-    expect(isStaleMember(0, 11, 100)).toBe(false);
+  it('returns true when all values are identical for many days', () => {
+    // All same → all gains are 0 → count = numberOfDays-1 (day 1 has no gain)
+    // 10 values: days 2-10 all gain=0 → count=9
+    expect(isStaleForReport(new Array(10).fill(1000), 10, 9)).toBe(true);
   });
 });

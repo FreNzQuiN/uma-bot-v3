@@ -211,7 +211,7 @@ export function isTransferMember(member: {
  * @deprecated Use isStaleForReport for production stale detection.
  *   This function is kept for test compatibility only.
  */
-export function isStaleMember(
+function isStaleMember(
   latestPositiveDay: number,
   latestDataDay: number,
   staleAfterDays: number = 3

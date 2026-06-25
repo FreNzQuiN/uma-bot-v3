@@ -1,125 +1,98 @@
 # Testing Audit Findings
 
 ## Summary
-
-12 findings: 0 CRITICAL, 2 HIGH, 5 MEDIUM, 5 LOW, 1 POSITIVE
-
----
+10 findings: 0 CRITICAL, 2 HIGH, 5 MEDIUM, 3 LOW
 
 ## Findings
 
-### [HIGH] SQLite `getExistingAlertKeys()` has no integration test
-- File: `tests/db/database.integration.test.ts` (entire file)
-- What: The SQLite adapter's `getExistingAlertKeys` method at `src/db/database.ts:235-243` has zero direct integration test coverage. This is the only `IDatabase` method without a SQLite integration test.
-- Why: This method constructs a dynamic `IN` clause with variable placeholders from an array of strings, then maps rows to a `Set`. A bug in placeholder generation (e.g., off-by-one, trailing comma) or row mapping would go undetected for SQLite deployments. The alerts system (`src/alerts/alerts.ts:171-173`) calls this on every alert detection cycle.
-- How: Add an integration test in `tests/db/database.integration.test.ts` covering: (1) empty input returns empty set, (2) batch of 3 keys where 1 exists as "sent" returns that key, (3) keys with "pending" status are NOT included, (4) keys with "suppressed" status ARE included. Mirror the MySQL mock tests at `mysql-database.unit.test.ts:517-539`.
+### [HIGH] Port conflict causes flaky test failure between server integration tests
+- File: `tests/api/server.integration.test.ts:251` and `tests/api/server-auth.integration.test.ts:9`
+- What: Both test files use port 18767 — `FAIL_DB_PORT = 18767` in server.integration.test.ts and `PORT = 18767` in server-auth.integration.test.ts. When Jest runs them in the same worker, the second server fails to bind with `EADDRINUSE`, causing a test failure observed during this review.
+- Why: The test suite currently has 1 flaky failure (1/1632 tests). This erodes confidence in CI and masks real regressions. The error message (`listen EADDRINUSE: address already in use 127.0.0.1:18767`) is non-obvious, making it hard for contributors to diagnose.
+- How: Change `FAIL_DB_PORT` in `tests/api/server.integration.test.ts:251` to a unique port (e.g., `18769`) that doesn't collide with any other test file. Alternatively, use port `0` for all test servers to let the OS assign free ports dynamically.
 - Confidence: HIGH
 
-### [HIGH] `afterEach` does not `await` `db.close()` in 3 test files
-- File: `tests/scheduler/scheduler.unit.test.ts:15-17`
-- File: `tests/scheduler/catchup-regression.test.ts:13-15`
-- File: `tests/reports/members.unit.test.ts:138-140`
-- What: These files use `afterEach(() => { db.close(); })` without `async`/`await`. Since `close()` returns a `Promise`, the connection teardown is fire-and-forget — it may not complete before the next test's `beforeEach` runs.
-- Why: With `:memory:` SQLite databases, the in-memory DB is GC'd so data doesn't leak between tests. But the auto-save `setInterval` timer inside `SqliteDatabase.close()` is async. If `close()` hasn't finished when the next test starts, a stale timer could trigger a write on a closed DB, causing non-deterministic test flakiness. Under high parallelism or slow CI, this becomes intermittent failures.
-- How: Change to `afterEach(async () => { await db.close(); })` in all three files, matching the pattern used by `database.integration.test.ts`, `alerts.unit.test.ts`, `member-history.unit.test.ts`, and `left-members.unit.test.ts`.
+### [HIGH] No regression test for weekly/monthly stale detection offset bug
+- File: `tests/reports/weekly/weekly.stale.test.ts` (entire file)
+- What: The correctness audit found a HIGH-severity bug where `isStaleForReport` uses the snapshot's latest data day instead of the viewed week's end day when computing stale zero-gain counts for offset reports (`/weekly -1`). No test in the suite exercises this code path — `weekly.stale.test.ts` only tests `offset=0` and one `offset=1` case that checks stale warning text, not stale member sections.
+- Why: The bug silently produces incorrect stale member lists for any weekly or monthly report viewed with a non-zero offset. Without a regression test, the fix (when applied) cannot be verified, and the bug could re-emerge.
+- How: Add a test in `tests/reports/weekly/weekly.stale.test.ts` that constructs a snapshot where a member was active in week N but inactive in week N+1. Call `generateWeeklyReport` with `offset=-1` and verify the stale section reflects week N's activity, not the full month tail. Same pattern needed for `tests/reports/monthly/monthly.stale.test.ts`.
 - Confidence: HIGH
 
-### [MEDIUM] Health endpoint DB-failure path is not tested
-- File: `tests/api/server.integration.test.ts:29-32` (server creation without `db`)
-- What: The server is instantiated as `new ApiServer(PORT, () => SNAPSHOT, config)` — without passing a `db` parameter. The health handler at `src/api/server.ts:216` checks `if (this.db)` and skips the DB ping when no DB is provided. There is no test for the case where `db` IS provided but `getLastSuccessfulRun` throws (which should return 503).
-- Why: The async health check (`await this.db.getLastSuccessfulRun('_health_check')`) was introduced as part of the DB refactor. If this throws and the try/catch is broken, the health endpoint would crash with an unhandled error instead of returning 503. No test guards this behavior.
-- How: Add a test case that constructs an `ApiServer` with a mock `db` where `getLastSuccessfulRun` rejects, then verifies `/health` returns status 503 with `dbConnected: false`.
+### [MEDIUM] No regression test for daily stale warning showing false alarm on offset reports
+- File: `tests/reports/daily/daily.stale.test.ts`
+- What: The daily stale test file tests stale warnings for `offset=0`, `offset=1`, and `offset=2`, but all three cases assert the stale warning IS present. None of the tests verify the correctness bug where `offset > 0` reports incorrectly show "Data mungkin tidak terbaru" for historical days that have complete data.
+- Why: When the bug fix is applied (using `adjustedDataDay` instead of `latestDataDay`), there's no test to verify that offset reports no longer show false staleness warnings. The existing tests would need to be updated too.
+- How: Add a test case: mock the current date to June 15, use the real snapshot (data through day 11), and verify that `generateDailyReport(snapshot, config, members, -3)` (viewing day 12) does NOT show the stale warning. This requires modifying `makeSnapshotWithLatestDay` or using a different snapshot construction.
 - Confidence: HIGH
 
-### [MEDIUM] MySQL tests don't cover pool connection failure or rejection
-- File: `tests/db/mysql-database.unit.test.ts` (entire file)
-- What: The mock pool always resolves `getConnection` successfully. No test verifies behavior when the pool cannot provide a connection (e.g., pool exhaustion, connection timeout).
-- Why: In production, `pool.getConnection()` can reject under load. The MySQL adapter's `transaction()` method calls `this.pool.getConnection()` at `src/db/mysql-database.ts:380` — if this rejects, the error propagates but no test confirms the error is clean (no leaked state, no hung promise).
-- How: Add a test case: `mockGetConnection.mockRejectedValueOnce(new Error('Pool exhausted'))`, then verify `db.transaction()` rejects and `db.getLastSuccessfulRun()` still works afterward (connection not leaked).
+### [MEDIUM] Catch-up regression tests use unmocked `new Date()` making them date-dependent
+- File: `tests/scheduler/catchup-regression.test.ts:31,68,112`
+- What: Three tests in `catchup-regression.test.ts` call `new Date()` to get the current day for computing "last weekly run" and "last monthly run" dates. Unlike other test files that use `mockCurrentDate()` from `_helpers`, these tests operate against the real system clock.
+- Why: The tests could produce different results depending on when they run. If run on day 29-31, the "most recent weekly scheduled day" calculation may behave differently than on day 8. On day 1, the monthly test's `if (todayDay >= 1)` guard is always true but still adds unnecessary conditional logic.
+- How: Use `mockCurrentDate(2026, 6, 15)` from `tests/_helpers` instead of `new Date()` to make tests deterministic. This also eliminates the need for the `if (todayDay >= ...)` guards.
 - Confidence: MEDIUM
 
-### [MEDIUM] `makeMockDb` does not type-check against `IDatabase`
-- File: `tests/_helpers/index.ts:198-217`
-- What: `makeMockDb()` returns a plain object that must match all 15 `IDatabase` methods. If a method is added to `IDatabase` but not added to `makeMockDb()`, the test will compile but the mock silently returns `undefined` for the new method instead of failing at type-check time.
-- Why: The current 15/15 match is correct, but this is fragile. A future PR that adds a method to `IDatabase` (e.g., `getSettings()`) would break all consumer code using the mock without any compile error.
-- How: Add a type assertion: `return { ... } as unknown as IDatabase;` — this ensures `makeMockDb` is checked against the interface at compile time. If a method is missing, TypeScript will error.
+### [MEDIUM] Config hot-reload watcher is untested
+- File: `src/index.ts:132-198`
+- What: The config hot-reload mechanism (5-second mtime polling, content hash comparison, config reload, scheduler restart) has zero test coverage. This is approximately 67 lines of code with non-trivial branching (schedule diff detection, error handling).
+- Why: A bug in the watcher could cause the bot to silently ignore config changes or crash on malformed YAML. Since the watcher is the only way to change configuration at runtime (other than restart), this is a meaningful gap.
+- How: Create `tests/config-watcher.unit.test.ts` with mocked `fs.watchFile`/`fs.statSync` to verify: (1) config reloads when mtime changes, (2) scheduler restarts when schedule config changes, (3) no restart when non-schedule config changes, (4) error logging when YAML is invalid.
 - Confidence: MEDIUM
 
-### [MEDIUM] MySQL mock doesn't simulate `INSERT IGNORE` returning `affectedRows: 0`
-- File: `tests/db/mysql-database.unit.test.ts:542-565`
-- What: The `recordAlert` test for the duplicate path returns `callCount === 1` as `[{}, undefined]`, simulating a successful INSERT. The MySQL `INSERT IGNORE` actually returns `affectedRows: 0` when a duplicate is silently skipped. The mock doesn't differentiate between an insert and a skip.
-- Why: The adapter code at `src/db/mysql-database.ts:232-254` checks `result.affectedRows > 0` to decide whether to call `LAST_INSERT_ID()`. If the mock always returns `{}`, the test always takes the "insert succeeded" path. A bug where `affectedRows` is incorrectly checked would go undetected.
-- How: For the duplicate case, return `[{ affectedRows: 0, insertId: 0 }, undefined]` instead of `[{}, undefined]`. This forces the code into the fallback SELECT path, which is the actual code path for duplicates.
+### [MEDIUM] Orchestrator unit test mocks detectAlerts at module level, masking behavior
+- File: `tests/orchestrator/report-orchestrator.unit.test.ts:353-357`
+- What: The `detectAlerts` mock is declared at module scope (line 353: `const mockDetectAlerts = jest.fn().mockResolvedValue([])`) with `jest.mock` at line 354. This applies to ALL tests in the file, including `deliverReport`, `deliverAlerts`, `generateReportString`, and `generateCombinedReport` describe blocks that run before the mock setup at line 352.
+- Why: While the mock defaults to returning `[]` (harmless for most tests), it makes it impossible to test `sendReport` end-to-end with real alert detection. Any future test that accidentally relies on real `detectAlerts` behavior will silently get the mocked version.
+- How: Move the `jest.mock` and mock variable to a nested `describe('processAlertsForReport')` block, or use `jest.spyOn` on a per-test basis for better isolation. Alternatively, document explicitly that all tests in this file use the mock.
 - Confidence: MEDIUM
 
-### [LOW] 4 test files import `Database` alias — will break when removed
-- File: `tests/scheduler/scheduler.unit.test.ts:4`
-- File: `tests/scheduler/catchup-regression.test.ts:2`
-- File: `tests/reports/members.unit.test.ts:15`
-- File: `tests/reports/compute.unit.test.ts:11`
-- What: These files import `Database` (the backward-compat alias) instead of `SqliteDatabase` from `src/db/database`. The alias at `src/db/database.ts:486-488` is marked for removal.
-- Why: When the alias is removed, all 4 files will fail to compile. The comment on the alias says "will be removed once all consumers migrate to IDatabase" but these tests need concrete instances, not the interface.
-- How: Replace `import { Database } from '../../src/db/database'` with `import { SqliteDatabase } from '../../src/db/database'` and update all `new Database(':memory:')` calls to `new SqliteDatabase(':memory:')`.
+### [LOW] Scheduler tests access private internals via `as any` casts
+- File: `tests/scheduler/scheduler.unit.test.ts:226,244,331,374,399`
+- What: Five test cases access `(scheduler as any).recordAndSend` to invoke private methods. This creates tight coupling to the Scheduler class's internal structure.
+- Why: If `recordAndSend` is renamed or refactored, all five tests break even if the public behavior is unchanged. The `as any` cast also suppresses TypeScript checks, hiding potential type mismatches.
+- How: Either expose `recordAndSend` as a public (or `@internal`) method if it's intentionally testable, or test through the public `start()` API by triggering the cron callback. The existing `detectCollision` tests already use the public API correctly.
+- Confidence: MEDIUM
+
+### [LOW] No test for runtime.ts module-level singleton
+- File: `src/runtime.ts` (93 lines, no corresponding test file in `tests/`)
+- What: `runtime.ts` tracks uptime, reconnect count, and message counts via module-level mutable state. Despite being a leaf module with no dependencies, it has zero dedicated tests.
+- Why: While the module is simple (93 lines, mostly getters/setters), the `trackReconnect()` and `trackMessage()` functions mutate shared state. A regression in the getter pattern (e.g., shallow-copy returning a stale reference) would go undetected.
+- How: Create `tests/utils/runtime.unit.test.ts` testing: (1) `getStats()` returns expected initial values, (2) `trackReconnect()` increments counter, (3) `trackMessage()` increments counter, (4) `getStats()` returns a copy (not a reference to internal state).
+- Confidence: MEDIUM
+
+### [LOW] e2e-output.test.ts depends on config.yaml existing on disk
+- File: `tests/reports/e2e-output.test.ts:33`
+- What: The test calls `loadConfig()` which reads `config.yaml` from the project root. If the file doesn't exist (fresh clone, CI environment), it falls back to defaults. This means the "actual formatted output" tests are actually testing against default config, not the production config.
+- Why: If a production config has different values (e.g., different `requirements.monthlyFans`, different `message` settings), the e2e output would differ between dev and CI environments. The golden-inline tests use `makeConfig()` (defaults), which is more reliable.
+- How: Replace `loadConfig()` with `getDefaultConfig()` in `beforeAll` to make the test deterministic and CI-friendly, or use `makeConfig()` from `_helpers` for consistency with golden-inline tests.
+- Confidence: LOW
+
+### [POSITIVE] Exceptional test infrastructure and coverage breadth
+- File: `tests/_helpers/index.ts` (221 lines), `tests/` (67 suites, 1632 tests)
+- What: The test suite demonstrates exceptional quality: shared helpers eliminate duplication, tests mirror source structure, regression tests are co-located with bug history, golden-inline snapshots catch formatting regressions, 56 adversarial fuzz inputs test security boundaries, and coverage exceeds all thresholds (84% statements, 70% branches, 83% functions).
+- Why: This is a textbook test architecture for a medium-sized Node.js project. The consistent patterns (real fixture snapshot, mock DB for unit tests, real SQLite for integration, port-isolated API servers) show deliberate design. The regression test naming convention (`*-regression.test.ts`) with bug context in descriptions makes it easy to understand what each test prevents.
+- How: Maintain this standard. The only structural improvement would be adding the missing regression tests identified in this audit.
 - Confidence: HIGH
-
-### [LOW] MySQL tests use shared mock objects across test cases
-- File: `tests/db/mysql-database.unit.test.ts:3-27`
-- What: `mockConn`, `mockPool`, and all `mock*` functions are module-level constants shared across all test cases. They're reset in `beforeEach` via `.mockReset()`, but the object structure itself is shared.
-- Why: If a test accidentally mutates the mock structure (e.g., adds a property), it affects all subsequent tests. The current tests don't do this, but it's a latent risk. The `resetMocks: true` Jest config (if used) could also interfere.
-- How: Low priority — the current approach works. Consider moving mock creation into `beforeEach` for stronger isolation if flaky tests emerge.
-- Confidence: LOW
-
-### [LOW] No test verifies `compute.unit.test.ts` Database import is used
-- File: `tests/reports/compute.unit.test.ts:11`
-- What: `compute.unit.test.ts` imports `Database` from the database module. It's used at line 375-378 for left-member testing. The import exists but the test section using it is deeply nested.
-- Why: Minimal risk — the import IS used. But if the `Database` alias is removed, this file breaks. Already covered by the broader alias finding.
-- How: Addressed by the alias migration finding above.
-- Confidence: LOW
-
-### [LOW] No transaction test for concurrent callers
-- File: `tests/db/database.integration.test.ts:456-493`, `tests/db/mysql-database.unit.test.ts:636-698`
-- What: Both adapter test suites verify that a single `transaction()` call commits or rolls back correctly. Neither tests what happens when two `transaction()` calls overlap.
-- Why: In SQLite, `transaction()` uses `BEGIN EXCLUSIVE` which blocks concurrent writers. In MySQL, `transaction()` pins a connection from the pool. If two callers run transactions simultaneously, the second could deadlock or timeout. Current production usage (only `updateMemberHistory` calls `transaction()`) makes concurrent transactions unlikely, but the behavior is untested.
-- How: Low priority for current usage. If the codebase starts using `transaction()` from multiple async call sites, add concurrent transaction tests.
-- Confidence: LOW
-
-### [LOW] Health endpoint test doesn't pass `db` parameter
-- File: `tests/api/server.integration.test.ts:30`
-- What: The test creates `new ApiServer(PORT, () => SNAPSHOT, config)` without the optional `db` parameter. The health check at `src/api/server.ts:216-218` therefore skips DB pinging entirely (`if (this.db)` is false).
-- Why: The happy-path health check works, but the new async DB health check path is never exercised in the integration test. This is already covered by the [MEDIUM] finding above about the missing 503 test.
-- How: Covered by the DB-failure path finding above.
-- Confidence: LOW
-
-### [POSITIVE] Test suite has excellent DB lifecycle hygiene
-- File: `tests/db/database.integration.test.ts:8-15`, `tests/alerts/alerts.unit.test.ts:12-19`, `tests/data/member-history.unit.test.ts:11-18`, `tests/data/left-members.unit.test.ts:14-21`
-- What: Most test files using real `SqliteDatabase` instances follow the correct `beforeEach` (create + initialize) / `afterEach` (close) pattern with `:memory:` databases. This ensures test isolation — each test gets a fresh, isolated in-memory database.
-- Why: This pattern prevents data leakage between tests and ensures no test depends on another's side effects. The persistence tests correctly use try/finally for file-based DBs. This is a well-structured test foundation.
-- How: The 3 files flagged in the async close finding should align with this established pattern.
-- Confidence: HIGH
-
----
 
 ## Modules Reviewed
-
-- **tests/db/database.integration.test.ts**: 1 finding (getExistingAlertKeys gap)
-- **tests/db/database-regression.test.ts**: clean
-- **tests/db/mysql-database.unit.test.ts**: 2 findings (pool failure, affectedRows mock)
-- **tests/alerts/alerts.unit.test.ts**: clean
-- **tests/alerts/alerts-regression.test.ts**: clean
-- **tests/data/member-history.unit.test.ts**: clean
-- **tests/data/left-members.unit.test.ts**: clean
-- **tests/scheduler/scheduler.unit.test.ts**: 1 finding (async close)
-- **tests/scheduler/catchup-regression.test.ts**: 1 finding (async close)
-- **tests/orchestrator/report-orchestrator.unit.test.ts**: clean
-- **tests/reports/members.unit.test.ts**: 1 finding (async close, Database alias)
-- **tests/reports/compute.unit.test.ts**: 1 finding (Database alias)
-- **tests/reports/e2e-output.test.ts**: clean
-- **tests/reports/e2e-output-regression.test.ts**: clean
-- **tests/reports/golden-inline.test.ts**: clean
-- **tests/_helpers/index.ts**: 1 finding (type assertion for makeMockDb)
-- **tests/api/server.integration.test.ts**: 2 findings (no DB param, no 503 test)
+- Reports (daily, weekly, monthly, ranks, bottom, stats, members, tier, compare, analyze, combined): 2 findings (missing stale offset regression tests)
+- Database (SQLite integration, MySQL unit): clean — thorough coverage of both adapters
+- Alerts (detection, formatting, dedup, quiet hours): clean — excellent edge case coverage
+- Scheduler (collision detection, cron expressions, double-send guard): clean
+- Catch-up (detection, execution, maxReportsPerStartup, collision grouping): 1 finding (date-dependent tests)
+- WhatsApp (dispatch, fuzz, commands, access, admin): clean — fuzz testing is exemplary
+- Orchestrator (deliver, alert processing, sendReport): 1 finding (module-level mock)
+- API (server integration, auth integration): 1 finding (port conflict)
+- Data layer (snapshot I/O, daily fans arithmetic, ensure-snapshot): clean
+- Config (validation, defaults, update, save): clean
+- Utils (format, timezone, logger): clean
+- Helpers (shared test utilities): clean — well-designed
 
 ## Low-Confidence Notes
 
-- The MySQL mock's `mockConnQuery` is shared between transaction-internal queries and non-transaction queries. If a future test needs to distinguish between pool-level and connection-level queries, the current shared mock may not differentiate correctly.
-- `scheduler.unit.test.ts:229` accesses `(scheduler as any).recordAndSend` — this private-access pattern couples tests to implementation details. If `recordAndSend` is renamed or refactored, the test breaks silently (no compile error due to `as any`).
+- [tests/reports/e2e-output.test.ts:80] The test file includes a `generateRanksReport` assertion against 4096-char limit. With the real snapshot (34 members), ranks report is typically short. But with a hypothetical 100+ member club, it could exceed the limit. No test verifies this upper bound.
+
+- [tests/whatsapp/dispatch.test.ts:100] The dispatch tests mock the snapshot but use real `computeMembers`. This is a reasonable boundary, but it means dispatch tests don't catch bugs in `computeMembers` that would affect the dispatch flow. The compute module has its own thorough tests, so this is acceptable.
+
+- [tests/db/mysql-database.unit.test.ts] All MySQL tests are fully mocked (no real MySQL server). This is expected for CI but means MySQL-specific SQL syntax is only tested structurally (string matching), not semantically (actual execution). The SQLite integration tests serve as the semantic correctness baseline.

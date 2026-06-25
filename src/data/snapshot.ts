@@ -133,32 +133,18 @@ export function loadMonthSnapshots(
   month: number,
   rootDir: string = process.cwd()
 ): Snapshot[] {
-  const monthDir = path.join(
-    rootDir,
-    SNAPSHOTS_DIR,
-    String(year),
-    String(month).padStart(2, '0')
-  );
+  const monthDir = path.join(rootDir, SNAPSHOTS_DIR, String(year), String(month).padStart(2, '0'));
+  if (!fs.existsSync(monthDir)) return [];
 
-  if (!fs.existsSync(monthDir)) {
-    return [];
-  }
+  const files = fs.readdirSync(monthDir).filter((f) => f.endsWith('.json')).sort();
+  if (files.length === 0) return [];
 
-  const files = fs.readdirSync(monthDir)
-    .filter((f) => f.endsWith('.json'))
-    .sort(); // ascending by filename = ascending by day
-
-  const snapshots: Snapshot[] = [];
-  for (const file of files) {
-    const day = file.replace('.json', '');
-    const dataDay = `${year}-${String(month).padStart(2, '0')}-${day}`;
-    const snap = loadSnapshot(dataDay, rootDir);
-    if (snap) {
-      snapshots.push(snap);
-    }
-  }
-
-  return snapshots;
+  // Only read the latest snapshot — callers only use the last element
+  const latestFile = files[files.length - 1];
+  const day = latestFile.replace('.json', '');
+  const dataDay = `${year}-${String(month).padStart(2, '0')}-${day}`;
+  const snap = loadSnapshot(dataDay, rootDir);
+  return snap ? [snap] : [];
 }
 
 /**

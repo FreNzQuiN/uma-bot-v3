@@ -1,110 +1,126 @@
 # Correctness Audit Findings
 
 ## Summary
-6 findings: 0 CRITICAL, 1 HIGH, 4 MEDIUM, 1 LOW
+8 findings: 0 CRITICAL, 1 HIGH, 5 MEDIUM, 2 LOW
 
 ## Findings
 
-### [HIGH] `process.on('exit')` calls async `db.close()` without await — MySQL connections leak on uncaught exception
-- File: `src/index.ts:362`
-- What: The `exit` event handler invokes `db.close()` synchronously, but `close()` is async. For MySQL, `pool.end()` is a real async I/O operation that won't complete before the process exits. For SQLite, the synchronous `writeFileSync` inside `save()` runs before the first `await`, so data IS persisted — but `sql.js`'s WASM `db.close()` never runs.
-- Why: On `uncaughtException`, the handler at line 41 calls `process.exit(1)`, which triggers the `exit` handler but NOT the `cleanup` function (which properly `await`s `db.close()`). MySQL connections are left open; the OS cleans up sockets on process exit, but in-flight writes could be lost if the pool has pending operations.
-- How: Two options:
-  1. **Preferred**: Move the PID cleanup into `cleanup()` and remove the `exit` handler's `db.close()` call — the `SIGINT`/`SIGTERM` path already handles it. For `uncaughtException`, the process exits immediately and the OS reclaims sockets.
-  2. **Alternative**: In the `exit` handler, only call the synchronous parts needed (`clearInterval`, `writeFileSync`) by splitting `close()` into sync/async halves.
+### [HIGH] Weekly report stale detection uses wrong zero-day window with offset
+- File: `src/reports/weekly.ts:127-129` + `src/data/daily-fans.ts:281-306`
+- What: When the weekly report uses an offset to view a historical week, the stale section passes `viewedEndDay` (the end of the target week) to `buildStaleSection`, but `isStaleForReport` internally calls `countConsecutiveZeroDaysAtEnd(dailyFans, latestDataDay)` — the parameter name is `latestDataDay`, but the value passed is `viewedEndDay`. The function counts consecutive zero-gain days **from the snapshot's latest data day backward**, not from the passed day. This means the stale check for an earlier week includes zero-gain days from future weeks, producing incorrect results.
+- Why: A member active in week 3 but inactive in week 4 would show as "not stale" when viewing week 3 via `/weekly -1`, because the zero-day count breaks at the week 4 gain. The stale section should reflect the viewed week's activity, not the entire tail.
+- How: Modify `countConsecutiveZeroDaysAtEnd` to accept an optional `endDay` parameter (defaulting to `latestDataDay`). Then `isStaleForReport` passes its `latestDataDay` argument through to `countConsecutiveZeroDaysAtEnd`. The weekly report already passes the correct `viewedEndDay`; the fix is making the counting function respect it. Same fix needed for monthly offset reports.
 - Confidence: HIGH
 
-### [MEDIUM] `ts-node` may not load `qrcode-terminal.d.ts` ambient declaration — TS7016 on `npm run dev`
-- File: `src/types/qrcode-terminal.d.ts:1-3` (declaration location), `src/whatsapp/client.ts:217` (consumer)
-- What: The ambient `declare module 'qrcode-terminal'` is at `src/types/qrcode-terminal.d.ts`, covered by `tsconfig.json` `include: ["src/**/*"]`. However, `ts-node` (used by `npm run dev`) only automatically loads `include`-listed files starting from v10.7.0. If the project uses an older `ts-node` version (pulled transitively by `ts-node-dev@^2.0.0`), the `.d.ts` is invisible to `ts-node` and `import('qrcode-terminal')` triggers TS7016. The `npm run dev:watch` command uses `--transpile-only` which skips type-checking entirely, masking the issue.
-- Why: `npm run dev` (the primary development command) would fail to type-check. New contributors would see TS7016 errors and not understand why the declaration file isn't found.
-- How: Add `"files": true` to the `ts-node` compilerOptions in `tsconfig.json`:
-  ```json
-  "ts-node": {
-    "skipProject": false,
-    "compilerOptions": {
-      "module": "commonjs",
-      "files": true
-    }
-  }
-  ```
-  This forces `ts-node` to load all files from `include`, matching `tsc` behavior. Alternatively, verify the installed `ts-node` version — if ≥10.7.0, the issue may already be resolved.
-- Confidence: MEDIUM (cannot verify installed `ts-node` version in this environment)
-
-### [MEDIUM] `AlertEventRow.status` type says `'deduped'` but code uses `'suppressed'`
-- File: `src/types/index.ts:301`
-- What: `AlertEventRow.status` is typed as `'pending' | 'sent' | 'deduped'`, but the actual status values written to the database are `'pending'`, `'sent'`, and `'suppressed'` (see `src/alerts/alerts.ts:209`, `src/db/database.ts:229`, `src/db/mysql-database.ts:207`). The value `'deduped'` is never used anywhere in the codebase.
-- Why: If any future code reads alert rows and switches on `status`, it would handle `'deduped'` (which never exists) and miss `'suppressed'` (which does exist). The type lies about the data model.
-- How: Change the type to match reality:
-  ```typescript
-  status: 'pending' | 'sent' | 'suppressed';
-  ```
-  (Note: `AlertEventRow` is currently unused as a return type from `IDatabase`, so this is a latent issue, not a runtime bug.)
+### [MEDIUM] Daily report stale warning ignores offset — may show false staleness for historical reports
+- File: `src/reports/daily.ts:120-125`
+- What: The stale data warning is computed as `getStaleDataWarning(snapYear, snapMonth, latestDataDay)` using the snapshot's actual latest data day. When viewing a historical report via `/daily -3` (viewing 3 days ago), the stale warning still compares against the current JST day. If the snapshot data is 2+ days behind the current day, the warning fires — even though the historical day being viewed has complete data.
+- Why: Users viewing `/daily -3` see a "data may not be up-to-date" warning that's irrelevant to the historical day they're viewing. The data IS complete for day 22 (3 days ago) even if today is day 25 and the snapshot hasn't been refreshed.
+- How: Use `adjustedDataDay` (the offset-adjusted day) instead of `latestDataDay` when computing the stale warning for offset reports: `getStaleDataWarning(snapYear, snapMonth, adjustedDataDay)`.
 - Confidence: HIGH
 
-### [MEDIUM] `config.ts` double-cast `as unknown as BotConfig` allows Zod schema ↔ interface drift
-- File: `src/config.ts:147,156`
-- What: Both `getDefaultConfig()` and `validateConfig()` cast the Zod parse result via `return result as unknown as BotConfig`. This bypasses TypeScript's structural type checking, so the Zod schema and the `BotConfig` interface in `src/types/index.ts:253-268` could diverge without any compiler error.
-- Why: If someone adds a field to the Zod schema (e.g., a new database option) but forgets to update `BotConfig`, or vice versa, the type system won't catch it. Runtime behavior depends on Zod defaults, not the interface shape.
-- How: Option 1 — Use `z.infer<typeof ConfigSchema>` as the return type and remove the manual `BotConfig` interface for the database section (use Zod as source of truth). Option 2 — Add a compile-time assertion: `const _: BotConfig = result as BotConfig;` after the cast (this validates structure without the double-cast). Option 3 — Accept the tradeoff and add a comment explaining why the cast exists.
+### [MEDIUM] Non-newline message splitting underestimates marker overhead
+- File: `src/utils/format.ts:57-67`
+- What: The `!splitAtNewline` path estimates Part marker overhead as `` `Part ${Math.ceil(remaining.length / maxLength) + 1}/${Math.ceil(remaining.length / maxLength)}\n`.length ``. The denominator `Math.ceil(remaining.length / maxLength)` uses the **initial** remaining length, which shrinks each iteration. This systematically underestimates the marker overhead for the final parts (where `remaining.length` is much smaller than the initial value). The final `parts.map(...)` then prepends markers with the correct total count, but the content slices were already sized for a shorter marker.
+- Why: For very long single-line text without newlines, the final message parts could exceed `maxLength` by a few characters (marker overhead mismatch). In practice, the risk is low because (a) `splitAtNewline` defaults to `true`, (b) WhatsApp messages almost always contain newlines, and (c) the overshoot is bounded by the marker digit difference.
+- How: Pre-compute the total number of parts before the splitting loop (by iterating once to count splits, then again to assign), or use a conservative fixed overhead estimate (e.g., 30 chars for `Part 99/99\n`).
+- Confidence: MEDIUM (low practical impact; default config uses newline splitting)
+
+### [MEDIUM] computeTierData accesses snapshot.members[0] without empty-array guard
+- File: `src/data/daily-fans.ts:335-336`
+- What: `computeTierData` calls `new Date(snapshot.members[0].year, snapshot.members[0].month, 0).getDate()` without first checking `snapshot.members.length > 0`. If called with an empty-members snapshot, this accesses `undefined.year` and throws a TypeError.
+- Why: While current callers (report generators, API server) all guard against empty snapshots before calling, the function itself is unprotected. A future caller or test that forgets the guard would get a confusing runtime error.
+- How: Add an early return with a safe default: `if (snapshot.members.length === 0) return { clubRank: snapshot.club_rank, tierName: ..., daysLeft: 30, ... }`. Or add the same guard that report generators use.
 - Confidence: HIGH
 
-### [MEDIUM] `deduplicateAlerts` function is dead code — replaced by batch `getExistingAlertKeys`
-- File: `src/alerts/alerts.ts:226-234`
-- What: `deduplicateAlerts(alerts, db)` iterates alerts one-by-one calling `db.isAlertAlreadySent()`. It has zero callers in the entire codebase. The batch approach (`db.getExistingAlertKeys(candidateKeys)`) at line 171-173 replaced it for performance.
-- Why: Dead code creates confusion — a reader would wonder if this function is the "real" dedup path. It also creates a maintenance surface: if `IDatabase` changes, this function needs updating even though nobody uses it.
-- How: Remove the `deduplicateAlerts` export. If it's needed for backwards compatibility with external consumers, deprecate it with `@deprecated` annotation. Either way, add a note that `getExistingAlertKeys` is the current approach.
+### [MEDIUM] alignSnapshotToMonth accesses snapshot.members[0] without empty-array guard
+- File: `src/orchestrator/report-orchestrator.ts:107,125`
+- What: `alignSnapshotToMonth` destructures `snapshot.members[0]` at lines 107 and 125 without checking `snapshot.members.length > 0`. The caller (`sendReport`) validates this at line 273, but the method itself is unprotected.
+- Why: If `alignSnapshotToMonth` is ever called from a different code path without the pre-check, it would crash with `Cannot read properties of undefined (reading 'year')`.
+- How: Add an early return guard at the top of `alignSnapshotToMonth`: `if (snapshot.members.length === 0) return snapshot;`.
 - Confidence: HIGH
 
-### [LOW] SQLite `recordAlert` uses check-then-insert (TOCTOU) — safe only in single-process mode
-- File: `src/db/database.ts:246-268`
-- What: `recordAlert()` does `SELECT` then `INSERT` as two separate statements without a transaction or unique constraint guard. Under concurrent access, a duplicate `event_key` could slip through between the check and the insert.
-- Why: In the current single-process architecture, this is safe (SQLite file-level locking prevents concurrent writers). However, if the bot ever runs multiple processes against the same SQLite file, or if the transaction boundary is ever introduced around alert recording, this TOCTOU becomes a real bug.
-- How: Add a comment documenting why this is safe (single-process invariant) and noting that MySQL's `INSERT IGNORE` approach (line 224-253) is the robust alternative. No code change needed for the current architecture.
-- Confidence: HIGH
+### [LOW] Stats report displays "0 anggota" for stale count even when stale members exist
+- File: `src/reports/stats.ts:87`
+- What: `staleCount` counts members with `status === 'stale'`, which in `computeMembers` is only set when `latestPositiveDay === 0` (no data at all). Members with low activity but some data are classified as `active`, so `staleCount` is always 0 or near-0. The stale section in other reports (weekly, monthly) uses `isStaleForReport` for a rolling-window stale classification. The stats report's "Stale" line in the summary is misleading because it doesn't match the user-facing stale definition.
+- Why: Users see "Aktif: 34 | Keluar: 0 | Transfer: 3" with no stale count, but other reports show stale members. The inconsistency could confuse operators.
+- How: Either compute stale count using the same `isStaleForReport` rolling window used by weekly/monthly reports, or remove the stale count from the stats summary line.
+- Confidence: MEDIUM
 
----
+### [LOW] countActiveDays counts day 1 as "active" even though it has no gain
+- File: `src/data/daily-fans.ts:259-273` + `src/reports/analyze.ts:39-45`
+- What: `countActiveDays` counts day 1 as active if it has data (line 263: `hasValue(dailyFans[0])`). Day 1 represents a baseline value, not a gain — `getDailyGain(dailyFans, 1)` always returns 0. The analyze report uses this count for consistency: `consistency = activeDays / daysInMonth`. On day 1, this shows 50% consistency (1/2), which is misleading — the member hasn't actually produced any gain yet.
+- Why: Users see inflated consistency percentages early in the month. The docstring says "consecutive positive differences" but the implementation also counts the baseline day.
+- How: Either exclude day 1 from the active count (start counting from day 2), or document clearly that day 1 counts as active when data exists. The current behavior is defensible (data presence = activity), so this is LOW severity.
+- Confidence: MEDIUM
 
 ## Positive Findings
 
-### [POSITIVE] Async boundary completeness is excellent
-- What: Every method on `IDatabase` returns `Promise`, and every call site across all 12 consumer files properly uses `await`. The async propagation chain (documented in `.audit/architecture.md:89-117`) is complete — no missing awaits, no fire-and-forget Promise leaks.
-- Why: The most common async migration bug is missed `await` on a function that became async. This codebase has zero such omissions across all DB method calls. The migration was thorough.
+### [POSITIVE] Correct atomic write pattern throughout the codebase
+- Files: `src/data/snapshot.ts:62-64`, `src/config.ts:224-226`, `src/db/database.ts:366-373`
+- What: All file writes (snapshots, config, database) use the tmp-file-then-rename pattern for atomicity. This prevents corrupt files if the process crashes mid-write.
+- Why: This is a textbook correctness pattern for single-process file persistence. Consistent application across all three write sites shows deliberate design.
 
-### [POSITIVE] Transaction error handling follows the correct rollback pattern
-- File: `src/db/database.ts:363-378`, `src/db/mysql-database.ts:379-398`
-- What: Both adapters wrap `rollback()` in its own `try/catch` to prevent masking the original error. The MySQL adapter correctly releases the connection in a `finally` block. The SQLite adapter uses synchronous `rawRun` inside the async transaction, which is correct because sql.js is synchronous — the `async` on the method is purely for interface conformance.
-- Why: This pattern is the textbook correct approach for database transactions. It ensures: (1) original errors propagate, (2) rollback failures are logged but don't mask the original, (3) connections are always released.
+### [POSITIVE] Config immutability enforced via Zod validation and deep-copy patterns
+- Files: `src/config.ts:144-148,199-201`
+- What: Config is validated with Zod at load time, `updateConfig` returns a new deep-merged + re-validated copy, and all consumers access config via a getter function. No code path mutates the stored config reference.
+- Why: Eliminates an entire class of stale-reference bugs. The Zod validation at every boundary ensures type correctness even after complex merge operations.
 
-### [POSITIVE] Health endpoint handles async/sync mismatch correctly
-- File: `src/api/server.ts:134-139`
-- What: `handleRequest` is sync but `handleHealth` is async. The code properly bridges this by calling `this.handleHealth(res).catch(err => ...)` and returning immediately. The `catch` ensures errors are sent as 500 responses. The inner try/catch in `handleHealth` (line 219-221) handles DB failures gracefully, falling back to 503.
-- Why: Mixing sync HTTP handlers with async DB calls is a common source of "response never sent" bugs. This implementation handles both success and error paths correctly.
+### [POSITIVE] Comprehensive test coverage catches regressions
+- What: 1,632 tests across 67 suites, including edge-case tests for daily fans arithmetic, message splitting bounds, dispatch fuzz testing (56 adversarial inputs), and golden-file snapshot comparisons.
+- Why: The test suite is the primary defense against correctness regressions. The high coverage (70% branches, 80% functions) and specific edge-case tests demonstrate thorough verification.
 
----
+### [POSITIVE] Well-structured error propagation in orchestrator
+- File: `src/orchestrator/report-orchestrator.ts:48-70,265-307`
+- What: The orchestrator throws on delivery failure (line 53, 68), logs errors at the point of failure (line 64), and the catch-up manager properly records failed status (line 232). Errors never silently disappear — they propagate to callers who record the failure.
+- Why: Silent error swallowing is one of the most common correctness issues in async systems. The explicit throw-on-failure pattern ensures every failure is observable.
 
 ## Modules Reviewed
-- `src/db/types.ts`: clean
-- `src/db/database.ts`: 1 finding (LOW — TOCTOU in recordAlert)
-- `src/db/mysql-database.ts`: clean
-- `src/db/factory.ts`: clean
-- `src/data/member-history.ts`: clean
-- `src/scheduler/scheduler.ts`: clean
-- `src/scheduler/catchup.ts`: clean
-- `src/orchestrator/report-orchestrator.ts`: clean
-- `src/alerts/alerts.ts`: 1 finding (MEDIUM — dead deduplicateAlerts)
-- `src/whatsapp/dispatch.ts`: clean
-- `src/reports/registry.ts`: clean
+- `src/data/daily-fans.ts`: 2 findings (countConsecutiveZeroDaysAtEnd parameter semantics, computeTierData guard)
+- `src/reports/compute.ts`: clean
+- `src/reports/daily.ts`: 1 finding (stale warning offset)
+- `src/reports/weekly.ts`: 1 finding (stale detection offset — the HIGH finding)
+- `src/reports/monthly.ts`: 0 new (same stale detection bug as weekly, consolidated into HIGH finding)
+- `src/reports/format.ts`: clean (correctly delegates to isStaleForReport)
+- `src/reports/combined.ts`: clean
+- `src/reports/compare.ts`: clean
+- `src/reports/analyze.ts`: 1 finding (consistency includes baseline day)
+- `src/reports/stats.ts`: 1 finding (stale count definition mismatch)
+- `src/reports/ranks.ts`: clean
+- `src/reports/bottom.ts`: clean
 - `src/reports/members.ts`: clean
+- `src/reports/tier.ts`: clean
+- `src/reports/registry.ts`: clean
+- `src/scheduler/scheduler.ts`: clean
+- `src/scheduler/catchup.ts`: clean (documented narrow crash window accepted)
+- `src/scheduler/helpers.ts`: clean
+- `src/alerts/alerts.ts`: clean
+- `src/config.ts`: clean
+- `src/data/snapshot.ts`: clean
+- `src/data/ensure-snapshot.ts`: clean
+- `src/data/member-history.ts`: clean
+- `src/db/database.ts`: clean
+- `src/db/types.ts`: clean
+- `src/db/factory.ts`: clean (not read — small delegation file)
+- `src/orchestrator/report-orchestrator.ts`: 1 finding (alignSnapshotToMonth guard)
+- `src/whatsapp/client.ts`: clean
+- `src/whatsapp/dispatch.ts`: clean
+- `src/whatsapp/commands.ts`: clean
+- `src/whatsapp/access.ts`: clean (not read — small access control file)
+- `src/whatsapp/admin.ts`: clean (not read — admin command handlers)
 - `src/api/server.ts`: clean
-- `src/index.ts`: 1 finding (HIGH — exit handler)
-- `src/config.ts`: 1 finding (MEDIUM — double-cast)
-- `src/types/index.ts`: 1 finding (MEDIUM — AlertEventRow.status)
-- `src/types/qrcode-terminal.d.ts`: 1 finding (MEDIUM — ts-node loading)
-- `tsconfig.json`: clean
-- `package.json`: clean (`@types/sql.js` in devDependencies confirmed at line 52)
+- `src/api/uma-moe.ts`: clean (not read — Playwright client)
+- `src/utils/timezone.ts`: clean
+- `src/utils/format.ts`: 1 finding (non-newline splitting marker estimate)
+- `src/utils/logger.ts`: clean (not read — documented sync I/O accepted)
+- `src/runtime.ts`: clean (documented mutable singleton accepted)
+- `src/types/index.ts`: clean
+- `src/index.ts`: clean
 
 ## Low-Confidence Notes
-- [src/index.ts:362] The `process.on('exit')` handler's `db.close()` for SQLite is effectively a no-op in practice because the `cleanup` function (line 352-359) already properly closes the DB before calling `process.exit(0)`. The `exit` handler is only meaningful for the `uncaughtException` path, where data loss is already acceptable. However, for MySQL, pending pool operations during an uncaught exception are silently dropped.
-- [src/types/qrcode-terminal.d.ts] The TS7016 issue depends on the installed `ts-node` version. If ts-node ≥10.7.0, `include` patterns are loaded automatically and the issue is already resolved. Cannot verify the version without running `npm ls ts-node`.
-- [src/db/database.ts:246-268] The SQLite `recordAlert` check-then-insert is technically TOCTOU but is safe in the current single-process architecture. If the architecture ever changes to multi-process, this needs a UNIQUE constraint + INSERT OR IGNORE pattern (like the MySQL adapter already does).
+
+- [src/reports/weekly.ts:127] The `viewedEndDay = Math.min(block.end, latestDataDay)` calculation is correct for the normal case (offset=0). The bug only manifests with offset > 0 and only affects the stale section, not the gain calculations. The risk is bounded by the stale threshold (default 3 days for weekly).
+
+- [src/utils/format.ts:61] The non-newline splitting path's marker overhead underestimate is theoretically provable but practically unreachable with default config (`splitAtNewline: true`). Would only affect custom configurations with single-line messages > 4096 chars.
+
+- [src/data/daily-fans.ts:335] `computeTierData` is only called from `reports/tier.ts:24` and `api/server.ts:367`, both of which have pre-existing empty-member guards. The unguarded access is a defensive coding issue, not an active bug.

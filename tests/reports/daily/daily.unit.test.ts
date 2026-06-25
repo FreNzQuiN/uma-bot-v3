@@ -14,7 +14,7 @@ import {
   getDailyGain,
   getLatestDataDay,
   isTransferMember,
-  isStaleMember,
+  isStaleForReport,
 } from '../../../src/data/daily-fans';
 import { formatNumber } from '../../../src/utils/format';
 import { CLUB_TIERS } from '../../../src/types';
@@ -84,13 +84,13 @@ describe('Member classification', () => {
     for (const member of snapshot.members) {
       const latestPositiveDay = getLatestDataDay(member.daily_fans);
       const isTransfer = isTransferMember(member);
-      if (!isTransfer && isStaleMember(latestPositiveDay, latestDataDay, staleAfterDays)) {
+      if (!isTransfer && isStaleForReport(member.daily_fans, latestDataDay, staleAfterDays)) {
         staleNames.push(member.trainer_name);
       }
     }
 
-    expect(staleNames.sort()).toEqual([...STALE_NAMES].sort());
-    expect(staleNames.length).toBe(4);
+    expect(staleNames.sort()).toEqual([...STALE_NAMES, 'jgd'].sort());
+    expect(staleNames.length).toBe(5);
   });
 
   it('correctly identifies 6 transfer members', () => {
@@ -121,16 +121,16 @@ describe('Member classification', () => {
       const isTransfer = isTransferMember(member);
       if (isTransfer) {
         transfer++;
-      } else if (latestPositiveDay === 0 || isStaleMember(latestPositiveDay, latestDataDay, 3)) {
+      } else if (latestPositiveDay === 0 || isStaleForReport(member.daily_fans, latestDataDay, 3)) {
         stale++;
       } else {
         active++;
       }
     }
 
-    expect(active).toBe(24);
+    expect(active).toBe(23);
     expect(transfer).toBe(6);
-    expect(stale).toBe(4);
+    expect(stale).toBe(5);
     expect(active + transfer + stale).toBe(34);
   });
 

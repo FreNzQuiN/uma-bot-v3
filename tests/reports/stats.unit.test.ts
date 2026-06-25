@@ -16,7 +16,6 @@ import {
   getDailyGain,
   getLatestDataDay,
   isTransferMember,
-  isStaleMember,
 } from '../../src/data/daily-fans';
 import { formatNumber } from '../../src/utils/format';
 import { formatDateWIB } from '../../src/utils/timezone';

@@ -265,7 +265,28 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     );
   }
 
-async upsertMember(member: MemberHistoryInsert): Promise<void> {
+  async recordAlerts(alerts: AlertEventInsert[]): Promise<number[]> {
+    if (alerts.length === 0) return [];
+    return this.transaction(async () => {
+      const ids: number[] = [];
+      for (const alert of alerts) {
+        ids.push(await this.recordAlert(alert));
+      }
+      return ids;
+    });
+  }
+
+  async markAlertsSent(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+    const now = new Date().toISOString();
+    const placeholders = ids.map(() => '?').join(',');
+    this.runSql(
+      `UPDATE alert_events SET status = ?, sent_at = ? WHERE id IN (${placeholders})`,
+      ['sent', now, ...ids]
+    );
+  }
+
+  async upsertMember(member: MemberHistoryInsert): Promise<void> {
     this.runSql(
       `INSERT INTO member_history
         (viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status)
@@ -288,6 +309,15 @@ async upsertMember(member: MemberHistoryInsert): Promise<void> {
         member.status ?? 'active',
       ]
     );
+  }
+
+  async upsertMembers(members: MemberHistoryInsert[]): Promise<void> {
+    if (members.length === 0) return;
+    await this.transaction(async () => {
+      for (const member of members) {
+        await this.upsertMember(member);
+      }
+    });
   }
 
   async getMembers(circleId: number): Promise<MemberHistoryRow[]> {

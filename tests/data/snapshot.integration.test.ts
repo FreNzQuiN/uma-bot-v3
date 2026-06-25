@@ -278,9 +278,8 @@ describe('loadMonthSnapshots', () => {
     saveSnapshot(snap3, '2026-07-01', tmpDir);
 
     const result = loadMonthSnapshots(2026, 6, tmpDir);
-    expect(result).toHaveLength(2);
-    expect(result[0].club_rank).toBe(1);
-    expect(result[1].club_rank).toBe(2);
+    expect(result).toHaveLength(1);
+    expect(result[0].club_rank).toBe(2); // latest (June 11)
   });
 
   test('returns snapshots sorted by date ascending', () => {
@@ -294,10 +293,8 @@ describe('loadMonthSnapshots', () => {
     saveSnapshot(snap2, '2026-06-10', tmpDir);
 
     const result = loadMonthSnapshots(2026, 6, tmpDir);
-    expect(result).toHaveLength(3);
-    expect(result[0].club_rank).toBe(1); // June 5
-    expect(result[1].club_rank).toBe(2); // June 10
-    expect(result[2].club_rank).toBe(3); // June 15
+    expect(result).toHaveLength(1);
+    expect(result[0].club_rank).toBe(3); // June 15 (latest)
   });
 
   test('returns empty for month with no data', () => {
