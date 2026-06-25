@@ -32,7 +32,6 @@ export interface Alert {
   reportDate: string;
 }
 
-// --- Per-type detector functions ---
 
 function detectPerformanceDrops(
   computedMembers: ComputedMember[],
@@ -182,7 +181,6 @@ function detectRankDrop(
   return { keys, alerts };
 }
 
-// --- Quiet hours suppression ---
 
 // Returns true if alerts were suppressed (caller should return [])
 async function suppressDuringQuietHours(
@@ -232,7 +230,6 @@ async function suppressDuringQuietHours(
   return true;
 }
 
-// --- Main coordinator ---
 
 export async function detectAlerts(
   computedMembers: ComputedMember[],
