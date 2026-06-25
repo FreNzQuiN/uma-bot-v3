@@ -2,6 +2,12 @@
 
 WhatsApp bot for Uma Musume club leaders. Tracks member performance, sends automated reports, and provides tier intelligence from uma.moe data.
 
+**What it does:** Replaces manual tracking of ~30 members' fan progress. Leaders check uma.moe once a day, mentally compare numbers, and decide who's meeting the 20M monthly requirement. The bot does this automatically and sends the result to WhatsApp.
+
+**Who it's for:** Circle leaders who need to know who's contributing, who's falling behind, and whether the club is promoting or demoting.
+
+**Core insight:** Everything is arithmetic on one array. uma.moe gives you a `daily_fans` array — 32 cumulative integers, one per day. Daily gain, weekly gain, monthly gain, who's stale, who's below requirement — all different math on the same data.
+
 ---
 
 ## Quick Reference
@@ -21,68 +27,42 @@ npm run fetch        # manually fetch uma.moe data for current month
 
 ---
 
-## Architecture
+## How It Works
 
-Single Node.js process. No microservices, no cache layer — one process handles WhatsApp (Baileys), HTTP API, cron scheduling, and report generation.
-
-**Why:** Data processing is arithmetic on arrays of ~34 integers. uma.moe data is static for 24h. Splitting adds friction without benefit.
+Single Node.js process. No microservices, no cache layer. One process handles WhatsApp (Baileys), HTTP API, cron scheduling, and report generation. Data processing is arithmetic on arrays of ~34 integers. uma.moe data is static for 24h. Splitting adds friction without benefit.
 
 **Key constraint:** The bot runs intermittently (on/off at unpredictable intervals). It must detect missed reports on restart and send catch-up reports tagged `*⚠️ Catch-up*` (below the report title).
+
+### Data Flow
+
+```
+uma.moe → Snapshot (immutable JSON) → computeMembers() → Report → WhatsApp
+```
+
+1. Playwright fetches circle data from uma.moe (solves Cloudflare Turnstile)
+2. Saved as `data/snapshots/YYYY/MM/DD.json` — immutable once written
+3. `computeMembers()` transforms `daily_fans` arrays into `ComputedMember` objects
+4. 12 report generators produce WhatsApp-formatted strings
+5. Split at newline boundaries (4096 char limit), sent to announcement groups
 
 ### Source Layout
 
 ```
 src/
-├── index.ts          # Entry point — composition root (wires modules together)
-├── config.ts         # YAML config loading + Zod validation + hot-reload watcher
-├── runtime.ts        # Runtime stats (uptime, reconnects, message counts)
-├── types/index.ts    # Shared TypeScript types (BotConfig, Snapshot, ComputedMember, etc.)
-├── orchestrator/
-│   └── report-orchestrator.ts  # Report pipeline: generation + delivery + alerts
-├── api/
-│   ├── uma-moe.ts    # HTTP client for uma.moe circle data API
-│   └── server.ts     # HTTP API (reports, members, tier endpoints)
-├── data/
-│   ├── snapshot.ts         # Snapshot save/load/path management (data/snapshots/YYYY/MM/DD.json)
-│   ├── ensure-snapshot.ts  # ensureMonthSnapshot — fetches missing month data (dependency on API layer)
-│   └── daily-fans.ts       # Daily fan array arithmetic
-├── db/
-│   ├── types.ts             # IDatabase interface — contract for all adapters
-│   ├── factory.ts           # createDatabase(config) — pluggable backend factory
-│   ├── database.ts          # SqliteDatabase — SQLite via sql.js (default)
-│   └── mysql-database.ts    # MysqlDatabase — MySQL/TiDB adapter (mysql2/promise)
-├── reports/
-│   ├── daily.ts, weekly.ts, monthly.ts, ranks.ts, bottom.ts, stats.ts, members.ts, tier.ts
-│   ├── compare.ts, analyze.ts, combined.ts
-│   ├── compute.ts    # Shared report computation (computeMembers)
-│   ├── registry.ts   # Report type → generator mapping (single source of truth)
-│   └── format.ts     # WhatsApp message formatting + splitting
-├── alerts/
-│   └── alerts.ts     # Alert detection + formatting (performance drop, demotion risk, etc.)
-├── scheduler/
-│   ├── scheduler.ts  # Cron-based auto-delivery (daily 22:05, weekly, monthly)
-│   ├── catchup.ts    # Missed report detection + catch-up execution
-│   └── helpers.ts    # Scheduler helper utilities
-├── whatsapp/
-│   ├── client.ts     # Baileys WhatsApp connection
-│   ├── dispatch.ts   # Command routing (parses /commands, routes to handlers)
-│   ├── commands.ts   # Command handler implementations
-│   ├── admin.ts      # Admin-only command handlers
-│   └── access.ts     # Access control (admin vs command group)
-└── utils/
-    ├── format.ts     # Pure string utilities (splitMessage)
-    ├── logger.ts     # Zero-dependency structured logger with file rotation
-    ├── timezone.ts   # WIB (Asia/Jakarta) timezone helpers (incl. getTargetMonth)
-    └── index.ts      # General utilities
+├── index.ts          # Composition root — wires everything together
+├── config.ts         # YAML config + Zod validation + hot-reload
+├── data/             # Snapshots (immutable JSON) + daily_fans arithmetic
+├── db/               # Pluggable database (SQLite default, MySQL/TiDB optional)
+├── reports/          # 12 report generators + compute engine + registry
+├── alerts/           # Performance drop, demotion risk, streak break detection
+├── scheduler/        # Cron delivery + catch-up on restart
+├── orchestrator/     # Report pipeline: generation → delivery → alerts
+├── whatsapp/         # Baileys client + command dispatch + access control
+├── api/              # HTTP API (localhost) + uma.moe client
+└── utils/            # Logger, timezone helpers, string formatting
 ```
 
-### Data Model
-
-Core data is a `daily_fans` array — cumulative integers, one per day. Every report (daily, weekly, monthly, ranks, bottom, stats) is different arithmetic on this same array.
-
-Snapshots: `data/snapshots/YYYY/MM/DD.json` — immutable once saved.
-Database: Pluggable via `IDatabase` interface — SQLite (default, `data/bot.db` via sql.js) or MySQL/TiDB.
-Config: `config.yaml` — YAML with Zod validation. Hot-reloaded every 5s via mtime polling.
+The `db/` directory uses the adapter pattern — `IDatabase` interface with SQLite and MySQL implementations. Consumer code depends only on the interface.
 
 ### Startup Order
 
@@ -114,65 +94,6 @@ Config: `config.yaml` — YAML with Zod validation. Hot-reloaded every 5s via mt
 
 Special files that keep their names: `e2e-output.test.ts`, `golden-inline.test.ts`, `dispatch-fuzz.test.ts`.
 
-Test structure mirrors src:
-```
-tests/
-├── _helpers/                    # Shared test utilities (snapshot loader, mock date, constants)
-├── alerts/
-│   ├── alerts.unit.test.ts
-│   └── alerts-regression.test.ts
-├── api/
-│   ├── server.integration.test.ts      # HTTP API integration (real HTTP requests)
-│   ├── server-auth.integration.test.ts # Bearer token auth + rate limiting
-│   └── uma-moe.unit.test.ts
-├── config.unit.test.ts
-├── data/
-│   ├── archive.unit.test.ts
-│   ├── daily-fans.unit.test.ts
-│   ├── left-members.unit.test.ts
-│   ├── snapshot.integration.test.ts
-│   └── snapshot-regression.test.ts
-├── db/
-│   ├── database.integration.test.ts
-│   └── database-regression.test.ts
-├── examples/                    # Test fixture data (real snapshot JSON)
-├── orchestrator/
-│   └── report-orchestrator.unit.test.ts
-├── reports/
-│   ├── daily/                   # daily.unit, daily.format, daily.dispatch, daily.stale, daily.edge
-│   ├── weekly/                  # weekly.unit, weekly.format, weekly.stale, weekly.edge
-│   ├── monthly/                 # monthly.unit, monthly.format, monthly.stale, monthly.edge
-│   ├── analyze.unit.test.ts
-│   ├── bottom.unit.test.ts
-│   ├── combined.unit.test.ts
-│   ├── compare.unit.test.ts
-│   ├── compute.unit.test.ts
-│   ├── members.unit.test.ts
-│   ├── ranks.unit.test.ts
-│   ├── stats.unit.test.ts
-│   ├── tier.unit.test.ts
-│   ├── formatters.unit.test.ts
-│   ├── formatters-regression.test.ts
-│   ├── golden-inline.test.ts           # Golden-file snapshots for all 8 report types
-│   ├── e2e-output.test.ts              # Cross-report consistency + data integrity
-│   ├── e2e-output-regression.test.ts   # Empty snapshot handling regressions
-│   └── tier-regression.test.ts
-├── scheduler/
-│   ├── scheduler.unit.test.ts
-│   └── catchup-regression.test.ts
-├── utils/
-│   ├── logger.unit.test.ts
-│   └── timezone.unit.test.ts
-└── whatsapp/
-    ├── dispatch.test.ts
-    ├── dispatch-fuzz.test.ts     # 56 adversarial inputs (injection, Unicode, etc.)
-    ├── commands.test.ts
-    ├── access.test.ts
-    ├── admin.test.ts
-    ├── client.test.ts
-    └── client-regression.test.ts # new Promise(async) antipattern check
-```
-
 ---
 
 ## Configuration
@@ -189,24 +110,20 @@ Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer toke
 
 ## Key Gotchas
 
-- **Windows paths:** `npm run restart` uses `timeout /t 2 >nul` (Windows syntax). `npm run db:reset` and `npm run db:backup` use inline Node scripts.
-- **No `dist/` in git:** Must run `npm run build` before `npm start`. `npm run dev` works without building.
-- **Snapshot immutability:** Never mutate saved snapshots. Reports recompute from the array each time.
-- **Month boundaries:** Monthly reports use offset=-1 (previous month). Pre-fetching target month snapshots is handled automatically.
-- **Combined reports:** On collision days (daily + weekly), a single combined message is sent instead of two separate ones.
-- **Message splitting:** WhatsApp 4096-char limit. Long reports split at newline boundaries (configurable).
-- **Playwright in Docker:** Dockerfile installs Playwright chromium + system deps. `PLAYWRIGHT_BROWSERS_PATH` is set.
-- **sql.js not sqlite3:** Uses sql.js (in-memory WASM SQLite). No native compilation needed. DB file is a binary blob.
-- **Config hot-reload:** Polls mtime every 5s. Changing schedule requires full scheduler restart (handled automatically).
-- **Database backend selection:** The `database.backend` config key switches between SQLite (default, zero-config) and MySQL/TiDB. MySQL adapter uses `mysql2/promise` with connection pooling. The `createDatabase()` factory in `src/db/factory.ts` handles instantiation — consumer code depends only on `IDatabase`. Changing `database.backend` at runtime logs a warning; a full restart is required.
-- **mysql2 is an optional runtime dependency:** Listed in `package.json` but only imported dynamically when `backend: mysql`. SQLite works without it. If switching to MySQL, run `npm install` to pull it in.
-- **MySQL version check:** On startup, the MySQL adapter runs `SELECT VERSION()` and compares against minimum 8.0.31. Versions below this throw a clear error with upgrade instructions. TiDB is auto-detected (version string contains "TiDB") and bypasses the version check.
-- **TiDB compatibility:** The adapter auto-detects TiDB at startup and uses the appropriate upsert syntax: `VALUES()` for TiDB (required), `AS new_vals` alias for standard MySQL 8.0.20+ (modern, no deprecation warnings). Detection is automatic — no config needed. Alert dedup uses `INSERT IGNORE` (atomic, no TOCTOU race). `getExistingAlertKeys()` does a single batch query instead of N+1 individual queries.
-- **CREATE INDEX compatibility:** Index creation catches `ER_DUP_KEYNAME` error instead of using `CREATE INDEX IF NOT EXISTS` (which requires MySQL 8.0.31+). Works on any MySQL version.
-- **BIGINT columns:** `viewer_id`, `circle_id`, `monthly_point`, `fans_to_*` use `BIGINT` in MySQL — values exceed `INT` range.
-- **SSL for TiDB Cloud:** Set `mysql.ssl: true` in config. Uses `rejectUnauthorized: true`. TiDB Cloud requires it. Local MySQL doesn't.
-- **Exit handler:** `process.on('exit')` does NOT call `db.close()` — SQLite close is async, can't await in exit handler. Data is safe because sql.js auto-saves periodically.
-- **`scripts/*.js` is gitignored:** The `stop.js` script is checked in but `scripts/*.js` is in `.gitignore`. The `scripts/reverse-engineer.js` is generated.
+| Gotcha | Why it matters |
+|--------|---------------|
+| **No `dist/` in git** | Must `npm run build` before `npm start`. `npm run dev` works without building. |
+| **Snapshot immutability** | Never mutate saved snapshots. Reports recompute from the array each time. |
+| **Month boundaries** | Monthly reports use offset=-1 (previous month). Pre-fetching is automatic. |
+| **Combined reports** | On collision days (daily + weekly), a single combined message is sent. |
+| **sql.js, not sqlite3** | In-memory WASM SQLite. No native compilation. DB file is a binary blob. |
+| **mysql2 is optional** | Only imported when `backend: mysql`. SQLite works without it. |
+| **MySQL 8.0.31+ required** | Adapter checks version at startup. TiDB auto-detected and bypasses check. |
+| **Config hot-reload** | Polls mtime every 5s. Schedule changes restart scheduler automatically. |
+| **Windows paths** | `npm run restart` uses `timeout /t 2 >nul` (Windows syntax). |
+| **Baileys doesn't clean up** | Tests use `--forceExit` because Baileys sockets don't close cleanly. |
+| **User-facing language** | Indonesian (`id`). All reports, alerts, and bot responses. |
+| **All times are WIB** | Asia/Jakarta (UTC+7). uma.moe data updates at ~22:00 WIB. |
 
 ---
 
@@ -214,8 +131,7 @@ Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer toke
 
 See `docs/uma-moe-api.md` for the uma.moe API documentation.
 See `docs/game-context.md` for Uma Musume game mechanics.
+See `docs/architecture.md` for system design and data flow.
+See `docs/message-design.md` for the Bourbon persona and message formatting.
+See `docs/configuration.md` for full config reference.
 See `tests/examples/snapshot-june-12.json` for real snapshot data.
-
-User-facing language is Indonesian (`id`). Report messages, alerts, and bot responses are in Bahasa Indonesia.
-
-All times are WIB (Asia/Jakarta). uma.moe data updates once daily at ~22:00 WIB.

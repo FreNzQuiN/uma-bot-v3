@@ -17,27 +17,6 @@ npm run lint:check && npm test
 
 Both must pass. No exceptions.
 
-## Project Structure
-
-```
-src/                    # TypeScript source (target: ES2022, CommonJS)
-  api/                  # uma.moe HTTP client + REST API server
-  alerts/               # Alert detection (performance drop, demotion risk, etc.)
-  data/                 # Snapshot persistence + daily_fans arithmetic
-  db/                   # SQLite via sql.js (in-memory WASM, no native deps)
-  reports/              # Report generators (daily, weekly, monthly, ranks, etc.)
-  scheduler/            # Cron scheduling + catch-up on restart
-  whatsapp/             # Baileys WhatsApp client + command dispatch
-  utils/                # Logger, timezone helpers, general utilities
-  types/                # Shared TypeScript types
-  config.ts             # YAML config loading + Zod validation + hot-reload
-  index.ts              # Entry point (startup orchestration)
-  runtime.ts            # Runtime stats (uptime, reconnects, message counts)
-tests/                  # Jest tests (mirrors src/ structure)
-  _helpers/             # Shared test utilities
-  examples/             # Real snapshot JSON fixtures
-```
-
 ## Code Conventions
 
 ### TypeScript
