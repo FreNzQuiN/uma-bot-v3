@@ -43,7 +43,6 @@ function isValidSnapshot(data: unknown): data is Snapshot {
 /**
  * Save a snapshot to disk.
  *
- * @param snapshot - The snapshot data to save
  * @param dataDay - WIB date string like "2026-06-11"
  * @param rootDir - Base project directory (for testing; defaults to process.cwd())
  * @returns The file path that was saved

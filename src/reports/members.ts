@@ -1,7 +1,7 @@
 /**
  * Members report generator for Uma Club Bot v3.
  *
- * Produces a comprehensive member listing with status badges,
+ * Produces a member listing with status badges,
  * monthly gains, and transfer information.
  * Optionally shows left members with "last seen" info when DB is provided.
  */
