@@ -9,9 +9,8 @@ import { Snapshot, BotConfig, RankedMember } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from './format';
 import { INDONESIAN_MONTHS } from '../utils/timezone';
-import { isStaleForReport } from '../data/daily-fans';
 import { computeMembers } from './compute';
 import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
 
@@ -151,16 +150,7 @@ export function generateMonthlyReport(
 
   // Stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
-  const staleMembers = effectiveMembers.filter((m) =>
-    m.status === 'active' && isStaleForReport(m.dailyFans, adjustedDataDay, staleThreshold)
-  );
-  if (staleMembers.length > 0) {
-    lines.push('');
-    lines.push(`*⚠️ Belum aktif bulan ini:*`);
-    for (const s of staleMembers) {
-      lines.push(`• ${sanitizeName(s.trainerName)}`);
-    }
-  }
+  lines.push(...buildStaleSection(effectiveMembers, adjustedDataDay, staleThreshold, '⚠️ Belum aktif bulan ini:'));
 
   const staleWarning = getStaleDataWarning(year, month, getDataDayFromSnapshot(activeSnapshot));
   if (staleWarning) {

@@ -9,8 +9,7 @@ import { Snapshot, BotConfig, WEEK_BLOCKS } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
-import { isStaleForReport } from '../data/daily-fans';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from './format';
 
 interface WeeklyRankedMember {
   rank: number;
@@ -132,16 +131,7 @@ export function generateWeeklyReport(
   // Stale members (rolling window: consecutive zero-gain days at end of target week)
   const viewedEndDay = Math.min(block.end, latestDataDay);
   const staleThreshold = config.memberStatus.staleAfterDaysWeekly;
-  const staleMembers = computedMembers.filter((m) =>
-    m.status === 'active' && isStaleForReport(m.dailyFans, viewedEndDay, staleThreshold)
-  );
-  if (staleMembers.length > 0) {
-    lines.push('');
-    lines.push(`*⚠️ Belum aktif minggu ini:*`);
-    for (const s of staleMembers) {
-      lines.push(`• ${sanitizeName(s.trainerName)}`);
-    }
-  }
+  lines.push(...buildStaleSection(computedMembers, viewedEndDay, staleThreshold, '⚠️ Belum aktif minggu ini:'));
 
   const { year, month } = snapshot.members[0];
   const staleWarning = getStaleDataWarning(year, month, latestDataDay);

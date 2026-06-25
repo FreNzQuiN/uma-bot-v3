@@ -9,8 +9,7 @@ import { Snapshot, BotConfig, RankedMember } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { buildDateStr, buildFooter, buildReportHeader } from './format';
-import { isStaleForReport } from '../data/daily-fans';
+import { buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from './format';
 
 /**
  * Generate the bottom report string.
@@ -70,16 +69,7 @@ export function generateBottomReport(
 
   // Add stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
-  const staleMembers = computedMembers.filter((m) =>
-    m.status === 'active' && isStaleForReport(m.dailyFans, dataDay, staleThreshold)
-  );
-  if (staleMembers.length > 0) {
-    lines.push('');
-    lines.push(`*⚠️ Tidak ada data (${staleThreshold}+ hari):*`);
-    for (const s of staleMembers) {
-      lines.push(`• ${sanitizeName(s.trainerName)}`);
-    }
-  }
+  lines.push(...buildStaleSection(computedMembers, dataDay, staleThreshold, `⚠️ Tidak ada data (${staleThreshold}+ hari):`));
 
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));

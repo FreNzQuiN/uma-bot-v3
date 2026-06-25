@@ -6,11 +6,11 @@
  */
 
 import { formatDateWIB, getDataDateComponents, formatForDisplay } from '../utils/timezone';
-
-import type { Snapshot, BotConfig } from '../types';
+import type { Snapshot, BotConfig, ComputedMember } from '../types';
 import { CLUB_TIERS } from '../types';
-import { getLatestDataDay } from '../data/daily-fans';
+import { getLatestDataDay, isStaleForReport } from '../data/daily-fans';
 import { getDataDayFromSnapshot } from '../data/snapshot';
+import { sanitizeName } from '../utils/format';
 
 /**
  * Check if a snapshot's data is stale (more than 1 day behind current data day).
@@ -93,6 +93,27 @@ export function buildReportHeader(
     const dateStr = buildDateStr(snapshot);
     const formattedDate = formatDateWIB(dateStr);
     lines.push(buildDataLine(formattedDate));
+  }
+  return lines;
+}
+
+/**
+ * Build the stale members section for a report.
+ * Returns lines (with leading blank line) if stale members exist, empty array otherwise.
+ */
+export function buildStaleSection(
+  computedMembers: ComputedMember[],
+  dataDay: number,
+  staleThreshold: number,
+  headerText: string
+): string[] {
+  const staleMembers = computedMembers.filter(
+    (m) => m.status === 'active' && isStaleForReport(m.dailyFans, dataDay, staleThreshold)
+  );
+  if (staleMembers.length === 0) return [];
+  const lines = ['', `*${headerText}*`];
+  for (const s of staleMembers) {
+    lines.push(`• ${sanitizeName(s.trainerName)}`);
   }
   return lines;
 }
