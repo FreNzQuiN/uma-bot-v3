@@ -19,12 +19,6 @@ import { log } from '../utils/logger';
 
 /**
  * Ensure a snapshot exists for the given year/month on disk.
- *
- * @param umaMoe - UmaMoeClient instance for API calls
- * @param circleId - Circle ID to fetch
- * @param year - Year (e.g. 2026)
- * @param month - Month (1-12)
- * @param rootDir - Base project directory (defaults to process.cwd())
  * @returns The Snapshot (from cache or freshly fetched)
  */
 export async function ensureMonthSnapshot(

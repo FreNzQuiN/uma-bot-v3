@@ -13,10 +13,6 @@ import { buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from 
 
 /**
  * Generate the bottom report string.
- *
- * @param snapshot - Raw snapshot data
- * @param config - Bot configuration
- * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateBottomReport(
   snapshot: Snapshot,

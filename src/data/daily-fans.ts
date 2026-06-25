@@ -309,8 +309,6 @@ export function isStaleForReport(
 /**
  * Get the latest data day number from a snapshot.
  * Uses getLatestDataDay on each member's daily_fans and returns the MAX.
- *
- * @param snapshot - The snapshot to analyze
  * @returns The latest 1-indexed day number with positive data across all members
  */
 export function getDataDayFromSnapshot(snapshot: Snapshot): number {

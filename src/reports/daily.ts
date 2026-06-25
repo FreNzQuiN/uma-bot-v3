@@ -15,11 +15,6 @@ import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } fro
 
 /**
  * Generate the daily report string.
- *
- * @param snapshot - Raw snapshot data
- * @param config - Bot configuration
- * @param computedMembers - Pre-computed member data (ComputedMember[])
- * @param offset - Days back from latest data day (0 = latest)
  */
 export function generateDailyReport(
   snapshot: Snapshot,

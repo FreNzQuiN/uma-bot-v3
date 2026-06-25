@@ -32,11 +32,6 @@ function stripFooter(report: string): string {
 
 /**
  * Generate a combined report string from multiple report types.
- *
- * @param types - Report types to include (e.g. ['daily', 'weekly', 'monthly'])
- * @param snapshot - Snapshot data
- * @param config - Bot configuration
- * @param computedMembers - Pre-computed member data (ComputedMember[])
  * @returns Joined report string, or empty string if no types matched
  */
 export function generateCombinedReport(

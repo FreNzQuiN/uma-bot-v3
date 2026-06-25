@@ -14,10 +14,6 @@ import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } fro
 
 /**
  * Generate the stats report string.
- *
- * @param snapshot - Raw snapshot data
- * @param config - Bot configuration
- * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateStatsReport(
   snapshot: Snapshot,

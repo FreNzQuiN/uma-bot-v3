@@ -20,9 +20,6 @@ import { log } from '../utils/logger';
  * Historical members not in the current snapshot are marked status='left'.
  *
  * This must be called before getLeftMembers so history is populated.
- *
- * @param snapshot - The current snapshot
- * @param db - Database instance
  */
 export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Promise<void> {
   const today = getDataDate();
@@ -73,9 +70,6 @@ export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Pr
  * A left member is:
  *   member existed in previous history (member_history with same circle_id)
  *   AND member does NOT exist in the current snapshot
- *
- * @param snapshot - The current snapshot
- * @param db - Database instance
  * @returns Array of member_history rows for departed members
  */
 export async function getLeftMembers(snapshot: Snapshot, db: IDatabase): Promise<MemberHistoryRow[]> {

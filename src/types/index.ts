@@ -4,10 +4,6 @@
  * Based on uma.moe API response shapes and v3-spec-2.md data model.
  */
 
-// ============================================================
-// Snapshot (raw uma.moe API response, immutable once saved)
-// ============================================================
-
 export interface CircleData {
   circle_id: number;
   name: string;
@@ -64,10 +60,6 @@ export interface Snapshot {
   yesterday_fans_to_lower_tier: number;
 }
 
-// ============================================================
-// Derived / computed types
-// ============================================================
-
 export type MemberStatus = 'active' | 'stale' | 'left';
 
 export interface ComputedMember {
@@ -106,10 +98,6 @@ export interface TierData {
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   projectedOutcome: 'promote' | 'stay' | 'demotion_risk' | 'unknown';
 }
-
-// ============================================================
-// Configuration
-// ============================================================
 
 export interface BotConfig {
   circleId: number;
@@ -208,10 +196,6 @@ export interface BotConfig {
   };
 }
 
-// ============================================================
-// Database models
-// ============================================================
-
 export interface ScheduleRunRow {
   id: number;
   report_type: string;
@@ -256,10 +240,6 @@ export interface RankHistoryRow {
   fans_to_next_tier: number;
   fans_to_lower_tier: number;
 }
-
-// ============================================================
-// Enums / constants
-// ============================================================
 
 export const CLUB_TIERS: Record<number, string> = {
   11: 'SS',

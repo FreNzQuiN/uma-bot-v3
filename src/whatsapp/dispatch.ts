@@ -50,11 +50,6 @@ function formatUptime(): string {
 
 /**
  * Set up the command handler on the WhatsApp client.
- *
- * @param client - WhatsApp client instance
- * @param config - Bot configuration
- * @param db - Database instance
- * @param getSnapshot - Function to load the latest snapshot
  */
 export function setupCommandHandler(
   client: WhatsAppClient,
@@ -99,7 +94,6 @@ async function dispatchMessage(
   prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>,
   onConfigUpdate?: (config: BotConfig) => void
 ): Promise<void> {
-  // Extract message text
   // Use || not ?? — protobuf-decoded messages have conversation:"" (empty string),
   // which ?? treats as non-nullish, short-circuiting before reaching extendedTextMessage.text
   const extMsg = msg.message?.extendedTextMessage as Record<string, unknown> | undefined;
@@ -113,7 +107,6 @@ async function dispatchMessage(
     return;
   }
 
-  // Parse the command
   const parsed = parseCommand(text, config.commands.prefixes);
   if (!parsed) {
     log.debug('Dispatch', `No command prefix match for: "${text.slice(0, 80)}"`);

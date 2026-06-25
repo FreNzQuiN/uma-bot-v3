@@ -16,9 +16,6 @@ import { sanitizeName } from '../utils/format';
  * Check if a snapshot's data is stale (more than 1 day behind current data day).
  * Returns a warning string if stale, empty string if fresh.
  *
- * @param snapshotYear - Year from snapshot
- * @param snapshotMonth - Month from snapshot
- * @param dataDay - Latest data day number from snapshot
  * @param now - Optional Date override for testing (defaults to current time)
  */
 export function getStaleDataWarning(
@@ -73,8 +70,6 @@ export function buildDataLine(formattedDate: string): string {
  * Build the standard report header lines.
  * Returns array of lines (without trailing empty line).
  *
- * @param snapshot - Snapshot data
- * @param title - Report title line (bold markdown)
  * @param includeDataLine - Whether to append the "Periode data" line (default: true)
  */
 export function buildReportHeader(

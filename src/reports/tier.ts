@@ -15,9 +15,6 @@ export { computeTierData, CLUB_TIERS };
 
 /**
  * Generate the tier report string.
- *
- * @param snapshot - Raw snapshot data
- * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateTierReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
   if (!snapshot.members || snapshot.members.length === 0) {

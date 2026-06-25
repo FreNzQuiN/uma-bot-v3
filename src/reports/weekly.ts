@@ -35,11 +35,6 @@ export function getWeekForDay(day: number): number {
 
 /**
  * Generate the weekly report string.
- *
- * @param snapshot - Raw snapshot data
- * @param config - Bot configuration
- * @param computedMembers - Pre-computed member data (ComputedMember[])
- * @param offset - Weeks back from latest (0 = current week)
  */
 export function generateWeeklyReport(
   snapshot: Snapshot,

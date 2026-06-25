@@ -14,10 +14,6 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 
 /**
  * Generate the ranks report string.
- *
- * @param snapshot - Raw snapshot data
- * @param config - Bot configuration
- * @param computedMembers - Pre-computed member data (ComputedMember[])
  */
 export function generateRanksReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
   if (!snapshot.members || snapshot.members.length === 0) {

@@ -15,12 +15,6 @@ import { computeRollingAverage } from '../data/daily-fans';
 
 /**
  * Generate the compare report string.
- *
- * @param snapshot - Raw snapshot data
- * @param config - Bot configuration
- * @param computedMembers - Pre-computed member data (ComputedMember[])
- * @param nameA - First member name to compare
- * @param nameB - Second member name to compare
  */
 export function generateCompareReport(
   snapshot: Snapshot,
