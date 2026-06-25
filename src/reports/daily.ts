@@ -5,13 +5,13 @@
  * Shows per-member daily gains ranked, stale warnings, and club tier info.
  */
 
-import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
+import { Snapshot, BotConfig, RankedMember } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { getDailyGain } from '../data/daily-fans';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { formatDateWIB } from '../utils/timezone';
-import { getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
 
 /**
  * Generate the daily report string.
@@ -74,20 +74,13 @@ export function generateDailyReport(
     0
   );
 
-  const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } =
-    snapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
-
+  const { fans_to_next_tier, fans_to_lower_tier } = snapshot;
   const dateStr = buildDateStr(snapshot, adjustedDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
   const lines: string[] = [];
-  lines.push(`📊 *Daily Report — ${formattedDate}*`);
-  lines.push('');
-  lines.push(
-    `${circle.name} | ${tierName} (#${circle.monthly_rank})`
-  );
-  lines.push(buildDataLine(formattedDate));
+  const header = buildReportHeader(snapshot, `📊 *Daily Report — ${formattedDate}*`);
+  lines.push(...header);
   lines.push(
     `Promosi: ${formatNumber(fans_to_next_tier)} fans lagi | Degradasi: buffer ${formatNumber(fans_to_lower_tier)}`
   );

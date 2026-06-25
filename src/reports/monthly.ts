@@ -5,12 +5,11 @@
  * member counts by status, and per-member monthly contributions.
  */
 
-import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
+import { Snapshot, BotConfig, RankedMember } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
 import { INDONESIAN_MONTHS } from '../utils/timezone';
 import { isStaleForReport } from '../data/daily-fans';
 import { computeMembers } from './compute';
@@ -90,11 +89,7 @@ export function generateMonthlyReport(
   const contributorCount = ranked.filter((m) => m.monthlyGain > 0).length;
   const activeCount = effectiveMembers.filter((m) => m.status === 'active').length;
 
-  const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } = activeSnapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
-
-  const dateStr = buildDateStr(activeSnapshot);
-  const formattedDate = formatDateWIB(dateStr);
+  const { fans_to_next_tier, fans_to_lower_tier } = activeSnapshot;
 
   const adjustedDataDay = getDataDayFromSnapshot(activeSnapshot);
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -110,14 +105,8 @@ export function generateMonthlyReport(
     lines.push(fallbackWarning);
   }
 
-  lines.push(`📅 *Monthly Report — ${formatMonthYear(month, year)}*`);
-  lines.push('');
-
-  lines.push(
-    `${circle.name} | ${tierName} (#${circle.monthly_rank})`
-  );
-
-  lines.push(buildDataLine(formattedDate));
+  const header = buildReportHeader(activeSnapshot, `📅 *Monthly Report — ${formatMonthYear(month, year)}*`);
+  lines.push(...header);
 
   // Tier context
   lines.push(

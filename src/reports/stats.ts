@@ -5,13 +5,12 @@
  * consistency metrics, and club-wide performance indicators.
  */
 
-import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
+import { Snapshot, BotConfig } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeRollingAverage, countActiveDays } from '../data/daily-fans';
 import { formatNumber } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
 
 /**
  * Generate the stats report string.
@@ -79,19 +78,13 @@ export function generateStatsReport(
     (m) => m.latestDailyGain === 0
   ).length;
 
-  const { circle, club_rank, fans_to_next_tier, fans_to_lower_tier } =
-    snapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
+  const { fans_to_next_tier, fans_to_lower_tier } = snapshot;
 
   const { year, month } = snapshot.members[0];
-  const dateStr = buildDateStr(snapshot, actualDataDay);
-  const formattedDate = formatDateWIB(dateStr);
 
   const lines: string[] = [];
-  lines.push(`📊 *Stats Overview*`);
-  lines.push('');
-  lines.push(`${circle.name} | ${tierName} (#${circle.monthly_rank})`);
-  lines.push(buildDataLine(formattedDate));
+  const header = buildReportHeader(snapshot, `📊 *Stats Overview*`);
+  lines.push(...header);
   lines.push('');
   const activeCount = computedMembers.filter((m) => m.status === 'active').length;
   const leftCount = computedMembers.filter((m) => m.status === 'left').length;

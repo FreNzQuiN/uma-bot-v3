@@ -8,6 +8,7 @@
 import { formatDateWIB, getDataDateComponents, formatForDisplay } from '../utils/timezone';
 
 import type { Snapshot, BotConfig } from '../types';
+import { CLUB_TIERS } from '../types';
 import { getLatestDataDay } from '../data/daily-fans';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 
@@ -66,4 +67,32 @@ const DATA_UPDATE_STRING = '22:00 WIB';
 
 export function buildDataLine(formattedDate: string): string {
   return `Periode data: ${formattedDate}, ${DATA_UPDATE_STRING}`;
+}
+
+/**
+ * Build the standard report header lines.
+ * Returns array of lines (without trailing empty line).
+ *
+ * @param snapshot - Snapshot data
+ * @param title - Report title line (bold markdown)
+ * @param includeDataLine - Whether to append the "Periode data" line (default: true)
+ */
+export function buildReportHeader(
+  snapshot: Snapshot,
+  title: string,
+  includeDataLine: boolean = true
+): string[] {
+  const { circle, club_rank } = snapshot;
+  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
+
+  const lines: string[] = [];
+  lines.push(`${title}`);
+  lines.push('');
+  lines.push(`${circle.name} | ${tierName} (#${circle.monthly_rank})`);
+  if (includeDataLine) {
+    const dateStr = buildDateStr(snapshot);
+    const formattedDate = formatDateWIB(dateStr);
+    lines.push(buildDataLine(formattedDate));
+  }
+  return lines;
 }

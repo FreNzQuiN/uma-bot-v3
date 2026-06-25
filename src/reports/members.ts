@@ -6,12 +6,12 @@
  * Optionally shows left members with "last seen" info when DB is provided.
  */
 
-import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
+import { Snapshot, BotConfig } from '../types';
 import type { ComputedMember } from '../types';
 import type { IDatabase } from '../db/types';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { formatDateWIB } from '../utils/timezone';
-import { buildFooter, buildDateStr } from './format';
+import { buildFooter, buildDateStr, buildReportHeader } from './format';
 import { getLeftMembers } from '../data/member-history';
 
 /**
@@ -32,9 +32,6 @@ export async function generateMembersReport(
     return 'ℹ️ *Daftar Anggota*\nData anggota belum tersedia.';
   }
 
-  const { circle, club_rank } = snapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
-
   const statusOrder = { active: 0, stale: 1, left: 2 };
   const sorted = [...computedMembers].sort((a, b) => {
     const sa = statusOrder[a.status] ?? 3;
@@ -44,9 +41,8 @@ export async function generateMembersReport(
   });
 
   const lines: string[] = [];
-  lines.push(`👥 *Daftar Anggota*`);
-  lines.push('');
-  lines.push(`${circle.name} | ${tierName} (#${circle.monthly_rank})`);
+  const header = buildReportHeader(snapshot, `👥 *Daftar Anggota*`, false);
+  lines.push(...header);
   lines.push('');
 
   for (const m of sorted) {

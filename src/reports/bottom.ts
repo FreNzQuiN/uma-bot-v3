@@ -5,12 +5,11 @@
  * Focuses on members who may need attention or encouragement.
  */
 
-import { Snapshot, BotConfig, RankedMember, CLUB_TIERS } from '../types';
+import { Snapshot, BotConfig, RankedMember } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { buildDateStr, buildFooter, buildDataLine } from './format';
+import { buildDateStr, buildFooter, buildReportHeader } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
 /**
@@ -33,18 +32,11 @@ export function generateBottomReport(
     .filter((m) => m.status === 'active')
     .sort((a, b) => a.monthlyGain - b.monthlyGain);
 
-  const { circle, club_rank } = snapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
-
   const dataDay = getDataDayFromSnapshot(snapshot);
-  const dateStr = buildDateStr(snapshot, dataDay);
-  const formattedDate = formatDateWIB(dateStr);
 
   const lines: string[] = [];
-  lines.push(`📉 *Perlu Perhatian*`);
-  lines.push('');
-  lines.push(`${circle.name} | ${tierName} (#${circle.monthly_rank})`);
-  lines.push(buildDataLine(formattedDate));
+  const header = buildReportHeader(snapshot, `📉 *Perlu Perhatian*`);
+  lines.push(...header);
   lines.push('');
 
   const { monthlyFans, weeklyFans } = config.requirements;

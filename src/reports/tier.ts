@@ -7,10 +7,8 @@
 
 import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
 import type { ComputedMember } from '../types';
-import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { buildDateStr, buildFooter, buildDataLine } from './format';
+import { buildDateStr, buildFooter, buildReportHeader } from './format';
 import { computeTierData } from '../data/daily-fans';
 
 export { computeTierData, CLUB_TIERS };
@@ -27,7 +25,6 @@ export function generateTierReport(snapshot: Snapshot, config: BotConfig, comput
   }
 
   const tier = computeTierData(snapshot);
-  const { circle } = snapshot;
 
   const riskEmoji: Record<string, string> = {
     LOW: '✅',
@@ -43,17 +40,8 @@ export function generateTierReport(snapshot: Snapshot, config: BotConfig, comput
   };
 
   const lines: string[] = [];
-  lines.push(`🏆 *Tier Intelligence*`);
-  lines.push('');
-
-  const dataDay = getDataDayFromSnapshot(snapshot);
-  const dateStr = buildDateStr(snapshot, dataDay);
-  const formattedDate = formatDateWIB(dateStr);
-
-  lines.push(
-    `${circle.name} | ${tier.tierName} (#${circle.monthly_rank})`
-  );
-  lines.push(buildDataLine(formattedDate));
+  const header = buildReportHeader(snapshot, `🏆 *Tier Intelligence*`);
+  lines.push(...header);
   lines.push('');
   lines.push(
     `Promosi: ${formatNumber(tier.promotionGap)} fans lagi`

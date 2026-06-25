@@ -5,12 +5,11 @@
  * Week blocks are fixed: W1=d1-7, W2=d8-14, W3=d15-21, W4=d22-28, W5=d29-31.
  */
 
-import { Snapshot, BotConfig, WEEK_BLOCKS, CLUB_TIERS } from '../types';
+import { Snapshot, BotConfig, WEEK_BLOCKS } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { getStaleDataWarning, buildDateStr, buildFooter, buildDataLine } from './format';
+import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
 import { isStaleForReport } from '../data/daily-fans';
 
 interface WeeklyRankedMember {
@@ -78,23 +77,16 @@ export function generateWeeklyReport(
     0
   );
 
-  const { circle, fans_to_next_tier, fans_to_lower_tier, club_rank } = snapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
-
+  const { fans_to_next_tier, fans_to_lower_tier } = snapshot;
   const dateStr = buildDateStr(snapshot);
-  const formattedDate = formatDateWIB(dateStr);
 
   const contributors = ranked.filter((m) => m.weeklyGain > 0);
   const activeCount = computedMembers.filter((m) => m.status === 'active').length;
   const contributorCount = contributors.length;
 
   const lines: string[] = [];
-  lines.push(`📈 *Weekly Report — Minggu ${targetWeek}*`);
-  lines.push('');
-  lines.push(
-    `${circle.name} | ${tierName} (#${circle.monthly_rank})`
-  );
-  lines.push(buildDataLine(formattedDate));
+  const header = buildReportHeader(snapshot, `📈 *Weekly Report — Minggu ${targetWeek}*`);
+  lines.push(...header);
   lines.push(
     `Periode: Hari ${block.start}-${block.end}`
   );

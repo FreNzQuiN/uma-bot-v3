@@ -5,12 +5,10 @@
  * Uses medal emojis for top 3 positions.
  */
 
-import { Snapshot, BotConfig, CLUB_TIERS } from '../types';
+import { Snapshot, BotConfig } from '../types';
 import type { ComputedMember } from '../types';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { buildDateStr, buildFooter, buildDataLine } from './format';
-import { getDataDayFromSnapshot } from '../data/snapshot';
+import { buildDateStr, buildFooter, buildReportHeader } from './format';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -31,18 +29,9 @@ export function generateRanksReport(snapshot: Snapshot, config: BotConfig, compu
     .sort((a, b) => b.monthlyGain - a.monthlyGain)
     .slice(0, 10);
 
-  const { circle, club_rank } = snapshot;
-  const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
-
-  const dataDay = getDataDayFromSnapshot(snapshot);
-  const dateStr = buildDateStr(snapshot, dataDay);
-  const formattedDate = formatDateWIB(dateStr);
-
   const lines: string[] = [];
-  lines.push(`🏆 *Peringkat Bulanan*`);
-  lines.push('');
-  lines.push(`${circle.name} | ${tierName} (#${circle.monthly_rank})`);
-  lines.push(buildDataLine(formattedDate));
+  const header = buildReportHeader(snapshot, `🏆 *Peringkat Bulanan*`);
+  lines.push(...header);
   lines.push('');
 
   for (let i = 0; i < sorted.length; i++) {
