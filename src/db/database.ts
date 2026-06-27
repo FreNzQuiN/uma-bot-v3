@@ -286,6 +286,16 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     );
   }
 
+  async markAlertsByEventKeys(eventKeys: string[]): Promise<void> {
+    if (eventKeys.length === 0) return;
+    const now = new Date().toISOString();
+    const placeholders = eventKeys.map(() => '?').join(',');
+    this.runSql(
+      `UPDATE alert_events SET status = ?, sent_at = ? WHERE event_key IN (${placeholders})`,
+      ['sent', now, ...eventKeys]
+    );
+  }
+
   async upsertMember(member: MemberHistoryInsert): Promise<void> {
     this.runSql(
       `INSERT INTO member_history
@@ -388,7 +398,7 @@ async save(): Promise<void> {
     if (!this.dirty) return;
     const db = this.ensureDb();
     const data = db.export();
-    const buffer = Buffer.from(data);
+    const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
     writeFileSync(this.dbPath, buffer);
     this.dirty = false;
   }

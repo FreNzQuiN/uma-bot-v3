@@ -71,6 +71,8 @@ export interface IDatabase {
   recordAlerts(alerts: AlertEventInsert[]): Promise<number[]>;
   markAlertSent(id: number): Promise<void>;
   markAlertsSent(ids: number[]): Promise<void>;
+  /** Mark alerts as sent by their event keys (for deferred delivery after catch-up). */
+  markAlertsByEventKeys(eventKeys: string[]): Promise<void>;
 
   upsertMember(member: MemberHistoryInsert): Promise<void>;
   upsertMembers(members: MemberHistoryInsert[]): Promise<void>;

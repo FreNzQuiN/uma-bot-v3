@@ -44,7 +44,7 @@ export function generateStatsReport(
       : 0;
 
   const totalDailyGain = contributing.reduce(
-    (sum, m) => sum + m.latestDailyGain,
+    (sum, m) => sum + m.latestKnownGain,
     0
   );
   const avgDailyGain =
@@ -66,7 +66,7 @@ export function generateStatsReport(
       : 0;
 
   const zeroGainToday = contributing.filter(
-    (m) => m.latestDailyGain === 0
+    (m) => m.latestKnownGain === 0
   ).length;
 
   const { fans_to_next_tier, fans_to_lower_tier } = snapshot;

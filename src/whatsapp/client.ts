@@ -162,7 +162,8 @@ export class WhatsAppClient {
       const msgsSinceLast = rt.messagesReceived - this.lastMessageCount;
       this.lastMessageCount = rt.messagesReceived;
       const jidInfo = this.sock?.user?.id ? this.sock.user.id.split(':')[0] : 'no-jid';
-      log.info('WhatsApp', `♥ heartbeat: state=${this.connectionState} jid=${jidInfo} msgs=${rt.messagesReceived} (+${msgsSinceLast} since last check) reconnects=${rt.reconnectCount}`);
+      const mem = process.memoryUsage();
+      log.info('WhatsApp', `♥ heartbeat: state=${this.connectionState} jid=${jidInfo} msgs=${rt.messagesReceived} (+${msgsSinceLast} since last check) reconnects=${rt.reconnectCount} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB`);
     }, 30_000);
   }
 

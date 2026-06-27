@@ -76,14 +76,14 @@ export class CatchUpManager {
   async recordSkippedReports(missed: string[]): Promise<void> {
     if (missed.length === 0) return;
 
-    const today = getDataDate();
     const scheduledAt = new Date().toISOString();
     const targetJid = this.config.groups.announcement[0] ?? '';
 
     for (const reportType of missed) {
+      const reportDate = this.getMissedDate(reportType);
       await this.db.recordRun({
         report_type: reportType,
-        report_date: today,
+        report_date: reportDate,
         scheduled_at: scheduledAt,
         status: 'skipped',
         is_catch_up: false,
@@ -285,6 +285,43 @@ export class CatchUpManager {
     }
 
     return { sent, skipped, failed, alerts };
+  }
+
+  /**
+   * Compute the date that was missed for a given report type.
+   * For daily: yesterday. For weekly/monthly: the most recent scheduled day.
+   */
+  private getMissedDate(reportType: string): string {
+    switch (reportType) {
+      case 'daily':
+        return getYesterdayDate();
+      case 'weekly': {
+        const todayDay = getDataDay();
+        const weeklyDays = this.config.schedule.weekly.days;
+        for (const day of [...weeklyDays].sort((a, b) => b - a)) {
+          if (day <= todayDay) {
+            return `${getDataYear()}-${String(getDataMonth()).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          }
+        }
+        const lastDay = Math.max(...weeklyDays);
+        const jstMonth = getDataMonth();
+        const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
+        const prevYear = jstMonth === 1 ? getDataYear() - 1 : getDataYear();
+        return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      }
+      case 'monthly': {
+        const monthlyDay = this.config.schedule.monthly.day;
+        const jstMonth2 = getDataMonth();
+        if (getDataDay() >= monthlyDay) {
+          return `${getDataYear()}-${String(jstMonth2).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
+        }
+        const prevMonth2 = jstMonth2 === 1 ? 12 : jstMonth2 - 1;
+        const prevYear2 = jstMonth2 === 1 ? getDataYear() - 1 : getDataYear();
+        return `${prevYear2}-${String(prevMonth2).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
+      }
+      default:
+        return getDataDate();
+    }
   }
 
   private isReportEnabled(reportType: string): boolean {

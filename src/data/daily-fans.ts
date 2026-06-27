@@ -72,9 +72,10 @@ export function getDailyGain(dailyFans: number[], day: number, includeTransfer: 
   }
 
   const current = dailyFans[day - 1];
-  if (!isPositive(current)) {
+  if (!hasValue(current, includeTransfer)) {
     return 0;
   }
+  const effectiveCurrent = effectiveValue(current, includeTransfer);
 
   if (day < 2) {
     return 0; // no previous day
@@ -82,10 +83,10 @@ export function getDailyGain(dailyFans: number[], day: number, includeTransfer: 
 
   const previous = dailyFans[day - 2];
   if (isPositive(previous)) {
-    return current - previous;
+    return effectiveCurrent - previous;
   }
   if (includeTransfer && typeof previous === 'number' && previous < 0) {
-    return current - Math.abs(previous);
+    return effectiveCurrent - Math.abs(previous);
   }
 
   return 0;
@@ -365,6 +366,10 @@ export function computeTierData(snapshot: Snapshot): TierData {
     if (currentPace >= requiredPace) {
       projectedOutcome = 'promote';
     } else if (projectedOutcome !== 'demotion_risk') {
+      projectedOutcome = 'stay';
+    }
+  } else if (fans_to_next_tier > 0 && daysLeft === 0) {
+    if (projectedOutcome !== 'demotion_risk') {
       projectedOutcome = 'stay';
     }
   } else if (fans_to_next_tier === 0 && projectedOutcome !== 'demotion_risk') {

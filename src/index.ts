@@ -323,7 +323,9 @@ async function main() {
         log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
 
         if (result.alerts.length > 0) {
-          await orchestrator.deliverAlerts(result.alerts as import('./alerts/alerts').Alert[], true);
+          const alerts = result.alerts as import('./alerts/alerts').Alert[];
+          await orchestrator.deliverAlerts(alerts, true);
+          await orchestrator.markAlertsByEventKeys(alerts.map((a) => a.eventKey));
         }
       } else {
         log.debug('CatchUp', 'No missed reports detected');

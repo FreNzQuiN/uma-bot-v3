@@ -59,8 +59,8 @@ export function generateCompareReport(
   lines.push(`• ${boldB}: ${formatNumber(memberB.monthlyGain)}`);
   lines.push('');
   lines.push(`*Daily Terakhir*`);
-  lines.push(`• ${boldA}: ${formatNumber(memberA.latestDailyGain)}`);
-  lines.push(`• ${boldB}: ${formatNumber(memberB.latestDailyGain)}`);
+  lines.push(`• ${boldA}: ${formatNumber(memberA.latestKnownGain)}`);
+  lines.push(`• ${boldB}: ${formatNumber(memberB.latestKnownGain)}`);
   lines.push('');
   lines.push(`*Rata-rata 7 Hari*`);
   lines.push(`• ${boldA}: ${formatNumber(avgA)}`);

@@ -91,6 +91,15 @@ export class ReportOrchestrator {
   }
 
   /**
+   * Mark alerts as sent by their event keys.
+   * Used after deferred delivery in catch-up flows.
+   */
+  async markAlertsByEventKeys(eventKeys: string[]): Promise<void> {
+    if (eventKeys.length === 0) return;
+    await this.db.markAlertsByEventKeys(eventKeys);
+  }
+
+  /**
    * Month-alignment + stale data pre-fetch.
    * If the snapshot is from a different month, or data is 2+ days behind,
    * fetch fresh data from uma.moe. Returns the (possibly refreshed) snapshot.
@@ -200,8 +209,8 @@ export class ReportOrchestrator {
 
         if (!options?.collectAlerts) {
           await this.deliverAlerts(alerts, options?.isCatchUp ?? false);
+          await this.db.markAlertsSent(alertIds);
         }
-        await this.db.markAlertsSent(alertIds);
       }
     } catch (err) {
       log.error('Alert', `Alert processing failed for ${type} report (report was delivered)`, err);

@@ -342,6 +342,17 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     );
   }
 
+  async markAlertsByEventKeys(eventKeys: string[]): Promise<void> {
+    if (eventKeys.length === 0) return;
+    const conn = this.getConn();
+    const now = new Date().toISOString();
+    const placeholders = eventKeys.map(() => '?').join(',');
+    await conn.query(
+      `UPDATE alert_events SET status = ?, sent_at = ? WHERE event_key IN (${placeholders})`,
+      ['sent', now, ...eventKeys]
+    );
+  }
+
   async upsertMember(member: MemberHistoryInsert): Promise<void> {
     const conn = this.getConn();
     const params = [

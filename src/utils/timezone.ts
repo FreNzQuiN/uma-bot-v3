@@ -75,6 +75,11 @@ export function getDataDay(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).day;
 }
 
+/** Get day of month in a specific display timezone. */
+export function getDisplayDay(displayTimezone: string, date?: Date): number {
+  return extractInTimezone(date ?? new Date(), displayTimezone).day;
+}
+
 /** Get JST month (1-12). */
 export function getDataMonth(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).month;

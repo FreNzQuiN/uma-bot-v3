@@ -76,7 +76,7 @@ export function generateAnalyzeReport(
   lines.push('');
   lines.push(`*Gain*`);
   lines.push(`• Monthly: ${formatNumber(member.monthlyGain)}`);
-  lines.push(`• Daily terakhir: ${formatNumber(member.latestDailyGain)}`);
+  lines.push(`• Daily terakhir: ${formatNumber(member.latestKnownGain)}`);
   lines.push(`• Rata-rata 3 Hari: ${formatNumber(avg3d)}`);
   lines.push(`• Rata-rata 7 Hari: ${formatNumber(avg7d)}`);
   lines.push('');

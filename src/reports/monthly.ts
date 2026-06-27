@@ -61,7 +61,7 @@ export function generateMonthlyReport(
     .map((m) => ({
       rank: 0,
       trainerName: m.trainerName,
-      dailyGain: m.latestDailyGain,
+      dailyGain: m.latestKnownGain,
       monthlyGain: m.monthlyGain,
       isTransfer: m.isTransfer,
       previousCircleName: m.previousCircleName,

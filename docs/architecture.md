@@ -168,7 +168,7 @@ npm run pm2:stop       # stop the service
 npm run pm2:restart    # rebuild + restart
 ```
 
-Single instance (no clustering — the bot has WebSocket state). Auto-restart on crash. Memory limit: 500MB (safety net). Boot persistence via `pm2-windows-startup`.
+Single instance (no clustering — the bot has WebSocket state). Auto-restart on crash. Memory limit: 400MB (safety net). Boot persistence via `pm2-windows-startup`.
 
 ### Docker
 

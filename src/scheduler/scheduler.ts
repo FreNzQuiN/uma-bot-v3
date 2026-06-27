@@ -9,9 +9,9 @@
 import cron, { ScheduledTask } from 'node-cron';
 import type { BotConfig } from '../types';
 import type { IDatabase } from '../db/types';
-import { getDataDate, getDataDay } from '../utils/timezone';
+import { getDataDate, getDisplayDay } from '../utils/timezone';
 import { log } from '../utils/logger';
-import { getCollidingTypes, isScheduledToday } from './helpers';
+import { getCollidingTypes } from './helpers';
 
 export class Scheduler {
   private getConfig: () => BotConfig;
@@ -119,38 +119,23 @@ export class Scheduler {
         }
       }
       await this.db.updateRunStatus(runId, 'sent');
+      // Record individual runs so catch-up detection doesn't re-send
+      for (const type of pending) {
+        await this.db.recordRun({
+          report_type: type,
+          report_date: today,
+          scheduled_at: scheduledAt,
+          status: 'sent',
+          is_catch_up: false,
+          target_jid: targetJid,
+        });
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       await this.db.updateRunStatus(runId, 'failed', errorMsg);
       throw error;
     }
   };
-
-  detectCollision(dayOfMonth: number, typeA: string, typeB: string): boolean {
-    const schedule = this.config.schedule;
-    const times: Record<string, string | undefined> = {
-      daily: schedule.daily.time,
-      weekly: schedule.weekly.time,
-      monthly: schedule.monthly.time,
-    };
-    if (times[typeA] !== times[typeB]) return false;
-    const aScheduled = isScheduledToday(typeA, dayOfMonth, this.config);
-    const bScheduled = isScheduledToday(typeB, dayOfMonth, this.config);
-    return aScheduled && bScheduled;
-  }
-
-  private scheduleDataFetch(): void {
-    const dailyCron = this.getDailyCron();
-    const task = cron.schedule(dailyCron, async () => {
-      try {
-        await this.onDataFetch?.();
-        log.debug('Scheduler', 'Scheduled data fetch completed');
-      } catch (error) {
-        log.error('Scheduler', 'Scheduled data fetch failed', error);
-      }
-    });
-    this.tasks.push(task);
-  }
 
   getDailyCron(): string {
     const [hour, minute] = this.config.schedule.daily.time.split(':');
@@ -172,20 +157,18 @@ export class Scheduler {
   start(): void {
     this.stop(); // clear any existing tasks
 
-    const scheduledDays = new Set([
-      ...this.config.schedule.weekly.days,
-      this.config.schedule.monthly.day,
-    ]);
-
-    // Data fetch task — registered FIRST
-    this.scheduleDataFetch();
-
+    // Daily schedule
     if (this.config.schedule.daily.enabled) {
       const dailyCron = this.getDailyCron();
       try {
         const task = cron.schedule(dailyCron, async () => {
           try {
-            const today = getDataDay();
+            if (this.onDataFetch) {
+              await this.onDataFetch();
+              log.debug('Scheduler', 'Pre-report data fetch completed');
+            }
+
+            const today = getDisplayDay(this.config.timezone);
             const collidingTypes = getCollidingTypes(today, this.config);
 
             if (collidingTypes.length > 1) {
@@ -210,7 +193,7 @@ export class Scheduler {
       try {
         const task = cron.schedule(weeklyCron, async () => {
           try {
-            const today = getDataDay();
+            const today = getDisplayDay(this.config.timezone);
             const collidingTypes = getCollidingTypes(today, this.config);
             const dailyEnabled = this.config.schedule.daily.enabled;
 
@@ -246,7 +229,7 @@ export class Scheduler {
       try {
         const task = cron.schedule(monthlyCron, async () => {
           try {
-            const today = getDataDay();
+            const today = getDisplayDay(this.config.timezone);
             const collidingTypes = getCollidingTypes(today, this.config);
             const dailyEnabled = this.config.schedule.daily.enabled;
 

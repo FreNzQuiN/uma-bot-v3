@@ -74,7 +74,7 @@ export interface ComputedMember {
   firstPositiveDay: number;     // 1-indexed day number, 0 = no data
   firstPositiveValue: number;
   monthlyGain: number;
-  latestDailyGain: number;
+  latestKnownGain: number;
   weeklyGains: number[];        // gains per week block
 }
 

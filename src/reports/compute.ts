@@ -49,7 +49,7 @@ export function computeMembers(
 
       const includeTransfer = config.requirements.includeTransferDataInCalculation;
       const monthlyGain = getMonthlyGain(dailyFans, includeTransfer);
-      const latestDailyGain = getDailyGain(dailyFans, latestPositiveDay, includeTransfer);
+      const latestKnownGain = getDailyGain(dailyFans, latestPositiveDay, includeTransfer);
       const weeklyGains = WEEK_BLOCKS.map((wb) =>
         getWeeklyGain(dailyFans, wb.week, includeTransfer)
       );
@@ -66,7 +66,7 @@ export function computeMembers(
         firstPositiveDay,
         firstPositiveValue,
         monthlyGain,
-        latestDailyGain,
+        latestKnownGain,
         weeklyGains,
       };
     });

@@ -191,7 +191,7 @@ describe('Average daily gain', () => {
     const contributing = members.filter(
       (m) => m.status === 'active'
     );
-    const totalDailyGain = contributing.reduce((sum, m) => sum + m.latestDailyGain, 0);
+    const totalDailyGain = contributing.reduce((sum, m) => sum + m.latestKnownGain, 0);
     expect(totalDailyGain).toBe(32287438);
 
     const avg = Math.round(totalDailyGain / 30);
@@ -239,7 +239,7 @@ describe('Zero gain today', () => {
     const contributing = members.filter(
       (m) => m.status === 'active'
     );
-    const zeroMembers = contributing.filter((m) => m.latestDailyGain === 0);
+    const zeroMembers = contributing.filter((m) => m.latestKnownGain === 0);
     expect(zeroMembers.length).toBe(3);
     expect(zeroMembers.map((m) => m.trainerName).sort()).toEqual(['Falkrum', 'jgd', 'naku'].sort());
   });

@@ -81,7 +81,7 @@ describe('REST API', () => {
         expect(typeof member.name).toBe('string');
         expect(typeof member.status).toBe('string');
         expect(typeof member.monthlyGain).toBe('number');
-        expect(typeof member.latestDailyGain).toBe('number');
+        expect(typeof member.latestKnownGain).toBe('number');
         expect(typeof member.isTransfer).toBe('boolean');
       }
     });
@@ -175,7 +175,7 @@ describe('REST API', () => {
       expect(data.name).toBe('Ryu');
       expect(data.status).toBe('active');
       expect(typeof data.monthlyGain).toBe('number');
-      expect(typeof data.latestDailyGain).toBe('number');
+      expect(typeof data.latestKnownGain).toBe('number');
       expect(Array.isArray(data.weeklyGains)).toBe(true);
       expect(data.weeklyGains).toHaveLength(5);
     });

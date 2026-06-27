@@ -51,7 +51,7 @@ export function generateWeeklyReport(
     .map((m, i) => ({
       rank: 0,
       trainerName: m.trainerName,
-      dailyGain: m.latestDailyGain,
+      dailyGain: m.latestKnownGain,
       monthlyGain: m.monthlyGain,
       weeklyGain: m.weeklyGains[targetWeek - 1] || 0,
       isTransfer: m.isTransfer,
