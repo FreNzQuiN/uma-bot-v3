@@ -1,22 +1,65 @@
 import { computeMembers } from '../../src/reports/compute';
-import { detectAlerts, formatAlerts, aggregateAlerts } from '../../src/alerts/alerts';
-import { SqliteDatabase } from '../../src/db/database';
+import { detectAlerts, formatAlerts } from '../../src/alerts/alerts';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot, BotConfig } from '../../src/types';
-import { loadRealSnapshot, makeConfig } from '../_helpers';
+import { loadRealSnapshot, makeConfig, makeMockDb } from '../_helpers';
+import type { IDatabase } from '../../src/db/types';
 
 const SNAPSHOT: Snapshot = loadRealSnapshot();
 
-let db: SqliteDatabase;
+let db: IDatabase;
 
-beforeEach(async () => {
-  db = new SqliteDatabase(':memory:');
-  await db.initialize();
+beforeEach(() => {
+  db = makeMockDb();
 });
 
-afterEach(async () => {
-  await db.close();
-});
+function makeSnapshotWithTransfer(): Snapshot {
+  return {
+    circle: {
+      circle_id: 1,
+      name: 'TestCircle',
+      comment: '',
+      leader_viewer_id: 100,
+      leader_name: 'Leader',
+      member_count: 1,
+      join_style: 1,
+      policy: 1,
+      created_at: '2026-01-01T00:00:00Z',
+      last_updated: '2026-06-22T15:00:00Z',
+      monthly_rank: 100,
+      monthly_point: 1000000,
+      last_month_rank: 100,
+      last_month_point: 1000000,
+      archived: false,
+      yesterday_updated: '2026-06-21T15:00:00Z',
+      yesterday_points: 500000,
+      yesterday_rank: 95,
+      live_points: null,
+      live_rank: 100,
+      last_live_update: null,
+    },
+    members: [
+      {
+        id: 1,
+        circle_id: 1,
+        viewer_id: 999,
+        trainer_name: 'TestTrainer',
+        shame_score: null,
+        year: 2026,
+        month: 6,
+        daily_fans: [-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        last_updated: '2026-06-22T15:00:00Z',
+        previous_circle_id: 42,
+        previous_circle_name: 'PrevCircle',
+      },
+    ],
+    club_rank: 5,
+    fans_to_next_tier: 1000000,
+    fans_to_lower_tier: 500000,
+    yesterday_fans_to_next_tier: 1100000,
+    yesterday_fans_to_lower_tier: 600000,
+  };
+}
 
 describe('detectAlerts', () => {
   it('returns empty when alerts disabled', async () => {
@@ -25,17 +68,16 @@ describe('detectAlerts', () => {
     expect(alerts).toHaveLength(0);
   });
 
-  it('detects no performance drops when all members are on track', async () => {
+  it('returns well-formed alert objects', async () => {
     const config = makeConfig();
     const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
-    // With the real snapshot, some members may trigger alerts
-    // Just verify it returns an array of Alert objects
-    expect(Array.isArray(alerts)).toBe(true);
+    expect(alerts.length).toBeGreaterThan(0);
     for (const alert of alerts) {
-      expect(alert).toHaveProperty('type');
-      expect(alert).toHaveProperty('eventKey');
-      expect(alert).toHaveProperty('message');
-      expect(alert).toHaveProperty('reportDate');
+      expect(typeof alert.type).toBe('string');
+      expect(typeof alert.eventKey).toBe('string');
+      expect(typeof alert.message).toBe('string');
+      expect(typeof alert.reportDate).toBe('string');
+      expect(alert.message.length).toBeGreaterThan(0);
     }
   });
 
@@ -55,31 +97,56 @@ describe('detectAlerts', () => {
 
   it('deduplicates alerts via DB', async () => {
     const config = makeConfig();
-    const alerts1 = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
-    // Record each alert once, then mark as sent
-    for (const alert of alerts1) {
-      const id = await db.recordAlert({
-        alert_type: alert.type,
-        event_key: alert.eventKey,
-        member_viewer_id: alert.memberViewerId,
-        report_date: alert.reportDate,
-        created_at: new Date().toISOString(),
-        message: alert.message,
-      });
-      await db.markAlertSent(id);
-    }
+    const recordedKeys = new Set<string>();
 
-    // Second detection should return fewer (all deduped)
+    const alerts1 = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
+    expect(alerts1.length).toBeGreaterThan(0);
+
+    // Record each alert key in the mock DB's getExistingAlertKeys
+    for (const alert of alerts1) {
+      recordedKeys.add(alert.eventKey);
+    }
+    (db as any).getExistingAlertKeys.mockResolvedValue(recordedKeys);
+
+    // Second detection should return 0 (all deduped via recorded keys)
     const alerts2 = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     expect(alerts2.length).toBe(0);
   });
 
+  it('deduplicates new_transfer across days via stable event key', async () => {
+    const config = makeConfig();
+    const snapshot = makeSnapshotWithTransfer();
+
+    // Day 1: detect and record alerts
+    const alerts1 = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const transferKeys1 = alerts1.filter(a => a.type === 'new_transfer').map(a => a.eventKey);
+    expect(transferKeys1.length).toBeGreaterThan(0);
+
+    // All new_transfer keys should NOT contain a date
+    for (const key of transferKeys1) {
+      expect(key).not.toMatch(/new_transfer:\d{4}-\d{2}-\d{2}:/);
+    }
+
+    // Simulate existing keys in DB (all day-1 keys recorded)
+    const recordedKeys = new Set(transferKeys1);
+    (db as any).getExistingAlertKeys.mockResolvedValue(recordedKeys);
+
+    // Day 2: same snapshot, new_transfer should NOT re-fire
+    const alerts2 = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
+    const transferKeys2 = alerts2.filter(a => a.type === 'new_transfer');
+    expect(transferKeys2).toHaveLength(0);
+  });
+
   it('detects demotion risk when tier data shows HIGH risk', async () => {
     const config = makeConfig();
-    // The snapshot may or may not be HIGH risk — just verify no crash
     const alerts = await detectAlerts(computeMembers(SNAPSHOT, config), SNAPSHOT, config, db);
     const demotionAlerts = alerts.filter((a) => a.type === 'demotion_risk');
-    expect(Array.isArray(demotionAlerts)).toBe(true);
+    // Demotion risk depends on snapshot tier data — may or may not be HIGH.
+    // Verify no crash and that the filter returns valid alert objects.
+    for (const alert of demotionAlerts) {
+      expect(alert.type).toBe('demotion_risk');
+      expect(alert.eventKey).toContain('demotion_risk');
+    }
   });
 
   it('does not trigger performance drop for inactive members', async () => {
@@ -163,99 +230,7 @@ describe('formatAlerts', () => {
 });
 
 
-describe('aggregateAlerts', () => {
-  it('returns empty string for empty alerts', () => {
-    expect(aggregateAlerts([])).toBe('');
-  });
 
-  it('groups alerts by type and counts them', () => {
-    const alerts = [
-      {
-        type: 'performance_drop' as const,
-        eventKey: 'k1',
-        memberViewerId: '1',
-        message: 'Alert 1',
-        reportDate: '2026-06-11',
-      },
-      {
-        type: 'performance_drop' as const,
-        eventKey: 'k2',
-        memberViewerId: '2',
-        message: 'Alert 2',
-        reportDate: '2026-06-11',
-      },
-      {
-        type: 'new_transfer' as const,
-        eventKey: 'k3',
-        memberViewerId: '3',
-        message: 'Alert 3',
-        reportDate: '2026-06-11',
-      },
-      {
-        type: 'demotion_risk' as const,
-        eventKey: 'k4',
-        memberViewerId: 'club',
-        message: 'Alert 4',
-        reportDate: '2026-06-11',
-      },
-    ];
-    const result = aggregateAlerts(alerts);
-    expect(result).toContain('[catch-up alerts]');
-    expect(result).toContain('2 penurunan performa terdeteksi');
-    expect(result).toContain('1 transfer baru terdeteksi');
-    expect(result).toContain('1 hari risiko degradasi terdeteksi');
-  });
-
-  it('handles single alert type with one occurrence', () => {
-    const alerts = [
-      {
-        type: 'streak_break' as const,
-        eventKey: 'k1',
-        memberViewerId: '1',
-        message: 'Streak broke',
-        reportDate: '2026-06-11',
-      },
-    ];
-    const result = aggregateAlerts(alerts);
-    expect(result).toContain('[catch-up alerts]');
-    expect(result).toContain('1 streak terputus terdeteksi');
-  });
-
-  it('uses singular form for count of 1', () => {
-    const alerts = [
-      {
-        type: 'performance_drop' as const,
-        eventKey: 'k1',
-        memberViewerId: '1',
-        message: 'One drop',
-        reportDate: '2026-06-11',
-      },
-    ];
-    const result = aggregateAlerts(alerts);
-    expect(result).toContain('1 penurunan performa terdeteksi');
-  });
-
-  it('uses correct format for count > 1', () => {
-    const alerts = [
-      {
-        type: 'performance_drop' as const,
-        eventKey: 'k1',
-        memberViewerId: '1',
-        message: 'Drop 1',
-        reportDate: '2026-06-11',
-      },
-      {
-        type: 'performance_drop' as const,
-        eventKey: 'k2',
-        memberViewerId: '2',
-        message: 'Drop 2',
-        reportDate: '2026-06-11',
-      },
-    ];
-    const result = aggregateAlerts(alerts);
-    expect(result).toContain('2 penurunan performa terdeteksi');
-  });
-});
 
 
 describe('quiet hours edge cases', () => {
@@ -629,5 +604,61 @@ describe('detection edge cases', () => {
     // Each alert should reference a different member
     const memberIds = new Set(perfAlerts.map((a) => a.memberViewerId));
     expect(memberIds.size).toBe(3);
+  });
+
+  function makeSnapshotWithDemotionBuffer(targetBufferDays: number): Snapshot {
+    const dataDay = 10;
+    const monthlyPoint = 10_000_000;
+    const fansToLowerTier = targetBufferDays * (monthlyPoint / dataDay);
+    const currentPace = Math.round(monthlyPoint / dataDay);
+
+    const dailyFans: number[] = [];
+    for (let i = 1; i <= dataDay; i++) {
+      dailyFans.push(currentPace * i);
+    }
+    while (dailyFans.length < 32) dailyFans.push(0);
+
+    return {
+      circle: {
+        circle_id: 1, name: 'Test', comment: '', leader_viewer_id: 100,
+        leader_name: 'Leader', member_count: 1, join_style: 1, policy: 1,
+        created_at: '2026-01-01T00:00:00Z', last_updated: '2026-06-10T15:00:00Z',
+        monthly_rank: 100, monthly_point: monthlyPoint,
+        last_month_rank: 100, last_month_point: monthlyPoint,
+        archived: false, yesterday_updated: '2026-06-09T15:00:00Z',
+        yesterday_points: 9_000_000, yesterday_rank: 95,
+        live_points: null, live_rank: 100, last_live_update: null,
+      },
+      members: [{
+        id: 1, circle_id: 1, viewer_id: 999, trainer_name: 'Test', shame_score: null,
+        year: 2026, month: 6, daily_fans: dailyFans,
+        last_updated: '2026-06-10T15:00:00Z',
+      }],
+      club_rank: 5,
+      fans_to_next_tier: 1_000_000,
+      fans_to_lower_tier: fansToLowerTier,
+      yesterday_fans_to_next_tier: 1_100_000,
+      yesterday_fans_to_lower_tier: fansToLowerTier + 100_000,
+    };
+  }
+
+  it('uses config bufferDays threshold for demotion risk detection', async () => {
+    const snapshot = makeSnapshotWithDemotionBuffer(4);
+
+    // With bufferDays=5, 4 < 5 → alert should fire
+    const config1 = makeConfig({
+      alerts: { ...getDefaultConfig().alerts, demotionRisk: { enabled: true, bufferDays: 5 } }
+    });
+    const alerts1 = await detectAlerts(computeMembers(snapshot, config1), snapshot, config1, db);
+    const demotionAlerts1 = alerts1.filter(a => a.type === 'demotion_risk');
+    expect(demotionAlerts1.length).toBe(1);
+
+    // With bufferDays=3, 4 >= 3 → alert should NOT fire
+    const config2 = makeConfig({
+      alerts: { ...getDefaultConfig().alerts, demotionRisk: { enabled: true, bufferDays: 3 } }
+    });
+    const alerts2 = await detectAlerts(computeMembers(snapshot, config2), snapshot, config2, db);
+    const demotionAlerts2 = alerts2.filter(a => a.type === 'demotion_risk');
+    expect(demotionAlerts2.length).toBe(0);
   });
 });

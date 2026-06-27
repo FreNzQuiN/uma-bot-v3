@@ -413,6 +413,34 @@ describe('ReportOrchestrator — processAlertsForReport', () => {
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
+  it('does NOT mark alerts as sent when collectAlerts is true', async () => {
+    const mockMarkAlertsSent = jest.fn().mockResolvedValue(undefined);
+    const { orch } = makeOrchestrator({ waClient: makeWaClient() });
+    (orch as any).db = {
+      recordAlerts: jest.fn().mockResolvedValue([1]),
+      markAlertsSent: mockMarkAlertsSent,
+    };
+    mockDetectAlerts.mockResolvedValue([sampleAlert]);
+
+    await orch.processAlertsForReport('daily', loadRealSnapshot(), makeConfig(), [] as any, { collectAlerts: true });
+
+    expect(mockMarkAlertsSent).not.toHaveBeenCalled();
+  });
+
+  it('marks alerts as sent after delivery when collectAlerts is false', async () => {
+    const mockMarkAlertsSent = jest.fn().mockResolvedValue(undefined);
+    const { orch } = makeOrchestrator({ waClient: makeWaClient() });
+    (orch as any).db = {
+      recordAlerts: jest.fn().mockResolvedValue([1]),
+      markAlertsSent: mockMarkAlertsSent,
+    };
+    mockDetectAlerts.mockResolvedValue([sampleAlert]);
+
+    await orch.processAlertsForReport('daily', loadRealSnapshot(), makeConfig(), [] as any);
+
+    expect(mockMarkAlertsSent).toHaveBeenCalledWith([1]);
+  });
+
   it('returns empty array when collectAlerts is true but no alerts', async () => {
     const { orch } = makeOrchestrator();
 

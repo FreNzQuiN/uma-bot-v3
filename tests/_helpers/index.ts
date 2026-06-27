@@ -185,9 +185,11 @@ export function makeMockDb() {
     save: jest.fn().mockResolvedValue(undefined),
     getExistingAlertKeys: jest.fn().mockResolvedValue(new Set<string>()),
     recordAlert: jest.fn().mockResolvedValue(1),
+    recordAlerts: jest.fn().mockResolvedValue([1]),
     getMembers: jest.fn().mockResolvedValue([]),
     getMember: jest.fn().mockResolvedValue(null),
     upsertMember: jest.fn().mockResolvedValue(undefined),
+    upsertMembers: jest.fn().mockResolvedValue(undefined),
     saveRankHistory: jest.fn().mockResolvedValue(undefined),
     getRankHistory: jest.fn().mockResolvedValue([]),
     getLastSuccessfulRun: jest.fn().mockResolvedValue(null),
@@ -195,6 +197,8 @@ export function makeMockDb() {
     recordRun: jest.fn().mockResolvedValue(1),
     updateRunStatus: jest.fn().mockResolvedValue(undefined),
     markAlertSent: jest.fn().mockResolvedValue(undefined),
+    markAlertsSent: jest.fn().mockResolvedValue(undefined),
+    markAlertsByEventKeys: jest.fn().mockResolvedValue(undefined),
     transaction: jest.fn().mockImplementation((fn: () => Promise<any>) => fn()),
   } as unknown as IDatabase;
 }

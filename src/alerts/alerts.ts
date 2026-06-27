@@ -13,7 +13,6 @@ import { formatNumber } from '../utils/format';
 import {
   computeRollingAverage,
   getDailyGain,
-  getLatestDataDay,
 } from '../data/daily-fans';
 import type { IDatabase } from '../db/types';
 import { getDataDate } from '../utils/timezone';
@@ -55,15 +54,15 @@ function detectPerformanceDrops(
     );
     if (avg7d <= 0) continue;
 
-    const todayGain = member.latestDailyGain;
-    if (todayGain < avg7d * threshold) {
+    const knownGain = member.latestKnownGain;
+    if (knownGain < avg7d * threshold) {
       const eventKey = `performance_drop:${reportDate}:${member.viewerId}`;
       keys.push(eventKey);
       alerts.push({
         type: 'performance_drop',
         eventKey,
         memberViewerId: String(member.viewerId),
-        message: `${member.trainerName} — gain hari ini ${formatNumber(todayGain)} (rata-rata ${minHistory} hari: ${formatNumber(avg7d)})`,
+        message: `${member.trainerName} — gain terakhir ${formatNumber(knownGain)} (rata-rata ${minHistory} hari: ${formatNumber(avg7d)})`,
         reportDate,
       });
     }
@@ -81,16 +80,21 @@ function detectDemotionRisk(
   const alerts: Alert[] = [];
 
   const tierData = computeTierData(snapshot);
-  if (tierData.riskLevel === 'HIGH') {
-    const eventKey = `demotion_risk:${reportDate}`;
-    keys.push(eventKey);
-    alerts.push({
-      type: 'demotion_risk',
-      eventKey,
-      memberViewerId: 'club',
-      message: `Degradasi risk! Buffer ${formatNumber(tierData.demotionBuffer)} — kurang dari ${config.alerts.demotionRisk.bufferDays} hari pace`,
-      reportDate,
-    });
+
+  // Use configurable threshold instead of computeTierData's hardcoded 'HIGH'
+  if (tierData.demotionBuffer > 0 && tierData.currentPace > 0) {
+    const bufferDays = tierData.demotionBuffer / tierData.currentPace;
+    if (bufferDays < config.alerts.demotionRisk.bufferDays) {
+      const eventKey = `demotion_risk:${reportDate}`;
+      keys.push(eventKey);
+      alerts.push({
+        type: 'demotion_risk',
+        eventKey,
+        memberViewerId: 'club',
+        message: `Degradasi risk! Buffer ${formatNumber(tierData.demotionBuffer)} — kurang dari ${config.alerts.demotionRisk.bufferDays} hari pace`,
+        reportDate,
+      });
+    }
   }
 
   return { keys, alerts };
@@ -107,7 +111,7 @@ function detectStreakBreaks(
   for (const member of computedMembers) {
     if (member.status !== 'active') continue;
     if (member.isTransfer) continue;
-    if (member.latestDailyGain > 0) continue;
+    if (member.latestKnownGain > 0) continue;
 
     const activeDays = countActiveDaysUpTo(member, member.latestPositiveDay);
     if (activeDays < 3) continue;
@@ -136,7 +140,7 @@ function detectNewTransfers(
 
   for (const member of computedMembers) {
     if (!member.isTransfer) continue;
-    const eventKey = `new_transfer:${reportDate}:${member.viewerId}`;
+    const eventKey = `new_transfer:${member.viewerId}`;
     keys.push(eventKey);
     const from = member.previousCircleName
       ? ` dari ${member.previousCircleName}`
@@ -194,20 +198,25 @@ async function suppressDuringQuietHours(
   const now = new Date();
   const displayParts = new Intl.DateTimeFormat('en-US', {
     timeZone: config.timezone,
+    minute: '2-digit',
     hour: '2-digit',
     hourCycle: 'h23',
   }).formatToParts(now);
   const currentHour = parseInt(displayParts.find((p) => p.type === 'hour')!.value, 10);
+  const currentMinute = parseInt(displayParts.find((p) => p.type === 'minute')!.value, 10);
 
-  const startHour = parseInt(config.alerts.quietHours.start.split(':')[0], 10);
-  const endHour = parseInt(config.alerts.quietHours.end.split(':')[0], 10);
+  const startParts = config.alerts.quietHours.start.split(':');
+  const endParts = config.alerts.quietHours.end.split(':');
+  const startTotal = parseInt(startParts[0], 10) * 60 + parseInt(startParts[1] ?? '0', 10);
+  const endTotal = parseInt(endParts[0], 10) * 60 + parseInt(endParts[1] ?? '0', 10);
+  const currentTotal = currentHour * 60 + currentMinute;
 
   let isQuiet = false;
-  if (startHour <= endHour) {
-    isQuiet = currentHour >= startHour && currentHour < endHour;
+  if (startTotal <= endTotal) {
+    isQuiet = currentTotal >= startTotal && currentTotal < endTotal;
   } else {
-    // Wraps midnight (e.g., 23:00 - 06:00)
-    isQuiet = currentHour >= startHour || currentHour < endHour;
+    // Wraps midnight (e.g., 23:30 - 06:30)
+    isQuiet = currentTotal >= startTotal || currentTotal < endTotal;
   }
 
   if (!isQuiet) return false;
@@ -226,7 +235,7 @@ async function suppressDuringQuietHours(
       });
     }
   }
-  log.info('Alert', `${alerts.length} alert(s) suppressed during quiet hours (${startHour}:00-${endHour}:00)`);
+  log.info('Alert', `${alerts.length} alert(s) suppressed during quiet hours (${config.alerts.quietHours.start}-${config.alerts.quietHours.end})`);
   return true;
 }
 
@@ -318,40 +327,7 @@ export function formatAlerts(alerts: Alert[], isCatchUp: boolean): string {
   return lines.join('\n');
 }
 
-const AGGREGATE_LABELS: Record<string, string> = {
-  performance_drop: 'penurunan performa',
-  demotion_risk: 'hari risiko degradasi',
-  streak_break: 'streak terputus',
-  new_transfer: 'transfer baru',
-  rank_drop: 'rank turun',
-};
 
-/**
- * Aggregate alerts into a single grouped summary message for catch-up.
- * Groups by type and counts occurrences, using singular/plural forms.
- *
- * Example output:
- *   [catch-up alerts]
- *   3 performance drops detected
- *   1 new transfer detected
- */
-export function aggregateAlerts(alerts: Alert[]): string {
-  if (alerts.length === 0) return '';
-
-  const grouped: Record<string, number> = {};
-  for (const alert of alerts) {
-    grouped[alert.type] = (grouped[alert.type] ?? 0) + 1;
-  }
-
-  const lines: string[] = ['_[catch-up alerts]_'];
-
-  for (const [type, count] of Object.entries(grouped)) {
-    const label = AGGREGATE_LABELS[type] ?? type;
-    lines.push(`${count} ${label} terdeteksi`);
-  }
-
-  return lines.join('\n');
-}
 
 /**
  * Count the consecutive active days of the streak that just broke.
