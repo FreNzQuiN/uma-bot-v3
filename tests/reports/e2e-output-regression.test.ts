@@ -47,110 +47,43 @@ function makeEmptyMembersSnapshot(): Snapshot {
   };
 }
 
-describe('Bug 3: Empty snapshot.members graceful handling', () => {
+describe('Empty snapshot: all generators handle gracefully', () => {
   const emptySnapshot = makeEmptyMembersSnapshot();
+  const members = computeMembers(emptySnapshot, config);
 
-  it('generateDailyReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateDailyReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
+  it('all report generators produce non-empty strings without crashing', async () => {
+    const results = await Promise.all([
+      Promise.resolve(generateDailyReport(emptySnapshot, config, members)),
+      Promise.resolve(generateWeeklyReport(emptySnapshot, config, members)),
+      Promise.resolve(generateMonthlyReport(emptySnapshot, config, members)),
+      Promise.resolve(generateStatsReport(emptySnapshot, config, members)),
+      Promise.resolve(generateTierReport(emptySnapshot, config, members)),
+      Promise.resolve(generateRanksReport(emptySnapshot, config, members)),
+      Promise.resolve(generateBottomReport(emptySnapshot, config, members)),
+      generateMembersReport(emptySnapshot, config, members),
+    ]);
+
+    for (const result of results) {
       expect(typeof result).toBe('string');
       expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
+    }
   });
 
-  it('generateDailyReport returns helpful message for empty members', () => {
-    const result = generateDailyReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
-  });
+  it('all report generators return helpful message for empty members', async () => {
+    const generators = [
+      () => generateDailyReport(emptySnapshot, config, members),
+      () => generateWeeklyReport(emptySnapshot, config, members),
+      () => generateMonthlyReport(emptySnapshot, config, members),
+      () => generateStatsReport(emptySnapshot, config, members),
+      () => generateTierReport(emptySnapshot, config, members),
+      () => generateRanksReport(emptySnapshot, config, members),
+      () => generateBottomReport(emptySnapshot, config, members),
+      () => generateMembersReport(emptySnapshot, config, members),
+    ];
 
-  it('generateWeeklyReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateWeeklyReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
-  });
-
-  it('generateWeeklyReport returns helpful message for empty members', () => {
-    const result = generateWeeklyReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
-  });
-
-  it('generateMonthlyReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateMonthlyReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
-  });
-
-  it('generateMonthlyReport returns helpful message for empty members', () => {
-    const result = generateMonthlyReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
-  });
-
-  it('generateStatsReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateStatsReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
-  });
-
-  it('generateStatsReport returns helpful message for empty members', () => {
-    const result = generateStatsReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
-  });
-
-  it('generateTierReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateTierReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
-  });
-
-  it('generateTierReport returns helpful message for empty members', () => {
-    const result = generateTierReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
-  });
-
-  it('generateRanksReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateRanksReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
-  });
-
-  it('generateRanksReport returns helpful message for empty members', () => {
-    const result = generateRanksReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
-  });
-
-  it('generateBottomReport handles empty members without crash', () => {
-    expect(() => {
-      const result = generateBottomReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
-  });
-
-  it('generateBottomReport returns helpful message for empty members', () => {
-    const result = generateBottomReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
-  });
-
-  it('generateMembersReport handles empty members without crash', async () => {
-    await expect(async () => {
-      const result = await generateMembersReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
-    }).not.toThrow();
-  });
-
-  it('generateMembersReport returns helpful message for empty members', async () => {
-    const result = await generateMembersReport(emptySnapshot, config, computeMembers(emptySnapshot, config));
-    expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
+    for (const generate of generators) {
+      const result = await generate();
+      expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
+    }
   });
 });

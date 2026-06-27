@@ -4,7 +4,6 @@ import { SqliteDatabase } from '../../src/db/database';
 import { getDefaultConfig } from '../../src/config';
 import type { Snapshot } from '../../src/types';
 import { loadRealSnapshot } from '../_helpers';
-import { getDailyGain } from '../../src/data/daily-fans';
 
 const realSnapshot: Snapshot = loadRealSnapshot();
 
@@ -144,57 +143,5 @@ describe('Bug 2: countActiveDaysUpTo consecutive streak counting', () => {
 
     // No alert — streak was only 1 day, below the 3-day threshold
     expect(streakAlerts.length).toBe(0);
-  });
-
-  it('consecutive counting: gap resets streak to 0 (verification of correct logic)', () => {
-    // This function represents the CORRECT implementation
-    function countConsecutive(dailyFans: number[], upToDay: number): number {
-      let streak = 0;
-      let maxStreak = 0;
-      for (let day = 2; day <= upToDay; day++) {
-        const gain = getDailyGain(dailyFans, day);
-        if (gain > 0) {
-          streak++;
-          maxStreak = Math.max(maxStreak, streak);
-        } else {
-          streak = 0;
-        }
-      }
-      return maxStreak;
-    }
-
-    // Test: 4 consecutive, gap, then 2 consecutive
-    const dailyFans = new Array(32).fill(0);
-    dailyFans[0] = 1000;   // day 1: baseline
-    dailyFans[1] = 2000;   // day 2: +1000
-    dailyFans[2] = 3000;   // day 3: +1000
-    dailyFans[3] = 4000;   // day 4: +1000
-    dailyFans[4] = 5000;   // day 5: +1000
-    // day 6: gap
-    dailyFans[6] = 6000;   // day 7: +1000
-    dailyFans[7] = 7000;   // day 8: +1000
-
-    expect(countConsecutive(dailyFans, 8)).toBe(4); // max streak is 4, not 6 total
-
-    // Test: no gaps = all consecutive
-    const dailyFans2 = new Array(32).fill(0);
-    dailyFans2[0] = 1000;
-    for (let i = 1; i < 10; i++) {
-      dailyFans2[i] = 1000 * (i + 1);
-    }
-    expect(countConsecutive(dailyFans2, 10)).toBe(9); // days 2-10 = 9 consecutive
-
-    // Test: all gaps = 0 consecutive
-    const dailyFans3 = new Array(32).fill(0);
-    dailyFans3[0] = 1000;
-    dailyFans3[2] = 2000; // day 3 only
-    dailyFans3[5] = 3000; // day 6 only
-    expect(countConsecutive(dailyFans3, 6)).toBe(0); // no consecutive pairs
-
-    // Test: single active day = 0 consecutive (need at least 2 for streak)
-    const dailyFans4 = new Array(32).fill(0);
-    dailyFans4[0] = 1000;
-    dailyFans4[1] = 2000; // day 2 only
-    expect(countConsecutive(dailyFans4, 2)).toBe(1); // one streak of 1
   });
 });
