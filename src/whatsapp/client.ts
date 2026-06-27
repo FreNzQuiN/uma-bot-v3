@@ -147,9 +147,6 @@ export class WhatsAppClient {
     return this.connectionState;
   }
 
-  /**
-   * Check if WhatsApp is connected and ready to send messages.
-   */
   isConnected(): boolean {
     return this.sock !== null && this.sock.user !== undefined && this.connectionState === 'open';
   }
@@ -205,7 +202,6 @@ export class WhatsAppClient {
     // @ts-ignore — no type declarations available for qrcode-terminal
     const qrcodeTerminal = await import('qrcode-terminal');
 
-    // Ensure auth directory exists
     const { mkdirSync, existsSync } = await import('fs');
     const { join } = await import('path');
     const authDir = this.authDir;
@@ -266,7 +262,6 @@ export class WhatsAppClient {
     this.chats.clear();
     const sock = this.sock;
 
-    // Handle credentials update
     sock.ev.on('creds.update', saveCreds);
 
     // Accumulate chats for /chats API endpoint
@@ -283,7 +278,6 @@ export class WhatsAppClient {
       }
     });
 
-    // Handle incoming messages
     sock.ev.on('messages.upsert', async (upt: any) => {
       const upsertType = upt.type;
       log.debug('WhatsApp', `messages.upsert type=${upsertType} count=${upt.messages?.length ?? 0}`);
@@ -299,9 +293,7 @@ export class WhatsAppClient {
       }
 
       for (const msg of upt.messages) {
-        // Skip status broadcasts
         if (msg.key.remoteJid === 'status@broadcast') continue;
-        // Skip own messages
         if (msg.key.fromMe) continue;
 
         recordMessageReceived();
@@ -316,7 +308,6 @@ export class WhatsAppClient {
         // msg.message.conversation is undefined and commands silently fail.
         msg.message = normalizeMessageContent(msg.message) as any;
 
-        // Log normalized message content
         const normTypes = msg.message ? Object.keys(msg.message).join(',') : 'null';
         const extMsg = msg.message?.extendedTextMessage as Record<string, unknown> | undefined;
         // Use || not ?? — protobuf-decoded messages have conversation:"" (empty string),
@@ -367,7 +358,6 @@ export class WhatsAppClient {
           log.info('WhatsApp', 'Connected successfully');
           this.reconnectAttempts = 0;
           this.startHeartbeat();
-          // Log the connected user ID if available
           if (sock.user?.id) {
             log.info('WhatsApp', `Authenticated as: ${sock.user.id.split(':')[0]}`);
           }
@@ -482,7 +472,6 @@ export class WhatsAppClient {
     const totalParts = parts.length;
     log.debug('WhatsApp', `sendOrEdit: jid=${jid} parts=${totalParts} totalChars=${text.length} splitAtNewline=${config.message.splitAtNewline}`);
 
-    // Single part: try edit in-place
     if (parts.length === 1) {
       if (messageId) {
         try {
@@ -503,7 +492,6 @@ export class WhatsAppClient {
       return sentMsg?.key?.id ?? '';
     }
 
-    // Multi-part: delete loading message if exists, then send all parts fresh
     if (messageId) {
       try {
         const key = { id: messageId, remoteJid: jid, fromMe: true };
@@ -550,7 +538,6 @@ export class WhatsAppClient {
   private cacheSentMessage(result: { key?: { id?: string | null }; message?: any } | undefined): void {
     if (result?.key?.id && result.message) {
       this.messageCache.set(result.key.id, result.message as Record<string, unknown>);
-      // Evict oldest entries when cache exceeds limit
       if (this.messageCache.size > WhatsAppClient.MESSAGE_CACHE_MAX) {
         const evictCount = WhatsAppClient.MESSAGE_CACHE_EVICT;
         let evicted = 0;
@@ -564,9 +551,6 @@ export class WhatsAppClient {
     }
   }
 
-  /**
-   * Get all groups the bot is participating in.
-   */
   async getGroups(): Promise<Array<{ id: string; name: string; participants: number }>> {
     if (!this.sock) return [];
     const result = await this.sock.groupFetchAllParticipating();
@@ -584,16 +568,10 @@ export class WhatsAppClient {
     return Array.from(this.chats.values());
   }
 
-  /**
-   * Register a message handler for incoming messages.
-   */
   onMessage(handler: MessageHandler): void {
     this.messageHandlers.push(handler);
   }
 
-  /**
-   * Disconnect from WhatsApp and clean up.
-   */
   disconnect(): void {
     this.stopHeartbeat();
     this.connectionState = 'disconnected';

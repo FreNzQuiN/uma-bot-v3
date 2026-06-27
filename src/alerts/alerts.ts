@@ -246,7 +246,6 @@ export async function detectAlerts(
     ? snapshot.circle.last_updated.split('T')[0]
     : getDataDate();
 
-  // Collect candidates from each enabled detector
   const detectors: { keys: string[]; alerts: Alert[] }[] = [];
   if (config.alerts.performanceDrop.enabled) {
     detectors.push(detectPerformanceDrops(computedMembers, latestDataDay, reportDate, config));
@@ -271,7 +270,6 @@ export async function detectAlerts(
     candidateAlerts.push(...result.alerts);
   }
 
-  // Dedup against existing alerts
   const existingKeys = candidateKeys.length > 0
     ? await db.getExistingAlertKeys(candidateKeys)
     : new Set<string>();
@@ -361,7 +359,6 @@ export function aggregateAlerts(alerts: Alert[]): string {
  * Finds the last active day before the break, then counts backwards.
  */
 function countActiveDaysUpTo(member: ComputedMember, upToDay: number): number {
-  // Find the last day with positive gain before the break
   let lastActiveDay = -1;
   for (let day = upToDay - 1; day >= 2; day--) {
     if (getDailyGain(member.dailyFans, day) > 0) {
@@ -371,7 +368,6 @@ function countActiveDaysUpTo(member: ComputedMember, upToDay: number): number {
   }
   if (lastActiveDay === -1) return 0;
 
-  // Count the streak ending at lastActiveDay
   let streak = 0;
   for (let day = lastActiveDay; day >= 2; day--) {
     if (getDailyGain(member.dailyFans, day) > 0) {

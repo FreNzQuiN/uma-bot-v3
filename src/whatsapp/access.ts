@@ -68,9 +68,7 @@ export function canUseCommand(
   const chatIsCmdGroup = isCommandGroup(chatJid, config);
   const chatIsAnnounce = isAnnouncementGroup(chatJid, config);
 
-  // Admin commands
   if (ADMIN_COMMANDS.has(command)) {
-    // Only admins can use admin commands
     if (!senderIsAdmin) return false;
     // Admin commands only in command groups or private chats (not random groups)
     if (chatIsCmdGroup) return true;
@@ -79,17 +77,13 @@ export function canUseCommand(
     return isPrivateChat;
   }
 
-  // Report/unknown commands
-  // Admin: only in command groups or private chats
   if (senderIsAdmin) {
     if (chatIsCmdGroup) return true;
     const isPrivateChat = !chatJid.endsWith('@g.us');
     return isPrivateChat;
   }
 
-  // Non-admin: only in command groups
   if (chatIsCmdGroup) return true;
 
-  // Non-admin in announcement group or other group: blocked
   return false;
 }

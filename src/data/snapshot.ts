@@ -64,9 +64,6 @@ function buildSnapshotPath(dataDay: string, rootDir: string): string {
   return path.join(rootDir, SNAPSHOTS_DIR, year, month, `${day}.json`);
 }
 
-/**
- * Validate that a parsed JSON object looks like a Snapshot.
- */
 function isValidSnapshot(data: unknown): data is Snapshot {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;

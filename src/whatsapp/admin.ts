@@ -14,7 +14,6 @@ export function handleSetReq(
   config: BotConfig
 ): { config: BotConfig; message: string } {
   if (args.length === 0) {
-    // Show current requirements
     const lines = [
       '📋 Current Requirements:',
       '',

@@ -58,7 +58,6 @@ export function parseCommand(text: string, prefixes: string[]): ParsedCommand | 
   const trimmed = text.trim();
   if (!trimmed) return null;
 
-  // Find matching prefix
   let matchedPrefix: string | null = null;
   for (const prefix of prefixes) {
     if (trimmed.startsWith(prefix)) {
@@ -69,7 +68,6 @@ export function parseCommand(text: string, prefixes: string[]): ParsedCommand | 
 
   if (matchedPrefix === null) return null;
 
-  // Strip prefix and split into tokens
   const afterPrefix = trimmed.slice(matchedPrefix.length).trim();
   if (!afterPrefix) return null;
 
@@ -134,14 +132,12 @@ export function resolveMemberName(
 
   for (const member of members) {
     const name = member.trainerName.toLowerCase();
-    // Check if query is within threshold of the full name
     const fullDist = levenshteinDistance(lowerQuery, name);
     if (fullDist <= FUZZY_THRESHOLD) {
       fuzzyMatches.push({ member, distance: fullDist });
       continue;
     }
 
-    // Check individual words in the name
     const nameWords = name.split(/\s+/);
     for (const word of nameWords) {
       const wordDist = levenshteinDistance(lowerQuery, word);
@@ -152,7 +148,6 @@ export function resolveMemberName(
     }
   }
 
-  // Sort by distance, return best match if unique
   if (fuzzyMatches.length === 1) {
     return fuzzyMatches[0].member;
   }

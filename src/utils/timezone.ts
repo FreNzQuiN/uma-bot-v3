@@ -49,9 +49,6 @@ function extractInTimezone(
   };
 }
 
-/**
- * Format a Date in a specific timezone as "YYYY-MM-DD".
- */
 function formatDateInTimezone(date: Date, tz: string): string {
   const { year, month, day } = extractInTimezone(date, tz);
   return `${year}-${pad2(month)}-${pad2(day)}`;
@@ -83,7 +80,6 @@ export function getDataMonth(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).month;
 }
 
-/** Get JST year. */
 export function getDataYear(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).year;
 }

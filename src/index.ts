@@ -308,7 +308,6 @@ async function main() {
   waClient.connect().then(async () => {
     log.info('WhatsApp', 'Connected — running catch-up');
 
-    // Run catch-up with alert aggregation
     const catchUp = new CatchUpManager(db, getConfig);
     const missed = await catchUp.detectMissedReports();
 

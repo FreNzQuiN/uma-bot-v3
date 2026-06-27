@@ -57,9 +57,6 @@ function formatUptime(): string {
   return `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`;
 }
 
-/**
- * Set up the command handler on the WhatsApp client.
- */
 export function setupCommandHandler(
   client: WhatsAppClient,
   configOrGetter: BotConfig | (() => BotConfig),
@@ -127,7 +124,6 @@ async function dispatchMessage(
   recordMessageParsed();
   log.debug('Dispatch', `Parsed command: /${parsed.command} args=[${parsed.args.join(', ').replace(/[\r\n]/g, ' ')}] offset=${parsed.offset}`);
 
-  // Determine sender and chat JIDs
   // Use || not ?? — protobuf-decoded messages set participant to "" (empty string)
   // for DMs, which ?? treats as non-nullish, leaving senderJid empty.
   const senderJid = msg.key.participant || msg.key.remoteJid;
@@ -139,7 +135,6 @@ async function dispatchMessage(
     return;
   }
 
-  // Dispatch to report generator or admin handler
   await generateAndSend(ctx, parsed, chatJid, senderJid);
 }
 
@@ -268,9 +263,6 @@ async function handleAdminCommand(
   await ctx.client.sendOrEdit(chatJid, null, message);
 }
 
-/**
- * Route a parsed command to the appropriate handler.
- */
 async function generateAndSend(
   ctx: DispatchContext,
   parsed: { command: string; args: string[]; offset: number | null; raw: string },
@@ -285,13 +277,9 @@ async function generateAndSend(
   if (REPORT_COMMANDS.has(command)) return handleReportCommand(ctx, parsed, chatJid);
   if (ADMIN_COMMANDS.has(command)) return handleAdminCommand(ctx, command, args, chatJid);
 
-  // Unknown command
   await ctx.client.sendOrEdit(chatJid, null, `❌ Perintah /${command} tidak dikenal. Coba /help untuk lihat daftar.`);
 }
 
-/**
- * Generate a report string for the given command.
- */
 async function generateReport(
   command: string,
   args: string[],
@@ -314,7 +302,6 @@ async function generateReport(
       if (!nameA || !nameB) {
         return '❌ Cara pakai: /compare <AnggotaA> <AnggotaB>';
       }
-      // 5-step member resolution via resolveMemberName
       const resolvedA = resolveMemberName(nameA, computedMembers);
       const resolvedB = resolveMemberName(nameB, computedMembers);
       if (!resolvedA && !resolvedB) {
@@ -333,7 +320,6 @@ async function generateReport(
       if (!name) {
         return '❌ Cara pakai: /analyze <NamaAnggota>';
       }
-      // 5-step member resolution via resolveMemberName
       const resolved = resolveMemberName(name, computedMembers);
       if (!resolved) {
         return `❌ "${name}" tidak ditemukan. Cek ejaan nama.`;

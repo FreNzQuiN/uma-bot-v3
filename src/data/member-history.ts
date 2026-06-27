@@ -79,10 +79,8 @@ export async function getLeftMembers(snapshot: Snapshot, db: IDatabase): Promise
   const circleId = snapshot.circle.circle_id;
   const currentViewerIds = new Set(snapshot.members.map((m) => m.viewer_id));
 
-  // Get all historical members for this circle
   const historicalMembers = await db.getMembers(circleId);
 
-  // Filter to those not in the current snapshot
   return historicalMembers.filter(
     (m) => !currentViewerIds.has(m.viewer_id)
   );

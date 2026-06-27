@@ -17,10 +17,6 @@ import { loadMonthSnapshots, saveSnapshot } from './snapshot';
 import { getDataDate, getDataDateComponents } from '../utils/timezone';
 import { log } from '../utils/logger';
 
-/**
- * Ensure a snapshot exists for the given year/month on disk.
- * @returns The Snapshot (from cache or freshly fetched)
- */
 export async function ensureMonthSnapshot(
   umaMoe: UmaMoeClient,
   circleId: number,

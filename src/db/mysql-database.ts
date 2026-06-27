@@ -57,7 +57,6 @@ export class MysqlDatabase implements IDatabase {
 
     this.pool = mysql.createPool(poolConfig);
 
-    // Verify connection
     const conn = await this.pool.getConnection();
 
     // Check MySQL version — fail fast with clear message

@@ -76,9 +76,6 @@ class Logger {
     return { ...this.config };
   }
 
-  /**
-   * Ensure the log directory exists.
-   */
   private ensureLogDir(): void {
     if (this.initialized) return;
     try {
@@ -94,9 +91,6 @@ class Logger {
     }
   }
 
-  /**
-   * Check if a given level should be logged.
-   */
   private shouldLog(level: LogLevel): boolean {
     return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.config.level];
   }
@@ -127,9 +121,6 @@ class Logger {
     return `[${ts}.${ms}] [${level.toUpperCase()}]${tagStr} ${message}`;
   }
 
-  /**
-   * Get ANSI color code for console output.
-   */
   private getColor(level: LogLevel): string {
     switch (level) {
       case 'debug': return '\x1b[90m';  // gray
@@ -148,7 +139,6 @@ class Logger {
   private write(level: LogLevel, tag: string, message: string): void {
     if (!this.shouldLog(level)) return;
 
-      // Console output — strip stack trace for error/warn level
     if (this.config.console) {
       const consoleMsg = (level === 'error' || level === 'warn') ? this.stripStackTrace(message) : message;
       const consoleLine = this.formatLine(level, tag, consoleMsg);
@@ -158,7 +148,6 @@ class Logger {
       console.log(`${color}${consoleLine}${reset}`);
     }
 
-    // File output — full message including stack trace
     const fileLine = this.formatLine(level, tag, message);
     this.writeToFile(fileLine);
   }
@@ -172,9 +161,6 @@ class Logger {
     return newlineIdx >= 0 ? message.slice(0, newlineIdx) : message;
   }
 
-  /**
-   * Write a line to the log file with rotation.
-   */
   private writeToFile(line: string): void {
     if (!this.config.fileOutput) return;
 
@@ -183,7 +169,6 @@ class Logger {
     try {
       const filePath = this.config.logFile;
 
-      // Rotate if file exceeds max size
       if (existsSync(filePath) && this.config.maxFiles > 0) {
         const stat = statSync(filePath);
         const sizeMB = stat.size / (1024 * 1024);
@@ -215,7 +200,6 @@ class Logger {
       const ext = '.log';
       const base = filePath.endsWith(ext) ? filePath.slice(0, -ext.length) : filePath;
 
-      // Delete oldest file if it exceeds maxFiles
       const oldestFile = `${base}-${this.config.maxFiles}${ext}`;
       if (existsSync(oldestFile)) {
         unlinkSync(oldestFile);
@@ -230,7 +214,6 @@ class Logger {
         }
       }
 
-      // Rename current → 1
       renameSync(filePath, `${base}-1${ext}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

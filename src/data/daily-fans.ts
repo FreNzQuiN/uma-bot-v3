@@ -153,7 +153,6 @@ export function getWeeklyGain(dailyFans: number[], weekNumber: number, includeTr
  * Returns 0 if no positive values or only one positive value (baseline only).
  */
 export function getMonthlyGain(dailyFans: number[], includeTransfer: boolean = false): number {
-  // Find first usable day
   let firstDay = 0;
   let firstValue = 0;
   for (let i = 0; i < dailyFans.length; i++) {
@@ -324,9 +323,6 @@ export function getDataDayFromSnapshot(snapshot: Snapshot): number {
   return maxDay;
 }
 
-/**
- * Compute tier intelligence data from a snapshot.
- */
 export function computeTierData(snapshot: Snapshot): TierData {
   const { club_rank, fans_to_next_tier, fans_to_lower_tier } = snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
@@ -353,7 +349,6 @@ export function computeTierData(snapshot: Snapshot): TierData {
   let projectedOutcome: TierData['projectedOutcome'] = 'unknown';
 
   if (fans_to_lower_tier > 0 && currentPace > 0) {
-    // Buffer in days of current pace
     const bufferDays = fans_to_lower_tier / currentPace;
     if (bufferDays < 3) {
       riskLevel = 'HIGH';
@@ -366,7 +361,6 @@ export function computeTierData(snapshot: Snapshot): TierData {
     }
   }
 
-  // Projection
   if (fans_to_next_tier > 0 && daysLeft > 0) {
     if (currentPace >= requiredPace) {
       projectedOutcome = 'promote';

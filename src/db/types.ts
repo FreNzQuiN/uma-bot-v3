@@ -54,20 +54,17 @@ export interface RankHistoryInsert {
 }
 
 export interface IDatabase {
-  // Lifecycle
   initialize(): Promise<void>;
   close(): Promise<void>;
   /** Persist to disk (no-op for external databases). */
   save(): Promise<void>;
 
-  // Schedule runs
   getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null>;
   /** Get the most recent run (any terminal status: sent, skipped). Used by catch-up detection. */
   getLastRun(reportType: string): Promise<ScheduleRunRow | null>;
   recordRun(run: ScheduleRunInsert): Promise<number>;
   updateRunStatus(id: number, status: string, errorMessage?: string): Promise<void>;
 
-  // Alerts
   /** Check which of the given event keys already exist (batch query). */
   getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>>;
   recordAlert(alert: AlertEventInsert): Promise<number>;
@@ -75,16 +72,14 @@ export interface IDatabase {
   markAlertSent(id: number): Promise<void>;
   markAlertsSent(ids: number[]): Promise<void>;
 
-  // Members
   upsertMember(member: MemberHistoryInsert): Promise<void>;
   upsertMembers(members: MemberHistoryInsert[]): Promise<void>;
   getMembers(circleId: number): Promise<MemberHistoryRow[]>;
   getMember(viewerId: number): Promise<MemberHistoryRow | null>;
 
-  // Rank history
   saveRankHistory(row: RankHistoryInsert): Promise<void>;
   getRankHistory(circleId: number, days: number): Promise<RankHistoryRow[]>;
 
-  // Transactions — replaces manual BEGIN/COMMIT/ROLLBACK
+  // Replaces manual BEGIN/COMMIT/ROLLBACK
   transaction<T>(fn: () => Promise<T>): Promise<T>;
 }
