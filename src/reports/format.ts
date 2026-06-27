@@ -13,9 +13,6 @@ import { getDataDayFromSnapshot } from '../data/snapshot';
 import { sanitizeName } from '../utils/format';
 
 /**
- * Check if a snapshot's data is stale (more than 1 day behind current data day).
- * Returns a warning string if stale, empty string if fresh.
- *
  * @param now - Optional Date override for testing (defaults to current time)
  */
 export function getStaleDataWarning(
@@ -37,10 +34,6 @@ export function getStaleDataWarning(
   return '';
 }
 
-/**
- * Build the snapshot date string from the data day.
- * Uses the snapshot's year/month and the computed data day.
- */
 export function buildDateStr(snapshot: Snapshot, dataDay?: number): string {
   if (snapshot.members.length === 0) return 'Unknown-Date';
   const { year, month } = snapshot.members[0];
@@ -48,10 +41,6 @@ export function buildDateStr(snapshot: Snapshot, dataDay?: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-/**
- * Build the sync footer for reports.
- * @param snapshotDate - Optional date string (YYYY-MM-DD) to show instead of current time.
- */
 export function buildFooter(config: BotConfig, snapshotDate?: string): string {
   const parsed = snapshotDate && /^\d{4}-\d{2}-\d{2}$/.test(snapshotDate)
     ? new Date(snapshotDate + 'T22:00:00+07:00')
@@ -67,9 +56,7 @@ export function buildDataLine(formattedDate: string): string {
 }
 
 /**
- * Build the standard report header lines.
  * Returns array of lines (without trailing empty line).
- *
  * @param includeDataLine - Whether to append the "Periode data" line (default: true)
  */
 export function buildReportHeader(
@@ -92,10 +79,6 @@ export function buildReportHeader(
   return lines;
 }
 
-/**
- * Build the stale members section for a report.
- * Returns lines (with leading blank line) if stale members exist, empty array otherwise.
- */
 export function buildStaleSection(
   computedMembers: ComputedMember[],
   dataDay: number,

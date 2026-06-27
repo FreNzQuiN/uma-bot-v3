@@ -12,9 +12,6 @@ import { buildDateStr, buildFooter, buildReportHeader } from './format';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-/**
- * Generate the ranks report string.
- */
 export function generateRanksReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Peringkat*\nData peringkat belum tersedia.';

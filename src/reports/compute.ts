@@ -19,14 +19,6 @@ import { getDataDayFromSnapshot } from '../data/snapshot';
 export { computeTierData } from '../data/daily-fans';
 
 /**
- * Compute derived data for every member in the snapshot.
- *
- * Each ComputedMember contains:
- * - Status classification (active / stale / left)
- * - Latest and first positive day values
- * - Monthly, daily, and weekly gains
- * - Transfer information (boolean attribute, not a status)
- *
  * Stale is computed per-report using report-specific thresholds,
  * NOT globally here. The only status assignments in this function are:
  * - 'stale' when latestPositiveDay === 0 (no data at all)
@@ -89,8 +81,6 @@ export function computeMembers(
   );
 
   if (ghostCount > 0) {
-    // Among non-left members, find the bottom N by monthlyGain to reclassify as left.
-    // These are the likely ghosts — members present in snapshot but not actually in the club.
     const candidates = [...membersWithGain]
       .sort((a, b) => a.monthlyGain - b.monthlyGain);
 

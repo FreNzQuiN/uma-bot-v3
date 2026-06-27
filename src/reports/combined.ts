@@ -15,25 +15,18 @@ import { generateWeeklyReport } from './weekly';
 import { generateMonthlyReport } from './monthly';
 import { buildFooter, buildDateStr } from './format';
 
-/** Footer marker that appears at the start of every report's sync footer. */
 const FOOTER_MARKER = '⸻';
 
 /**
  * Strip the sync footer from a report string.
- * The footer always starts with FOOTER_MARKER ("⸻") on its own line
- * and spans to the end of the string.
+ * Footer always starts with FOOTER_MARKER on its own line, spans to end of string.
  */
 function stripFooter(report: string): string {
   const markerIdx = report.lastIndexOf(FOOTER_MARKER);
   if (markerIdx === -1) return report;
-  // Trim the footer and any trailing whitespace before it
   return report.slice(0, markerIdx).trimEnd();
 }
 
-/**
- * Generate a combined report string from multiple report types.
- * @returns Joined report string, or empty string if no types matched
- */
 export function generateCombinedReport(
   types: string[],
   snapshot: Snapshot,
@@ -61,7 +54,6 @@ export function generateCombinedReport(
   }
   if (parts.length === 0) return '';
 
-  // Single shared footer for the whole combined report
   parts.push(buildFooter(config, buildDateStr(snapshot)));
   return parts.join('\n\n');
 }

@@ -21,9 +21,6 @@ interface WeeklyRankedMember {
   previousCircleName?: string;
 }
 
-/**
- * Determine which week the data day falls into.
- */
 export function getWeekForDay(day: number): number {
   for (const block of WEEK_BLOCKS) {
     if (day >= block.start && day <= block.end) {
@@ -33,9 +30,6 @@ export function getWeekForDay(day: number): number {
   return 5; // default to last week
 }
 
-/**
- * Generate the weekly report string.
- */
 export function generateWeeklyReport(
   snapshot: Snapshot,
   config: BotConfig,

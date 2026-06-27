@@ -13,9 +13,6 @@ import { formatNumber, sanitizeName } from '../utils/format';
 import { formatDateWIB } from '../utils/timezone';
 import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
 
-/**
- * Generate the daily report string.
- */
 export function generateDailyReport(
   snapshot: Snapshot,
   config: BotConfig,
@@ -41,7 +38,6 @@ export function generateDailyReport(
     (m) => m.status === 'active'
   );
 
-  // Sort by offset day's daily gain descending
   const sorted = [...contributing].sort(
     (a, b) => b.dailyGain - a.dailyGain
   );
@@ -85,7 +81,6 @@ export function generateDailyReport(
   );
   lines.push('');
 
-  // Member list (only members with positive gain — zero-gain members go to stale section)
   const rankedPositive = ranked.filter((m) => m.dailyGain > 0);
   for (const member of rankedPositive) {
     const gainStr = `+${formatNumber(member.dailyGain)}`;
@@ -95,7 +90,6 @@ export function generateDailyReport(
     );
   }
 
-  // Stale section: zero-gain members shown here, not in ranked list
   if (staleMembers.length > 0) {
     lines.push('');
     if (contributorCount === 0 && adjustedDataDay <= 1) {

@@ -11,9 +11,6 @@ import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from './format';
 
-/**
- * Generate the bottom report string.
- */
 export function generateBottomReport(
   snapshot: Snapshot,
   config: BotConfig,

@@ -18,10 +18,6 @@ import { generateTierReport } from './tier';
 
 export const REPORT_TYPES = ['daily', 'weekly', 'monthly', 'ranks', 'bottom', 'stats', 'members', 'tier'] as const;
 
-/**
- * Generate a report string for a given report type.
- * Returns the formatted string, or undefined for unknown types.
- */
 export async function generateReportString(
   type: string,
   snapshot: Snapshot,

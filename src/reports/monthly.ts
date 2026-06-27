@@ -14,16 +14,10 @@ import { INDONESIAN_MONTHS } from '../utils/timezone';
 import { computeMembers } from './compute';
 import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
 
-/**
- * Format month+year in Indonesian: "Juni 2026".
- */
 function formatMonthYear(month: number, year: number): string {
   return `${INDONESIAN_MONTHS[month - 1]} ${year}`;
 }
 
-/**
- * Generate the monthly report string.
- */
 export function generateMonthlyReport(
   snapshot: Snapshot,
   config: BotConfig,
@@ -102,7 +96,6 @@ export function generateMonthlyReport(
   const header = buildReportHeader(activeSnapshot, `📅 *Monthly Report — ${formatMonthYear(month, year)}*`);
   lines.push(...header);
 
-  // Tier context
   lines.push(
     `Promosi: ${formatNumber(fans_to_next_tier)} fans lagi | Degradasi: buffer ${formatNumber(fans_to_lower_tier)}`
   );

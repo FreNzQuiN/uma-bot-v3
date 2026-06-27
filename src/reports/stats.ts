@@ -12,9 +12,6 @@ import { computeRollingAverage, countActiveDays } from '../data/daily-fans';
 import { formatNumber } from '../utils/format';
 import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
 
-/**
- * Generate the stats report string.
- */
 export function generateStatsReport(
   snapshot: Snapshot,
   config: BotConfig,
@@ -37,7 +34,6 @@ export function generateStatsReport(
   const avgMonthlyGain =
     contributing.length > 0 ? Math.round(totalMonthlyGain / contributing.length) : 0;
 
-  // Median monthly gain
   const sortedGains = contributing.map((m) => m.monthlyGain).sort((a, b) => a - b);
   const mid = Math.floor(sortedGains.length / 2);
   const medianMonthlyGain =
@@ -61,7 +57,6 @@ export function generateStatsReport(
       ? Math.round((passCount / contributing.length) * 100)
       : 0;
 
-  // Active days distribution
   const activeDayCounts = contributing.map((m) => countActiveDays(m.dailyFans, undefined, config.requirements.includeTransferDataInCalculation));
   const avgActiveDays =
     activeDayCounts.length > 0

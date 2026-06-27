@@ -13,9 +13,6 @@ import { formatDateWIB } from '../utils/timezone';
 import { buildDateStr, buildFooter } from './format';
 import { computeRollingAverage } from '../data/daily-fans';
 
-/**
- * Generate the compare report string.
- */
 export function generateCompareReport(
   snapshot: Snapshot,
   config: BotConfig,
@@ -74,7 +71,6 @@ export function generateCompareReport(
   lines.push(`• ${boldB}: ${formatNumber(weeklyGainB)}`);
   lines.push('');
 
-  // Requirement status
   const monthlyReq = config.requirements.monthlyFans;
   if (monthlyReq > 0) {
     const reqA = memberA.monthlyGain >= monthlyReq
@@ -89,7 +85,6 @@ export function generateCompareReport(
     lines.push('');
   }
 
-  // Winner
   if (memberA.monthlyGain > memberB.monthlyGain) {
     lines.push(`🏆 *${sanitizeName(memberA.trainerName)}* unggul di monthly gain`);
   } else if (memberB.monthlyGain > memberA.monthlyGain) {

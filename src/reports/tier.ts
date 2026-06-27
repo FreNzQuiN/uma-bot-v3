@@ -13,9 +13,6 @@ import { computeTierData } from '../data/daily-fans';
 
 export { computeTierData, CLUB_TIERS };
 
-/**
- * Generate the tier report string.
- */
 export function generateTierReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Tier Intelligence*\nData tier belum tersedia.';

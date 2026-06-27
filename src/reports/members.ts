@@ -15,8 +15,6 @@ import { buildFooter, buildDateStr, buildReportHeader } from './format';
 import { getLeftMembers } from '../data/member-history';
 
 /**
- * Generate the members report string.
- *
  * @param db - Optional database for querying left members history
  */
 export async function generateMembersReport(
