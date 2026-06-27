@@ -39,10 +39,6 @@ export class Scheduler {
     return this.getConfig();
   }
 
-  /**
-   * Record a schedule run in the database.
-   * Returns the run ID for status updates.
-   */
   private recordAndSend = async (reportType: string, options?: { offset?: number }): Promise<void> => {
     const targetJid = this.config.groups.announcement[0] ?? '';
     if (!targetJid) {
@@ -80,10 +76,6 @@ export class Scheduler {
     }
   };
 
-  /**
-   * Send multiple report types as one combined message.
-   * Skips types already sent today. Records a single combined run.
-   */
   private recordAndSendCombined = async (types: string[], options?: { offset?: number }): Promise<void> => {
     const targetJid = this.config.groups.announcement[0] ?? '';
     if (!targetJid) {
@@ -134,9 +126,6 @@ export class Scheduler {
     }
   };
 
-  /**
-   * Detect if two report types collide (same day and same time).
-   */
   detectCollision(dayOfMonth: number, typeA: string, typeB: string): boolean {
     const schedule = this.config.schedule;
     const times: Record<string, string | undefined> = {
@@ -150,9 +139,6 @@ export class Scheduler {
     return aScheduled && bScheduled;
   }
 
-  /**
-   * Schedule a silent data fetch at the daily report time.
-   */
   private scheduleDataFetch(): void {
     const dailyCron = this.getDailyCron();
     const task = cron.schedule(dailyCron, async () => {
@@ -166,35 +152,23 @@ export class Scheduler {
     this.tasks.push(task);
   }
 
-  /**
-   * Generate the cron expression for daily reports.
-   */
   getDailyCron(): string {
     const [hour, minute] = this.config.schedule.daily.time.split(':');
     return `${minute} ${hour} * * *`;
   }
 
-  /**
-   * Generate the cron expression for weekly reports.
-   */
   getWeeklyCron(): string {
     const [hour, minute] = this.config.schedule.weekly.time.split(':');
     const days = this.config.schedule.weekly.days.join(',');
     return `${minute} ${hour} ${days} * *`;
   }
 
-  /**
-   * Generate the cron expression for monthly reports.
-   */
   getMonthlyCron(): string {
     const [hour, minute] = this.config.schedule.monthly.time.split(':');
     const day = this.config.schedule.monthly.day;
     return `${minute} ${hour} ${day} * *`;
   }
 
-  /**
-   * Start all enabled scheduled tasks.
-   */
   start(): void {
     this.stop(); // clear any existing tasks
 
@@ -206,7 +180,6 @@ export class Scheduler {
     // Data fetch task — registered FIRST
     this.scheduleDataFetch();
 
-    // Daily schedule
     if (this.config.schedule.daily.enabled) {
       const dailyCron = this.getDailyCron();
       try {
@@ -304,9 +277,6 @@ export class Scheduler {
     }
   }
 
-  /**
-   * Stop all scheduled tasks.
-   */
   stop(): void {
     if (this.tasks.length > 0) {
       log.debug('Scheduler', `Stopping ${this.tasks.length} task(s)`);

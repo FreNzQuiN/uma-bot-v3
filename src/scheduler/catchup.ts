@@ -117,7 +117,6 @@ export class CatchUpManager {
         const todayDay = getDataDay();
         const weeklyDays = this.config.schedule.weekly.days;
 
-        // Find the most recent scheduled day that has passed (today or before)
         let mostRecentScheduledDay = 0;
         for (const day of [...weeklyDays].sort((a, b) => b - a)) {
           if (day <= todayDay) {
@@ -126,7 +125,6 @@ export class CatchUpManager {
           }
         }
 
-        // If no scheduled day has passed this month yet, check last month
         if (mostRecentScheduledDay === 0) {
           const lastDay = Math.max(...weeklyDays);
           const jstYear = getDataYear();
@@ -146,14 +144,12 @@ export class CatchUpManager {
       case 'monthly': {
         const monthlyDay = this.config.schedule.monthly.day;
 
-        // If today >= monthlyDay, check if we ran this month
         if (getDataDay() >= monthlyDay) {
           const thisMonth = `${getDataYear()}-${String(getDataMonth()).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
           if (!lastRun) return true;
           return lastRun.report_date < thisMonth;
         }
 
-        // If today < monthlyDay, check if we ran last month
         const jstYear = getDataYear();
         const jstMonth = getDataMonth();
         const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
@@ -168,9 +164,6 @@ export class CatchUpManager {
     }
   }
 
-  /**
-   * Execute a single report: record the run, send it, update status.
-   */
   private async executeSingleReport(
     reportType: string,
     sendReport: (type: string, options?: { isCatchUp: boolean; offset?: number }) => Promise<unknown>,
@@ -201,14 +194,6 @@ export class CatchUpManager {
     }
   }
 
-  /**
-   * Execute catch-up by sending missed reports.
-   *
-   * Sends reports oldest-first (daily → weekly → monthly).
-   * Combines colliding reports (same time) into single messages.
-   * Respects maxReportsPerStartup limit.
-   * Records each attempt in the database.
-   */
   async executeCatchUp(
     sendReport: (type: string, options?: { isCatchUp: boolean; offset?: number }) => Promise<unknown>,
     onCombinedReport?: (types: string[]) => Promise<unknown>
@@ -228,7 +213,6 @@ export class CatchUpManager {
       return { sent: 0, skipped: missed.length, failed: 0, alerts: [] };
     }
 
-    // Group missed reports by collision (same time → combine)
     const groups = groupByCollision(missed, this.config);
 
     let sent = 0;
@@ -243,7 +227,6 @@ export class CatchUpManager {
       }
 
       if (group.length === 1) {
-        // Single report — send individually
         const result = await this.executeSingleReport(group[0], sendReport, today, scheduledAt, targetJid);
         if (result.success) {
           alerts.push(...result.alerts);
@@ -252,7 +235,6 @@ export class CatchUpManager {
           failed++;
         }
       } else if (onCombinedReport) {
-        // Combined reports — send as one message
         const combinedKey = group.join('+');
         let runId: number | undefined;
         try {
@@ -290,7 +272,6 @@ export class CatchUpManager {
           log.error('CatchUp', `Failed to send combined report ${combinedKey}`, error);
         }
       } else {
-        // No combined handler — send each in the group individually
         for (const reportType of group) {
           const result = await this.executeSingleReport(reportType, sendReport, today, scheduledAt, targetJid);
           if (result.success) {

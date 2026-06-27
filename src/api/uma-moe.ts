@@ -121,9 +121,6 @@ export class UmaMoeClient {
     }
   }
 
-  /**
-   * Close the browser session.
-   */
   async closeSession(): Promise<void> {
     if (this.browser) {
       try {

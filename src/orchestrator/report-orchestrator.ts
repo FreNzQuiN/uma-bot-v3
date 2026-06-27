@@ -69,9 +69,6 @@ export class ReportOrchestrator {
     }
   }
 
-  /**
-   * Deliver alerts to admin/alertAdmin targets.
-   */
   async deliverAlerts(alerts: Alert[], isCatchUp: boolean): Promise<void> {
     if (!this.waClient.isConnected() || alerts.length === 0) return;
 
@@ -143,10 +140,6 @@ export class ReportOrchestrator {
     return snapshot;
   }
 
-  /**
-   * Generate a report string for a single report type.
-   * Returns the formatted report string, or undefined for unknown types.
-   */
   async buildReportString(
     type: string,
     snapshot: Snapshot,
@@ -169,9 +162,6 @@ export class ReportOrchestrator {
     return report;
   }
 
-  /**
-   * Generate a combined report string from multiple report types.
-   */
   generateCombinedReportString(
     types: string[],
     snapshot: Snapshot,
@@ -223,16 +213,11 @@ export class ReportOrchestrator {
     return [];
   }
 
-  /**
-   * Generate a combined catch-up report, deliver it, and collect alerts per type.
-   * Returns collected alerts for deferred delivery.
-   */
   async sendCombinedCatchUp(types: string[]): Promise<Alert[]> {
     const snapshot = this.getSnapshot();
     if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
     const config = this.getConfig();
 
-    // Pre-fetch monthly data if monthly report is in the combined set
     if (types.includes('monthly')) {
       await preFetchMonthlySnapshot(
         (y, m) => ensureMonthSnapshot(this.umaMoe, config.circleId, y, m),
@@ -247,7 +232,6 @@ export class ReportOrchestrator {
     lines.splice(1, 0, '', '*⚠️ Catch-up*');
     await this.deliverReport(lines.join('\n'), types.join('+'));
 
-    // Detect alerts for each combined report type
     const allAlerts: Alert[] = [];
     for (const type of types) {
       const alerts = await this.processAlertsForReport(type, snapshot, config, computedMembers, { isCatchUp: true, collectAlerts: true });
@@ -275,10 +259,8 @@ export class ReportOrchestrator {
 
     const config = this.getConfig();
 
-    // Month-alignment + stale data pre-fetch
     snapshot = await this.alignSnapshotToMonth(type, snapshot, config);
 
-    // Pre-fetch target month for monthly reports with offset
     if (type === 'monthly' && Math.abs(options?.offset ?? 0) > 0) {
       const { year: curYear, month: curMonth } = getDataDateComponents();
       const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, options!.offset!);
@@ -292,7 +274,6 @@ export class ReportOrchestrator {
       }
     }
 
-    // Compute once, use everywhere
     const computedMembers = computeMembers(snapshot, config);
     const report = await this.buildReportString(type, snapshot, config, computedMembers, options);
     if (report === undefined) return [];
