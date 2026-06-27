@@ -62,7 +62,7 @@ export function generateBottomReport(
 
   // Add stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
-  lines.push(...buildStaleSection(computedMembers, dataDay, staleThreshold, `⚠️ Tidak ada data (${staleThreshold}+ hari):`));
+  lines.push(...buildStaleSection(computedMembers, dataDay, staleThreshold, `⚠️ Belum aktif ${staleThreshold} hari terakhir:`));
 
   lines.push('');
   lines.push(buildFooter(config, buildDateStr(snapshot)));

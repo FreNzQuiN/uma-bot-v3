@@ -138,7 +138,7 @@ export function generateMonthlyReport(
 
   // Stale members (rolling window: consecutive zero-gain days at end >= threshold)
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
-  lines.push(...buildStaleSection(effectiveMembers, adjustedDataDay, staleThreshold, '⚠️ Belum aktif bulan ini:'));
+  lines.push(...buildStaleSection(effectiveMembers, adjustedDataDay, staleThreshold, `⚠️ Belum aktif ${staleThreshold} hari terakhir:`));
 
   const staleWarning = getStaleDataWarning(year, month, getDataDayFromSnapshot(activeSnapshot));
   if (staleWarning) {

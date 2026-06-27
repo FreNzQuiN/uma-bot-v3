@@ -120,7 +120,7 @@ export function generateWeeklyReport(
   // Stale members (rolling window: consecutive zero-gain days at end of target week)
   const viewedEndDay = Math.min(block.end, latestDataDay);
   const staleThreshold = config.memberStatus.staleAfterDaysWeekly;
-  lines.push(...buildStaleSection(computedMembers, viewedEndDay, staleThreshold, '⚠️ Belum aktif minggu ini:'));
+  lines.push(...buildStaleSection(computedMembers, viewedEndDay, staleThreshold, `⚠️ Belum aktif ${staleThreshold} hari terakhir:`));
 
   const { year, month } = snapshot.members[0];
   const staleWarning = getStaleDataWarning(year, month, latestDataDay);
