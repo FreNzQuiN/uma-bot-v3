@@ -14,7 +14,7 @@ function makeMember(overrides: Partial<ComputedMember> = {}): ComputedMember {
     firstPositiveDay: 0,
     firstPositiveValue: 0,
     monthlyGain: 0,
-    latestDailyGain: 0,
+    latestKnownGain: 0,
     weeklyGains: [0, 0, 0, 0, 0],
     ...overrides,
   };

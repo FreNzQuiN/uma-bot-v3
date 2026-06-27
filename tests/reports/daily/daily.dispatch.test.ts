@@ -336,7 +336,7 @@ describe('/daily dispatch integration (real snapshot)', () => {
     expect(rankLines.length).toBe(27);
   });
 
-  it('transfer badge verification: all 6 transfer members have 🔄 through dispatch', async () => {
+  it('transfer badge verification: 5 transfer members with positive gain have 🔄 through dispatch', async () => {
     setupCommandHandler(mockClient, cfg, mockDb, () => snapshot);
 
     await messageHandler!(

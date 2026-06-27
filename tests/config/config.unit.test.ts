@@ -1,6 +1,6 @@
 import { writeFileSync, unlinkSync, mkdirSync, rmSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getDefaultConfig, validateConfig, loadConfig, updateConfig, saveConfig } from '../src/config';
+import { getDefaultConfig, validateConfig, loadConfig, updateConfig, saveConfig } from '../../src/config';
 
 const TEMP_DIR = join(__dirname, '../../tests/temp-config');
 

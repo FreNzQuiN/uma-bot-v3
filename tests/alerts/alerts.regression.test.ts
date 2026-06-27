@@ -1,22 +1,11 @@
 import { computeMembers } from '../../src/reports/compute';
 import { detectAlerts } from '../../src/alerts/alerts';
-import { SqliteDatabase } from '../../src/db/database';
-import { getDefaultConfig } from '../../src/config';
 import type { Snapshot } from '../../src/types';
-import { loadRealSnapshot } from '../_helpers';
+import { loadRealSnapshot, makeConfig, makeMockDb } from '../_helpers';
 
 const realSnapshot: Snapshot = loadRealSnapshot();
 
-let db: SqliteDatabase;
-
-beforeEach(async () => {
-  db = new SqliteDatabase(':memory:');
-  await db.initialize();
-});
-
-afterEach(async () => {
-  await db.close();
-});
+const db = makeMockDb();
 
 describe('Bug 2: countActiveDaysUpTo consecutive streak counting', () => {
   // The function is not exported, so we test via detectAlerts.
@@ -75,8 +64,7 @@ describe('Bug 2: countActiveDaysUpTo consecutive streak counting', () => {
       ],
     };
 
-    const config = getDefaultConfig();
-    config.alerts.streakBreak.enabled = true;
+    const config = makeConfig({ alerts: { streakBreak: { enabled: true } } as any });
 
     const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
     const streakAlerts = alerts.filter(
@@ -133,8 +121,7 @@ describe('Bug 2: countActiveDaysUpTo consecutive streak counting', () => {
       ],
     };
 
-    const config = getDefaultConfig();
-    config.alerts.streakBreak.enabled = true;
+    const config = makeConfig({ alerts: { streakBreak: { enabled: true } } as any });
 
     const alerts = await detectAlerts(computeMembers(snapshot, config), snapshot, config, db);
     const streakAlerts = alerts.filter(

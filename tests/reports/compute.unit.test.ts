@@ -8,7 +8,6 @@
 import { Snapshot, ComputedMember, BotConfig } from '../../src/types';
 import { getDefaultConfig } from '../../src/config';
 import { computeMembers } from '../../src/reports/compute';
-import { SqliteDatabase } from '../../src/db/database';
 import { loadRealSnapshot } from '../_helpers';
 
 const snapshot: Snapshot = loadRealSnapshot();
@@ -93,10 +92,10 @@ describe('computeMembers', () => {
       expect(ryu.monthlyGain).toBe(15351042);
     });
 
-    it('computes correct latestDailyGain for Ryu', () => {
+    it('computes correct latestKnownGain for Ryu', () => {
       const ryu = findMember(members, 'Ryu');
       // fans[10] - fans[9] = 332207534 - 331992091 = 215443
-      expect(ryu.latestDailyGain).toBe(215443);
+      expect(ryu.latestKnownGain).toBe(215443);
     });
 
     it('computes correct weeklyGains for Ryu', () => {
@@ -115,8 +114,8 @@ describe('computeMembers', () => {
       const gf = findMember(members, 'GoldFamily');
       expect(gf.status).toBe('active');
       expect(gf.monthlyGain).toBe(27709705);
-      // latestDailyGain: 317726222 - 315015625 = 2710597
-      expect(gf.latestDailyGain).toBe(2710597);
+      // latestKnownGain: 317726222 - 315015625 = 2710597
+      expect(gf.latestKnownGain).toBe(2710597);
     });
   });
 
@@ -172,8 +171,8 @@ describe('computeMembers', () => {
       expect(zero.latestPositiveDay).toBe(11);
       // monthlyGain = 315534000 - 301413137 = 14120863
       expect(zero.monthlyGain).toBe(14120863);
-      // latestDailyGain = 315534000 - 313515911 = 2018089
-      expect(zero.latestDailyGain).toBe(2018089);
+      // latestKnownGain = 315534000 - 313515911 = 2018089
+      expect(zero.latestKnownGain).toBe(2018089);
     });
 
     it('computes correct gains for Sairen', () => {
@@ -261,7 +260,7 @@ describe('computeMembers', () => {
       expect(result[0].latestPositiveDay).toBe(0);
       expect(result[0].firstPositiveDay).toBe(0);
       expect(result[0].monthlyGain).toBe(0);
-      expect(result[0].latestDailyGain).toBe(0);
+      expect(result[0].latestKnownGain).toBe(0);
       expect(result[0].isTransfer).toBe(false);
     });
 
@@ -284,7 +283,7 @@ describe('computeMembers', () => {
       expect(result[0].latestPositiveDay).toBe(1);
       expect(result[0].firstPositiveDay).toBe(1);
       expect(result[0].monthlyGain).toBe(0); // single day = no gain
-      expect(result[0].latestDailyGain).toBe(0); // no previous day
+      expect(result[0].latestKnownGain).toBe(0); // no previous day
     });
 
     it('handles empty members array', () => {
@@ -335,131 +334,12 @@ describe('computeMembers', () => {
       // They are reclassified as 'left' via member_count ghost detection
       const stale = result.filter((m) => m.status === 'stale');
       const left = result.filter((m) => m.status === 'left');
-      expect(stale.length + left.length).toBeGreaterThanOrEqual(4);
+      expect(stale.length + left.length).toBe(4);
     });
   });
 
 
-  describe('DB cross-check: left member detection', () => {
-    let db: SqliteDatabase;
 
-    beforeEach(async () => {
-      db = new SqliteDatabase(':memory:');
-      await db.initialize();
-    });
-
-    afterEach(() => {
-      db.close();
-    });
-
-    it('marks stale members as "left" when DB says they left', () => {
-      // DOA IBU is already 'left' via member_count ghost detection.
-      // DB cross-check is redundant but harmless — status stays 'left'.
-      const douIBU = snapshot.members.find((m) => m.trainer_name === 'DOA IBU');
-      expect(douIBU).toBeDefined();
-
-      db.upsertMember({
-        viewer_id: douIBU!.viewer_id,
-        trainer_name: 'DOA IBU',
-        circle_id: snapshot.circle.circle_id,
-        first_seen: '2026-06-01',
-        last_seen: '2026-06-01',
-        status: 'left',
-      });
-
-      const result = computeMembers(snapshot, config);
-      const douIBUResult = result.find((m) => m.trainerName === 'DOA IBU');
-      expect(douIBUResult).toBeDefined();
-      expect(douIBUResult!.status).toBe('left');
-    });
-
-    it('does NOT mark active members as "left" even if in DB as left', () => {
-      // Ryu is active. Even if DB says "left", since status is not stale, left check is skipped
-      const ryu = snapshot.members.find((m) => m.trainer_name === 'Ryu');
-      expect(ryu).toBeDefined();
-
-      db.upsertMember({
-        viewer_id: ryu!.viewer_id,
-        trainer_name: 'Ryu',
-        circle_id: snapshot.circle.circle_id,
-        first_seen: '2026-06-01',
-        last_seen: '2026-06-11',
-        status: 'left',
-      });
-
-      const result = computeMembers(snapshot, config);
-      const ryuResult = result.find((m) => m.trainerName === 'Ryu');
-      expect(ryuResult!.status).toBe('active');
-    });
-
-    it('transfer member is NOT marked "left" even when DB says left', () => {
-      // Zero is a transfer member (status='active', isTransfer=true).
-      // Ghost detection may reclassify bottom gainers as 'left',
-      // but Zero has decent monthlyGain so stays active.
-      const zero = snapshot.members.find((m) => m.trainer_name === 'Zero');
-      expect(zero).toBeDefined();
-
-      db.upsertMember({
-        viewer_id: zero!.viewer_id,
-        trainer_name: 'Zero',
-        circle_id: snapshot.circle.circle_id,
-        first_seen: '2026-06-01',
-        last_seen: '2026-06-11',
-        previous_circle_id: 555894304,
-        previous_circle_name: 'Advent',
-        status: 'left',
-      });
-
-      const result = computeMembers(snapshot, config);
-      const zeroResult = result.find((m) => m.trainerName === 'Zero');
-      expect(zeroResult!.status).toBe('active');
-    });
-
-    it('member NOT in member_history gets normal status (not left)', () => {
-      // Ryu is not in DB at all → should get normal active status
-      const result = computeMembers(snapshot, config);
-      const ryuResult = result.find((m) => m.trainerName === 'Ryu');
-      expect(ryuResult!.status).toBe('active');
-    });
-
-    it('works without DB (db=undefined) — member_count detects ghosts as left', () => {
-      const resultNoDb = computeMembers(snapshot, config);
-      const resultWithDb = computeMembers(snapshot, config);
-
-      // Without DB, member_count gap still detects 4 ghosts as 'left'
-      const leftNoDb = resultNoDb.filter((m) => m.status === 'left');
-      expect(leftNoDb).toHaveLength(4);
-
-      // With empty DB, same result (member_count handles ghost detection)
-      const leftWithDb = resultWithDb.filter((m) => m.status === 'left');
-      expect(leftWithDb).toHaveLength(4);
-    });
-
-    it('marks all stale members as left when DB has them all marked', () => {
-      // All 4 ghost members are already 'left' via member_count gap.
-      // Adding DB entries is redundant but confirms the behavior.
-      const staleNames = ['DOA IBU', 'Kuro', 'Rowking', 'Lebowski'];
-      for (const name of staleNames) {
-        const member = snapshot.members.find((m) => m.trainer_name === name);
-        expect(member).toBeDefined();
-        db.upsertMember({
-          viewer_id: member!.viewer_id,
-          trainer_name: name,
-          circle_id: snapshot.circle.circle_id,
-          first_seen: '2026-06-01',
-          last_seen: '2026-06-01',
-          status: 'left',
-        });
-      }
-
-      const result = computeMembers(snapshot, config);
-      const leftMembers = result.filter((m) => m.status === 'left');
-      expect(leftMembers).toHaveLength(4);
-      expect(leftMembers.map((m) => m.trainerName).sort()).toEqual(
-        staleNames.sort()
-      );
-    });
-  });
 
 
   describe('transfer member with no data', () => {
