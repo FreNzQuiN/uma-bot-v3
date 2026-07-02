@@ -24,7 +24,7 @@ import { generateMembersReport } from '../../src/reports/members';
 import { generateTierReport } from '../../src/reports/tier';
 import { getDataDayFromSnapshot } from '../../src/data/snapshot';
 import { computeMembers } from '../../src/reports/compute';
-import { loadConfig } from '../../src/config';
+import { getDefaultConfig } from '../../src/config';
 import { loadRealSnapshot, WHATSAPP_MAX_LENGTH } from '../_helpers';
 
 let snapshot: Snapshot;
@@ -33,7 +33,7 @@ let config: BotConfig;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
-  config = loadConfig();
+  config = getDefaultConfig();
 });
 
 

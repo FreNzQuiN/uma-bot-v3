@@ -11,8 +11,6 @@ import { formatNumber } from '../utils/format';
 import { buildDateStr, buildFooter, buildReportHeader } from './format';
 import { computeTierData } from '../data/daily-fans';
 
-export { computeTierData, CLUB_TIERS };
-
 export function generateTierReport(snapshot: Snapshot, config: BotConfig, computedMembers: ComputedMember[]): string {
   if (!snapshot.members || snapshot.members.length === 0) {
     return 'ℹ️ *Tier Intelligence*\nData tier belum tersedia.';

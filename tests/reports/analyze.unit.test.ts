@@ -12,7 +12,7 @@
  */
 
 import { generateAnalyzeReport } from '../../src/reports/analyze';
-import { getDefaultConfig, loadConfig } from '../../src/config';
+import { getDefaultConfig } from '../../src/config';
 import { computeMembers } from '../../src/reports/compute';
 import { getDataDayFromSnapshot } from '../../src/data/snapshot';
 import type { Snapshot, BotConfig } from '../../src/types';
@@ -24,11 +24,7 @@ let config: BotConfig;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
-  try {
-    config = loadConfig();
-  } catch {
-    config = getDefaultConfig();
-  }
+  config = getDefaultConfig();
 });
 
 
@@ -44,7 +40,7 @@ function buildMember(
 ): Snapshot['members'][0] {
   return {
     id: memberIdCounter++,
-    circle_id: 232229195,
+    circle_id: 99999,
     viewer_id: memberIdCounter + 1000000,
     trainer_name: name,
     shame_score: null,
@@ -523,5 +519,100 @@ describe('generateAnalyzeReport — weekly gains', () => {
 
     // Weekly gains are joined with " | "
     expect(report).toMatch(/W\d+: [\d.,]+[KMB]? \| W\d+:/);
+  });
+});
+
+
+// ── Offset support (previous month) ────────────────────────
+
+jest.mock('../../src/data/snapshot', () => {
+  const actual = jest.requireActual('../../src/data/snapshot');
+  return { ...actual, loadMonthSnapshots: jest.fn() };
+});
+
+import { loadMonthSnapshots } from '../../src/data/snapshot';
+
+const mockLoadMonthSnapshots = loadMonthSnapshots as jest.MockedFunction<typeof loadMonthSnapshots>;
+
+describe('generateAnalyzeReport — offset support', () => {
+  afterEach(() => {
+    mockLoadMonthSnapshots.mockReset();
+  });
+
+  it('offset=0 produces identical output to current behavior (regression)', () => {
+    const withOffset = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', 0);
+    const withoutOffset = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu');
+
+    expect(withOffset).toBe(withoutOffset);
+  });
+
+  it('offset=-1 loads previous month snapshot and generates report', () => {
+    // Build a previous month snapshot with same member
+    const prevMember = {
+      ...snapshot.members.find(m => m.trainer_name === 'Ryu')!,
+      year: 2026,
+      month: 5,
+    };
+    const prevSnapshot: Snapshot = {
+      ...snapshot,
+      members: [prevMember],
+    };
+    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
+
+    expect(report).toContain('Analyze: Ryu');
+    expect(report).toContain('*Gain*');
+    expect(mockLoadMonthSnapshots).toHaveBeenCalledWith(2026, 5);
+  });
+
+  it('member not found in previous month → error message', () => {
+    // Previous month has a different member (not Ryu)
+    const prevMember = {
+      id: 99,
+      circle_id: 99999,
+      viewer_id: 999999,
+      trainer_name: 'OtherGuy',
+      shame_score: null,
+      year: 2026,
+      month: 5,
+      daily_fans: makeCumulativeFans(0, 100_000, 10),
+      last_updated: '2026-05-10',
+    };
+    const prevSnapshot: Snapshot = {
+      ...snapshot,
+      members: [prevMember],
+    };
+    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
+
+    expect(report).toContain('❌');
+    expect(report).toContain('Ryu');
+    expect(report).toContain('tidak ditemukan');
+  });
+
+  it('previous month snapshot unavailable → fallback to current data', () => {
+    mockLoadMonthSnapshots.mockReturnValue([]);
+
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
+
+    // Should still produce a valid report (uses current snapshot as fallback)
+    expect(report).toContain('Analyze: Ryu');
+    expect(report).toContain('*Gain*');
+  });
+
+  it('previous month snapshot has empty members → info message', () => {
+    const emptySnapshot: Snapshot = {
+      ...snapshot,
+      members: [],
+    };
+    mockLoadMonthSnapshots.mockReturnValue([emptySnapshot]);
+
+    const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
+
+    expect(report).toContain('ℹ️');
+    expect(report).toContain('Data belum tersedia');
+    expect(report).not.toContain('Analyze');
   });
 });

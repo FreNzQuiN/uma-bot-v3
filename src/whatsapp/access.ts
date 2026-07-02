@@ -70,9 +70,7 @@ export function canUseCommand(
 
   if (ADMIN_COMMANDS.has(command)) {
     if (!senderIsAdmin) return false;
-    // Admin commands only in command groups or private chats (not random groups)
     if (chatIsCmdGroup) return true;
-    // Private chat check: JID doesn't end with @g.us
     const isPrivateChat = !chatJid.endsWith('@g.us');
     return isPrivateChat;
   }

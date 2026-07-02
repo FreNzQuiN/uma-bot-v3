@@ -14,6 +14,7 @@ import { getDataDayFromSnapshot } from '../data/snapshot';
 import { computeMembers, computeTierData } from '../reports/compute';
 import { log } from '../utils/logger';
 import { getRuntimeStats, getUptimeMs } from '../runtime';
+import { getDataDateComponents } from '../utils/timezone';
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -80,7 +81,7 @@ export class ApiServer {
       this.server = http.createServer((req, res) => {
         this.handleRequest(req, res);
       });
-      this.server.timeout = 30_000; // 30 second timeout
+      this.server.timeout = 30_000;
 
       // Bind to localhost only (security requirement from spec)
       this.server.listen(this.port, '127.0.0.1', () => {
@@ -220,7 +221,7 @@ export class ApiServer {
       try {
         await this.db.getLastSuccessfulRun('_health_check');
       } catch (err) {
-        log.debug('API', `Health check DB probe failed: ${err instanceof Error ? err.message : String(err)}`);
+        log.debug('API', 'Health check DB probe failed', err);
         dbOk = false;
       }
     }
@@ -288,10 +289,15 @@ export class ApiServer {
     const dataDay = getDataDayFromSnapshot(snapshot);
     const members = computeMembers(snapshot, this.config);
 
+    const snapshotYear = snapshot.members[0]?.year;
+    const snapshotMonth = snapshot.members[0]?.month;
+    const { year: currentYear, month: currentMonth, day: currentDay } = getDataDateComponents();
+    const stale = snapshotYear === currentYear && snapshotMonth === currentMonth && dataDay < currentDay - 1;
+
     const meta = {
       snapshotDate: snapshot.circle.last_updated?.split('T')[0] ?? 'unknown',
       timezone: this.config.timezone,
-      stale: false,
+      stale,
       dataDay,
     };
 

@@ -12,7 +12,7 @@ import { formatNumber, sanitizeName } from '../utils/format';
 import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from './format';
 import { INDONESIAN_MONTHS } from '../utils/timezone';
 import { computeMembers } from './compute';
-import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
+import { getTargetMonth } from '../utils/timezone';
 
 function formatMonthYear(month: number, year: number): string {
   return `${INDONESIAN_MONTHS[month - 1]} ${year}`;
@@ -34,8 +34,8 @@ export function generateMonthlyReport(
   let fallbackWarning = '';
   const absOffset = Math.abs(offset);
   if (absOffset > 0) {
-    const { year: curYear, month: curMonth } = getDataDateComponents();
-    const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, offset);
+    const { year: snapYear, month: snapMonth } = snapshot.members[0];
+    const { year: targetYear, month: targetMonth } = getTargetMonth(snapYear, snapMonth, offset);
     const prevSnapshots = loadMonthSnapshots(targetYear, targetMonth);
     if (prevSnapshots.length > 0) {
       activeSnapshot = prevSnapshots[prevSnapshots.length - 1]; // latest snapshot for that month

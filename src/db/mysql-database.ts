@@ -59,7 +59,6 @@ export class MysqlDatabase implements IDatabase {
 
     const conn = await this.pool.getConnection();
 
-    // Check MySQL version — fail fast with clear message
     await this.checkVersion(conn);
 
     conn.release();
@@ -183,7 +182,6 @@ export class MysqlDatabase implements IDatabase {
       )
     `);
 
-    // Safe index creation — catches ER_DUP_KEYNAME for MySQL < 8.0.31 compatibility
     await this.createIndexSafe(conn, 'CREATE INDEX idx_member_history_circle_id ON member_history(circle_id)');
     await this.createIndexSafe(conn, 'CREATE INDEX idx_rank_history_circle_date ON rank_history(circle_id, date DESC)');
     await this.createIndexSafe(conn, 'CREATE INDEX idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)');

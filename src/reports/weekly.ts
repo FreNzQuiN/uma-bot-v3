@@ -45,7 +45,8 @@ export function generateWeeklyReport(
   const currentWeek = getWeekForDay(latestDataDay);
   const absOffset = Math.abs(offset);
   const targetWeek = Math.max(1, currentWeek - absOffset);
-  const block = WEEK_BLOCKS.find((b) => b.week === targetWeek)!;
+  const block = WEEK_BLOCKS.find((b) => b.week === targetWeek);
+  if (!block) return 'ℹ️ *Weekly Report*\nData minggu ini belum tersedia.';
 
   const ranked: WeeklyRankedMember[] = computedMembers
     .map((m, i) => ({
@@ -53,7 +54,7 @@ export function generateWeeklyReport(
       trainerName: m.trainerName,
       dailyGain: m.latestKnownGain,
       monthlyGain: m.monthlyGain,
-      weeklyGain: m.weeklyGains[targetWeek - 1] || 0,
+      weeklyGain: m.weeklyGains[targetWeek - 1] ?? 0,
       isTransfer: m.isTransfer,
       previousCircleName: m.previousCircleName,
     }))

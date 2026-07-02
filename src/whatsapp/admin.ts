@@ -6,7 +6,7 @@
  */
 
 import type { BotConfig } from '../types';
-import { getDefaultConfig, validateConfig, saveConfig } from '../config';
+import { validateConfig, saveConfig } from '../config';
 import { formatNumber } from '../utils/format';
 
 export function handleSetReq(

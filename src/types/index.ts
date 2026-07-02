@@ -108,6 +108,7 @@ export interface BotConfig {
     maxDailyOffset: number;
     maxWeeklyOffset: number;
     maxMonthlyOffset: number;
+    maxAnalyzeOffset: number;
   };
 
   admins: string[];

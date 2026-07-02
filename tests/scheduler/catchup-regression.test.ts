@@ -109,4 +109,36 @@ describe('Bug 1: Catch-up detects missed reports across days', () => {
     const missed = await catchUp.detectMissedReports();
     expect(missed).toContain('monthly');
   });
+
+  it('passes offset=-1 for monthly catch-up reports', async () => {
+    const config = makeConfig({
+      catchUp: { enabled: true, maxReportsPerStartup: 10 },
+      groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+      schedule: {
+        daily: { enabled: false, time: '22:05' },
+        weekly: { enabled: false, days: [], time: '22:05' },
+        monthly: { enabled: true, day: 1, time: '22:12' },
+      },
+    });
+
+    const lastMonthStr = '2026-05-01';
+    await db.recordRun({
+      report_type: 'monthly',
+      report_date: lastMonthStr,
+      scheduled_at: `${lastMonthStr}T22:12:00.000Z`,
+      sent_at: `${lastMonthStr}T22:12:01.000Z`,
+      status: 'sent',
+      is_catch_up: false,
+      target_jid: 'test@g.us',
+    });
+
+    const catchUp = new CatchUpManager(db, () => config);
+    const sendReport = jest.fn().mockResolvedValue(undefined);
+
+    await catchUp.executeCatchUp(sendReport);
+
+    const monthlyCall = sendReport.mock.calls.find((c: unknown[]) => c[0] === 'monthly');
+    expect(monthlyCall).toBeDefined();
+    expect(monthlyCall[1]).toEqual({ isCatchUp: true, offset: -1 });
+  });
 });

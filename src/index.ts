@@ -21,7 +21,7 @@ import { setupCommandHandler } from './whatsapp/dispatch';
 
 import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, ensureMonthSnapshot, getDataDayFromSnapshot, getCachedSnapshot, setCachedSnapshot } from './data/snapshot';
 import { updateMemberHistory } from './data/member-history';
-import { getDataDate, getDataDateComponents, getTargetMonth } from './utils/timezone';
+import { getDataDate, getDataDateComponents, getDisplayDateComponents, getTargetMonth } from './utils/timezone';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
 import { recordConfigReload, recordSchedulerRestart } from './runtime';
@@ -31,13 +31,16 @@ import { preFetchMonthlySnapshot } from './scheduler/helpers';
 
 const PID_FILE = 'data/bot.pid';
 
+let emergencyCleanup: (() => Promise<void>) | null = null;
+
 process.on('unhandledRejection', (reason) => {
   log.error('Bot', `Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
 });
 
 process.on('uncaughtException', (err) => {
   log.error('Bot', `Uncaught exception: ${err.message}`, err);
-  process.exit(1);
+  if (emergencyCleanup) emergencyCleanup().catch(() => {});
+  setTimeout(() => process.exit(1), 6_000);
 });
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -61,7 +64,6 @@ function configChanged(oldCfg: BotConfig, newCfg: BotConfig): { changed: boolean
 }
 
 async function main() {
-  // Save PID for stop script
   try {
     if (!existsSync('data')) mkdirSync('data', { recursive: true });
     writeFileSync(PID_FILE, String(process.pid), 'utf-8');
@@ -80,7 +82,7 @@ async function main() {
   log.info('Bot', `Timezone: ${config.timezone}`);
   log.info('Bot', `Log level: ${config.logging.level}`);
 
-  // Watch config.yaml for manual edits (polling-based, reliable on Windows)
+  // Polling instead of fs.watch — more reliable on Windows
   const configPath = require('path').resolve('config.yaml');
   let lastConfigMtime = 0;
   let lastConfigHash = '';
@@ -94,6 +96,7 @@ async function main() {
   }
 
   const umaMoe = new UmaMoeClient();
+  emergencyCleanup = () => umaMoe.closeSession();
   const getSnapshot = (): Snapshot | null => {
     const cached = getCachedSnapshot();
     if (cached) return cached;
@@ -126,8 +129,7 @@ async function main() {
         lastConfigMtime = currentMtime;
         lastConfigHash = currentContent;
 
-        // If initial read failed, this is the first successful read.
-        // Config was already loaded by main() — don't trigger a false reload.
+        // First read after initial failure — don't trigger false reload
         if (!initialReadOk) {
           initialReadOk = true;
           log.info('Config', 'config.yaml is now accessible (initial read was deferred)');
@@ -163,12 +165,10 @@ async function main() {
             log.info('Config', 'Config reloaded from config.yaml');
           }
 
-          // Warn if database config changed — requires full restart
           if (!deepEqual(oldConfig.database, config.database)) {
             log.warn('Config', 'Database config changed — restart required to apply new database settings');
           }
 
-          // Always restart scheduler on any config change
           if (scheduler) {
             scheduler.stop();
             scheduler.start();
@@ -188,7 +188,7 @@ async function main() {
   const { year: currentYear, month: currentMonth, day: currentDay } = getDataDateComponents();
 
   const latestSnap = loadLatestSnapshot();
-  if (latestSnap) setCachedSnapshot(latestSnap);
+  if (latestSnap && latestSnap.members.length > 0) setCachedSnapshot(latestSnap);
   let needFetch = true;
   if (latestSnap && latestSnap.members.length > 0) {
     const { year: snapYear, month: snapMonth } = latestSnap.members[0];
@@ -205,9 +205,13 @@ async function main() {
     try {
       log.info('Data', `No snapshot for ${todayStr} — fetching from uma.moe...`);
       const snapshot = await umaMoe.fetchCircleData(config.circleId, currentYear, currentMonth);
-      saveSnapshot(snapshot, todayStr);
-      setCachedSnapshot(snapshot);
-      log.info('Data', `Snapshot saved for ${todayStr}`);
+      if (snapshot.members.length === 0) {
+        log.warn('Data', 'Fetched snapshot has no members, not caching — will retry next cycle');
+      } else {
+        saveSnapshot(snapshot, todayStr);
+        setCachedSnapshot(snapshot);
+        log.info('Data', `Snapshot saved for ${todayStr}`);
+      }
     } catch (error) {
       log.error('Data', 'Failed to fetch fresh data', error);
       const latestDate = getLatestSnapshotDate();
@@ -233,7 +237,7 @@ async function main() {
   }
 
   const latestSnapshot = loadLatestSnapshot();
-  if (latestSnapshot) setCachedSnapshot(latestSnapshot);
+  if (latestSnapshot && latestSnapshot.members.length > 0) setCachedSnapshot(latestSnapshot);
   if (latestSnapshot) {
     try {
       await updateMemberHistory(latestSnapshot, db);
@@ -263,10 +267,15 @@ async function main() {
 
   const onDataFetch = async () => {
     try {
-      const { year: currentYear, month: currentMonth } = getDataDateComponents();
       const currentConfig = getConfig();
+      const { year: currentYear, month: currentMonth, day: currentDay } = getDisplayDateComponents(currentConfig.timezone);
       const snapshot = await umaMoe.fetchCircleData(currentConfig.circleId, currentYear, currentMonth);
-      saveSnapshot(snapshot, getDataDate());
+      if (snapshot.members.length === 0) {
+        log.warn('Data', 'Scheduled fetch returned empty snapshot, not caching');
+        return;
+      }
+      const todayStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+      saveSnapshot(snapshot, todayStr);
       setCachedSnapshot(snapshot);
       log.info('Data', 'Scheduled data fetch completed');
     } catch (error) {
@@ -275,18 +284,19 @@ async function main() {
   };
 
   scheduler = new Scheduler(getConfig, db, (type, options) => orchestrator.sendReport(type, options), async (types) => {
-    // Combined report: generate all reports and send as one message
     const snapshot = getSnapshot();
     if (!snapshot) return;
 
     const currentConfig = getConfig();
 
-    // Pre-fetch monthly data if monthly report is in the combined set
     if (types.includes('monthly')) {
+      const { year: snapYear, month: snapMonth } = snapshot.members[0];
       await preFetchMonthlySnapshot(
         (y, m) => ensureMonthSnapshot(umaMoe, currentConfig.circleId, y, m),
         1,
-        'combined report'
+        'combined report',
+        snapYear,
+        snapMonth
       );
     }
 
@@ -294,7 +304,6 @@ async function main() {
     const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
     await orchestrator.deliverReport(combined, types.join('+'));
 
-    // Detect alerts for each combined report type — fire in background, don't block
     for (const type of types) {
       orchestrator.processAlertsForReport(type, snapshot, currentConfig, computedMembers)
         .catch((err) => log.error('Alert', `Background alert processing failed for ${type}`, err));
@@ -303,8 +312,7 @@ async function main() {
   scheduler.start();
   log.info('Scheduler', `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(',')}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`);
 
-  // Connect WhatsApp (retries forever on network errors, rejects only for
-  // loggedOut/badSession which require user action).
+  // Retries forever on network errors; rejects only for loggedOut/badSession
   waClient.connect().then(async () => {
     log.info('WhatsApp', 'Connected — running catch-up');
 

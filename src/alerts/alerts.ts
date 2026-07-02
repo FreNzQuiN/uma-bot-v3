@@ -31,7 +31,6 @@ export interface Alert {
   reportDate: string;
 }
 
-
 function detectPerformanceDrops(
   computedMembers: ComputedMember[],
   latestDataDay: number,
@@ -100,10 +99,11 @@ function detectDemotionRisk(
   return { keys, alerts };
 }
 
+const MIN_STREAK_DAYS = 3;
+
 function detectStreakBreaks(
   computedMembers: ComputedMember[],
-  reportDate: string,
-  _config: BotConfig
+  reportDate: string
 ): { keys: string[]; alerts: Alert[] } {
   const keys: string[] = [];
   const alerts: Alert[] = [];
@@ -114,7 +114,7 @@ function detectStreakBreaks(
     if (member.latestKnownGain > 0) continue;
 
     const activeDays = countActiveDaysUpTo(member, member.latestPositiveDay);
-    if (activeDays < 3) continue;
+    if (activeDays < MIN_STREAK_DAYS) continue;
 
     const eventKey = `streak_break:${reportDate}:${member.viewerId}`;
     keys.push(eventKey);
@@ -132,8 +132,7 @@ function detectStreakBreaks(
 
 function detectNewTransfers(
   computedMembers: ComputedMember[],
-  reportDate: string,
-  _config: BotConfig
+  reportDate: string
 ): { keys: string[]; alerts: Alert[] } {
   const keys: string[] = [];
   const alerts: Alert[] = [];
@@ -185,7 +184,6 @@ function detectRankDrop(
   return { keys, alerts };
 }
 
-
 // Returns true if alerts were suppressed (caller should return [])
 async function suppressDuringQuietHours(
   alerts: Alert[],
@@ -223,17 +221,15 @@ async function suppressDuringQuietHours(
 
   // Record alerts for dedup so they don't re-fire after quiet hours end
   for (const alert of alerts) {
-    if (!existingKeys.has(alert.eventKey)) {
-      await db.recordAlert({
-        alert_type: alert.type,
-        event_key: alert.eventKey,
-        member_viewer_id: alert.memberViewerId,
-        report_date: alert.reportDate,
-        created_at: new Date().toISOString(),
-        status: 'suppressed',
-        message: alert.message,
-      });
-    }
+    await db.recordAlert({
+      alert_type: alert.type,
+      event_key: alert.eventKey,
+      member_viewer_id: alert.memberViewerId,
+      report_date: alert.reportDate,
+      created_at: new Date().toISOString(),
+      status: 'suppressed',
+      message: alert.message,
+    });
   }
   log.info('Alert', `${alerts.length} alert(s) suppressed during quiet hours (${config.alerts.quietHours.start}-${config.alerts.quietHours.end})`);
   return true;
@@ -263,10 +259,10 @@ export async function detectAlerts(
     detectors.push(detectDemotionRisk(snapshot, reportDate, config));
   }
   if (config.alerts.streakBreak.enabled) {
-    detectors.push(detectStreakBreaks(computedMembers, reportDate, config));
+    detectors.push(detectStreakBreaks(computedMembers, reportDate));
   }
   if (config.alerts.newTransfer.enabled) {
-    detectors.push(detectNewTransfers(computedMembers, reportDate, config));
+    detectors.push(detectNewTransfers(computedMembers, reportDate));
   }
   if (config.alerts.rankDrop.enabled) {
     detectors.push(detectRankDrop(snapshot, reportDate, config));
@@ -326,8 +322,6 @@ export function formatAlerts(alerts: Alert[], isCatchUp: boolean): string {
 
   return lines.join('\n');
 }
-
-
 
 /**
  * Count the consecutive active days of the streak that just broke.

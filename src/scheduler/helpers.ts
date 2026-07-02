@@ -1,6 +1,6 @@
 import type { BotConfig } from '../types';
 import { log } from '../utils/logger';
-import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
+import { getTargetMonth } from '../utils/timezone';
 
 export function isScheduledToday(type: string, dayOfMonth: number, config: BotConfig): boolean {
   if (type === 'daily') return true;
@@ -55,10 +55,11 @@ export function groupByCollision(types: string[], config: BotConfig): string[][]
 export async function preFetchMonthlySnapshot(
   fetcher: (year: number, month: number) => Promise<unknown>,
   offset: number,
-  context: string
+  context: string,
+  baseYear: number,
+  baseMonth: number
 ): Promise<void> {
-  const { year: curYear, month: curMonth } = getDataDateComponents();
-  const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, offset);
+  const { year: targetYear, month: targetMonth } = getTargetMonth(baseYear, baseMonth, offset);
   try {
     await fetcher(targetYear, targetMonth);
   } catch (err) {

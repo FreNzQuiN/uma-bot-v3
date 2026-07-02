@@ -41,7 +41,13 @@ function levenshteinDistance(a: string, b: string): number {
   return prev[bLen];
 }
 
-function parseStrictInt(value: string): number | null {
+const COMMAND_ALIASES: Record<string, string> = {
+  d: 'daily',
+  w: 'weekly',
+  m: 'monthly',
+};
+
+export function parseStrictInt(value: string): number | null {
   if (!/^-?\d+$/.test(value)) return null;
   return parseInt(value, 10);
 }
@@ -72,7 +78,7 @@ export function parseCommand(text: string, prefixes: string[]): ParsedCommand | 
   if (!afterPrefix) return null;
 
   const tokens = afterPrefix.split(/\s+/);
-  const command = tokens[0].toLowerCase();
+  const command = COMMAND_ALIASES[tokens[0].toLowerCase()] || tokens[0].toLowerCase();
   const args = tokens.slice(1);
 
   // Parse offset: first numeric arg (strict integer only — no hex/octal)

@@ -8,7 +8,7 @@ describe('UmaMoeClient', () => {
     });
 
     it('custom cache TTL works', () => {
-      const client = new UmaMoeClient({ tokenCacheMs: 50 });
+      const client = new UmaMoeClient({ sessionCacheMs: 50 });
       expect(client.isSessionValid()).toBe(false);
     });
 
@@ -27,7 +27,7 @@ describe('UmaMoeClient', () => {
     });
 
     it('creates with custom options', () => {
-      const client = new UmaMoeClient({ tokenCacheMs: 60_000 });
+      const client = new UmaMoeClient({ sessionCacheMs: 60_000 });
       expect(client.isSessionValid()).toBe(false);
     });
   });

@@ -118,10 +118,14 @@ export class ReportOrchestrator {
         try {
           log.info('Report', `Snapshot is from ${snapYear}-${snapMonth}, fetching current month ${curYear}-${curMonth}`);
           const freshSnapshot = await this.umaMoe.fetchCircleData(config.circleId, curYear, curMonth);
-          saveSnapshot(freshSnapshot, getDataDate());
-          setCachedSnapshot(freshSnapshot);
-          snapshot = freshSnapshot;
-          log.info('Report', `Fresh data fetched for ${type} report`);
+          if (freshSnapshot.members.length > 0) {
+            saveSnapshot(freshSnapshot, getDataDate());
+            setCachedSnapshot(freshSnapshot);
+            snapshot = freshSnapshot;
+            log.info('Report', `Fresh data fetched for ${type} report`);
+          } else {
+            log.warn('Report', 'Fresh fetch returned empty snapshot, keeping existing data');
+          }
         } catch (err) {
           log.warn('Report', `Cannot fetch fresh data for ${type} report (snapshot is from previous month)`, err);
           throw new Error(`Tidak ada data untuk ${type} report bulan ini. Data terakhir: ${snapYear}-${snapMonth}`);
@@ -137,9 +141,13 @@ export class ReportOrchestrator {
         try {
           log.info('Report', `Snapshot data day ${dataDay} is stale (current day ${curDay}), fetching fresh`);
           const freshSnapshot = await this.umaMoe.fetchCircleData(config.circleId, curYear, curMonth);
-          saveSnapshot(freshSnapshot, getDataDate());
-          setCachedSnapshot(freshSnapshot);
-          snapshot = freshSnapshot;
+          if (freshSnapshot.members.length > 0) {
+            saveSnapshot(freshSnapshot, getDataDate());
+            setCachedSnapshot(freshSnapshot);
+            snapshot = freshSnapshot;
+          } else {
+            log.warn('Report', 'Stale refresh returned empty snapshot, keeping existing data');
+          }
         } catch (err) {
           log.warn('Report', `Failed to refresh stale data, using existing snapshot`, err);
         }
@@ -225,13 +233,19 @@ export class ReportOrchestrator {
   async sendCombinedCatchUp(types: string[]): Promise<Alert[]> {
     const snapshot = this.getSnapshot();
     if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
+    if (snapshot.members.length === 0) {
+      throw new Error('Snapshot has no members for combined catch-up report');
+    }
     const config = this.getConfig();
 
     if (types.includes('monthly')) {
+      const { year: snapYear, month: snapMonth } = snapshot.members[0];
       await preFetchMonthlySnapshot(
         (y, m) => ensureMonthSnapshot(this.umaMoe, config.circleId, y, m),
         1,
-        'combined catch-up report'
+        'combined catch-up report',
+        snapYear,
+        snapMonth
       );
     }
 
@@ -271,14 +285,15 @@ export class ReportOrchestrator {
     snapshot = await this.alignSnapshotToMonth(type, snapshot, config);
 
     if (type === 'monthly' && Math.abs(options?.offset ?? 0) > 0) {
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      const { year: targetYear, month: targetMonth } = getTargetMonth(curYear, curMonth, options!.offset!);
       const { year: snapYear, month: snapMonth } = snapshot.members[0];
+      const { year: targetYear, month: targetMonth } = getTargetMonth(snapYear, snapMonth, options!.offset!);
       if (targetYear !== snapYear || targetMonth !== snapMonth) {
         await preFetchMonthlySnapshot(
           (y, m) => ensureMonthSnapshot(this.umaMoe, config.circleId, y, m),
           options!.offset!,
-          'offset report'
+          'offset report',
+          snapYear,
+          snapMonth
         );
       }
     }

@@ -8,7 +8,7 @@
 import type { BotConfig, Snapshot } from '../types';
 import type { IDatabase } from '../db/types';
 import type { WhatsAppClient, IncomingMessage } from './client';
-import { parseCommand, resolveMemberName } from './commands';
+import { parseCommand, parseStrictInt, resolveMemberName } from './commands';
 import { canUseCommand, isAdmin, ADMIN_COMMANDS, ADMIN_COMMAND_HELP } from './access';
 import { handleSetReq, handleConfig, handleStatus, handleCatchUp, handleAlerts } from './admin';
 import { computeMembers } from '../reports/compute';
@@ -95,9 +95,6 @@ export function setupCommandHandler(
   });
 }
 
-/**
- * Core dispatch logic — extracted for testability.
- */
 async function dispatchMessage(
   ctx: DispatchContext,
   msg: IncomingMessage
@@ -158,16 +155,16 @@ async function handleHelpCommand(
     '📋 *Command Registry*',
     '',
     '*Laporan:*',
-    '`/daily` [offset] — Laporan harian',
-    '`/weekly` [offset] — Laporan mingguan',
-    '`/monthly` [offset] — Laporan bulanan',
+    '`/daily` `/d` [offset] — Laporan harian',
+    '`/weekly` `/w` [offset] — Laporan mingguan',
+    '`/monthly` `/m` [offset] — Laporan bulanan',
     '`/ranks` — Peringkat top 10',
     '`/bottom` — Perlu perhatian',
     '`/stats` — Statistik klub',
     '`/members` — Daftar anggota',
     '`/tier` — Tier intelligence',
     '`/compare` A B — Bandingkan 2 anggota',
-    '`/analyze` Nama — Analisis anggota',
+    '`/analyze` Nama [offset] — Analisis anggota',
     '',
     '*Lainnya:*',
     '`/ping` — Cek apakah bot aktif',
@@ -207,13 +204,27 @@ async function handleReportCommand(
 ): Promise<void> {
   const { command, args, offset } = parsed;
 
+  // For name-based commands (analyze), offset is the last arg, not the first.
+  // Extract it early so validation and pre-fetch use the correct value.
+  let effectiveOffset = offset;
+  let effectiveArgs = args;
+  if (command === 'analyze' && effectiveOffset === null && args.length > 1) {
+    const lastArg = args[args.length - 1];
+    const parsedLast = parseStrictInt(lastArg);
+    if (parsedLast !== null) {
+      effectiveOffset = parsedLast;
+      effectiveArgs = args.slice(0, -1);
+    }
+  }
+
   // Validate offset early (before sending loading message)
-  if (offset !== null) {
+  if (effectiveOffset !== null) {
     const maxOffset = command === 'daily' ? ctx.config.commands.maxDailyOffset
       : command === 'weekly' ? ctx.config.commands.maxWeeklyOffset
       : command === 'monthly' ? ctx.config.commands.maxMonthlyOffset
+      : command === 'analyze' ? ctx.config.commands.maxAnalyzeOffset
       : null;
-    if (maxOffset !== null && Math.abs(offset) > maxOffset) {
+    if (maxOffset !== null && Math.abs(effectiveOffset) > maxOffset) {
       await ctx.client.sendOrEdit(chatJid, null, `Batas offset untuk /${command} adalah ${maxOffset}.`);
       return;
     }
@@ -226,17 +237,16 @@ async function handleReportCommand(
     return;
   }
 
-  // Send loading message — user sees immediate feedback
   const loadingMsgId = await ctx.client.sendOrEdit(chatJid, null, pickLoadingMessage());
 
-  // Pre-fetch target month for /monthly with offset > 0
-  if (command === 'monthly' && offset !== null && Math.abs(offset) > 0 && ctx.prefetchSnapshot) {
-    await preFetchMonthlySnapshot(ctx.prefetchSnapshot, offset, `/monthly ${offset}`);
+  if ((command === 'monthly' || command === 'analyze') && effectiveOffset !== null && Math.abs(effectiveOffset) > 0 && ctx.prefetchSnapshot && snapshot.members.length > 0) {
+    const { year: snapYear, month: snapMonth } = snapshot.members[0];
+    await preFetchMonthlySnapshot(ctx.prefetchSnapshot, effectiveOffset, `/${command} ${effectiveOffset}`, snapYear, snapMonth);
   }
 
   let report: string;
   try {
-    report = await generateReport(command, args, offset, snapshot, ctx.config, ctx.db);
+    report = await generateReport(command, effectiveArgs, effectiveOffset, snapshot, ctx.config, ctx.db);
   } catch (err) {
     log.error('Dispatch', `Report generation failed for /${command}`, err);
     await ctx.client.sendOrEdit(chatJid, loadingMsgId, '⚠️ Gagal memproses laporan. Coba lagi.');
@@ -290,11 +300,9 @@ async function generateReport(
 ): Promise<string> {
   const computedMembers = computeMembers(snapshot, config);
 
-  // Try standard report types from registry
   const registryResult = await generateReportString(command, snapshot, config, computedMembers, { offset: offset ?? 0, db });
   if (registryResult !== undefined) return registryResult;
 
-  // Dispatch-specific commands requiring member resolution
   switch (command) {
     case 'compare': {
       const nameA = args[0] ?? '';
@@ -318,13 +326,13 @@ async function generateReport(
     case 'analyze': {
       const name = args.join(' ');
       if (!name) {
-        return '❌ Cara pakai: /analyze <NamaAnggota>';
+        return '❌ Cara pakai: /analyze <NamaAnggota> [offset]';
       }
       const resolved = resolveMemberName(name, computedMembers);
       if (!resolved) {
         return `❌ "${name}" tidak ditemukan. Cek ejaan nama.`;
       }
-      return generateAnalyzeReport(snapshot, config, computedMembers, resolved.trainerName);
+      return generateAnalyzeReport(snapshot, config, computedMembers, resolved.trainerName, offset ?? 0);
     }
     default:
       return `❌ Perintah /${command} tidak dikenal. Cek /help.`;
@@ -332,8 +340,8 @@ async function generateReport(
 }
 
 /**
- * Process admin commands. Returns either a plain message string
- * or { config, message } when the command modifies config.
+ * Returns either a plain message string or { config, message }
+ * when the command modifies config.
  */
 async function processAdminCommand(
   command: string,

@@ -80,6 +80,11 @@ export function getDisplayDay(displayTimezone: string, date?: Date): number {
   return extractInTimezone(date ?? new Date(), displayTimezone).day;
 }
 
+/** Get date components in the display timezone. Used by cron-triggered fetches to match WIB day. */
+export function getDisplayDateComponents(displayTimezone: string, date?: Date): { year: number; month: number; day: number } {
+  return extractInTimezone(date ?? new Date(), displayTimezone);
+}
+
 /** Get JST month (1-12). */
 export function getDataMonth(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).month;
@@ -91,10 +96,11 @@ export function getDataYear(date?: Date): number {
 
 /**
  * Calculate a target month by applying an offset to a base year/month.
+ * Always goes backwards in time (absolute value of offset is used).
  *
  * @param curYear  - Base year (e.g. current JST year)
  * @param curMonth - Base month 1-12 (e.g. current JST month)
- * @param offsetMonths - Number of months to go back (positive = past, negative = future)
+ * @param offsetMonths - Number of months to go back (absolute value used)
  * @returns { year, month } of the target month
  *
  * @example getTargetMonth(2026, 1, 2)  → { year: 2025, month: 11 }

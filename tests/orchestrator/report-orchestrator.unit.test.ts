@@ -272,6 +272,19 @@ describe('ReportOrchestrator — alignSnapshotToMonth', () => {
     await expect(orch.alignSnapshotToMonth('daily', snapshot, config))
       .rejects.toThrow('Tidak ada data untuk daily report bulan ini');
   });
+
+  it('returns empty snapshot unchanged without fetching', async () => {
+    mockCurrentDate(2026, 7, 5);
+    const mockFetch = jest.fn();
+    const { orch, config } = makeOrchestrator();
+    (orch as any).umaMoe = { fetchCircleData: mockFetch };
+    const emptySnapshot = { ...loadRealSnapshot(), members: [] };
+
+    const result = await orch.alignSnapshotToMonth('daily', emptySnapshot, config);
+
+    expect(result).toBe(emptySnapshot);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
 
 
@@ -521,6 +534,7 @@ describe('ReportOrchestrator — sendReport', () => {
   });
 
   it('delivers report to announcement groups', async () => {
+    mockCurrentDate(2026, 6, 15);
     const snapshot = loadRealSnapshot();
     const mockSendMessage = jest.fn().mockResolvedValue(undefined);
     const { orch, config } = makeOrchestrator({

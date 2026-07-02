@@ -12,10 +12,7 @@
 
 import { Snapshot, WEEK_BLOCKS, TierData, CLUB_TIERS } from '../types';
 
-/**
- * Check if a daily_fans value is positive (usable cumulative data).
- * Negative values are transfer markers, zero means no data.
- */
+/** Negative values are transfer markers, zero means no data. */
 function isPositive(value: number | undefined): boolean {
   return typeof value === 'number' && value > 0;
 }
@@ -52,7 +49,7 @@ export function getLatestDataDay(dailyFans: number[]): number {
 export function getFirstPositiveDay(dailyFans: number[]): number {
   for (let i = 0; i < dailyFans.length; i++) {
     if (isPositive(dailyFans[i])) {
-      return i + 1; // convert to 1-indexed
+      return i + 1;
     }
   }
   return 0;
@@ -78,7 +75,7 @@ export function getDailyGain(dailyFans: number[], day: number, includeTransfer: 
   const effectiveCurrent = effectiveValue(current, includeTransfer);
 
   if (day < 2) {
-    return 0; // no previous day
+    return 0;
   }
 
   const previous = dailyFans[day - 2];
@@ -93,15 +90,6 @@ export function getDailyGain(dailyFans: number[], day: number, includeTransfer: 
 }
 
 /**
- * Compute the weekly gain for a given week number (1-5).
- *
- * Week blocks (1-indexed):
- *   1 = days 1-7   (indices 0-6)
- *   2 = days 8-14  (indices 7-13)
- *   3 = days 15-21 (indices 14-20)
- *   4 = days 22-28 (indices 21-27)
- *   5 = days 29-31 (indices 28-30)
- *
  * Gain = last positive value in block - first positive value in block.
  * Returns 0 if no positive values or only one positive value in the block.
  */
@@ -111,7 +99,6 @@ export function getWeeklyGain(dailyFans: number[], weekNumber: number, includeTr
     return 0;
   }
 
-  // Find the last positive value BEFORE this block starts
   let valueBeforeBlock: number | null = null;
   for (let day = 1; day < block.start; day++) {
     const idx = day - 1;
@@ -120,7 +107,6 @@ export function getWeeklyGain(dailyFans: number[], weekNumber: number, includeTr
     }
   }
 
-  // Find the last positive value in this block
   let lastPositiveInBlock: number | null = null;
   let firstPositiveInBlock: number | null = null;
   for (let day = block.start; day <= block.end; day++) {
@@ -135,24 +121,19 @@ export function getWeeklyGain(dailyFans: number[], weekNumber: number, includeTr
   }
 
   if (lastPositiveInBlock === null) {
-    return 0; // No positive data in block
+    return 0;
   }
 
-  // Use valueBeforeBlock as baseline if available
-  // Otherwise use firstPositiveInBlock (joiner/new member in this block)
   const baseline = valueBeforeBlock ?? firstPositiveInBlock;
 
   if (baseline === null || baseline === lastPositiveInBlock) {
-    return 0; // Single data point or no change
+    return 0;
   }
 
   return lastPositiveInBlock - baseline;
 }
 
-/**
- * Compute the monthly gain: latest positive value - first positive value.
- * Returns 0 if no positive values or only one positive value (baseline only).
- */
+/** Returns 0 if no positive values or only one (baseline only). */
 export function getMonthlyGain(dailyFans: number[], includeTransfer: boolean = false): number {
   let firstDay = 0;
   let firstValue = 0;
@@ -204,22 +185,6 @@ export function isTransferMember(member: {
 }
 
 /**
- * Determine if a member is stale (hasn't contributed recently).
- * Returns true if latestPositiveDay <= latestDataDay - staleAfterDays.
- * Default staleAfterDays = 3.
- * 
- * @deprecated Use isStaleForReport for production stale detection.
- *   This function is kept for test compatibility only.
- */
-function isStaleMember(
-  latestPositiveDay: number,
-  latestDataDay: number,
-  staleAfterDays: number = 3
-): boolean {
-  return latestPositiveDay <= latestDataDay - staleAfterDays;
-}
-
-/**
  * Compute the rolling average of the last N days of gains.
  * Only counts days where gain can be computed (both current and previous positive).
  * Returns 0 if no valid gain days.
@@ -257,9 +222,9 @@ export function computeRollingAverage(
  * Count the number of days where gain > 0 (consecutive positive differences).
  */
 export function countActiveDays(dailyFans: number[], latestDataDay?: number, includeTransfer: boolean = false): number {
-  const maxDay = latestDataDay ?? dailyFans.length;
+  // Cap at 31 to avoid scanning the unused padding element at index 31
+  const maxDay = latestDataDay ?? Math.min(dailyFans.length, 31);
   let count = 0;
-  // Count day 1 if it has data
   if (maxDay >= 1 && dailyFans.length >= 1 && hasValue(dailyFans[0], includeTransfer)) {
     count++;
   }
@@ -272,12 +237,7 @@ export function countActiveDays(dailyFans: number[], latestDataDay?: number, inc
   return count;
 }
 
-/**
- * Count consecutive zero-gain days ending at the latest data day.
- * A day is "zero gain" if getDailyGain returns 0.
- * Resets the counter on any day with positive gain.
- * Returns the count of consecutive zero-gain days at the tail.
- */
+/** Resets the counter on any day with positive gain. */
 export function countConsecutiveZeroDaysAtEnd(
   dailyFans: number[],
   latestDataDay: number
@@ -306,11 +266,7 @@ export function isStaleForReport(
   return countConsecutiveZeroDaysAtEnd(dailyFans, latestDataDay) >= threshold;
 }
 
-/**
- * Get the latest data day number from a snapshot.
- * Uses getLatestDataDay on each member's daily_fans and returns the MAX.
- * @returns The latest 1-indexed day number with positive data across all members
- */
+/** Returns the max latest data day across all members. */
 export function getDataDayFromSnapshot(snapshot: Snapshot): number {
   let maxDay = 0;
 

@@ -14,7 +14,7 @@ import type {
   RankHistoryInsert,
 } from './types';
 import initSqlJs, { Database as SqlJsDatabase, QueryExecResult, BindParams } from 'sql.js';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import * as path from 'path';
 import { log } from '../utils/logger';
 
@@ -38,7 +38,6 @@ export class SqliteDatabase implements IDatabase {
     } else {
       const dir = path.dirname(this.dbPath);
       if (dir && !existsSync(dir)) {
-        const { mkdirSync } = await import('fs');
         mkdirSync(dir, { recursive: true });
       }
 
@@ -156,7 +155,6 @@ export class SqliteDatabase implements IDatabase {
       )
     `);
 
-    // Performance indexes
     this.runSql('CREATE INDEX IF NOT EXISTS idx_member_history_circle_id ON member_history(circle_id)');
     this.runSql('CREATE INDEX IF NOT EXISTS idx_rank_history_circle_date ON rank_history(circle_id, date DESC)');
     this.runSql('CREATE INDEX IF NOT EXISTS idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)');
@@ -417,13 +415,9 @@ async save(): Promise<void> {
     }
   }
 
-private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): ScheduleRunRow | null {
+  private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): ScheduleRunRow | null {
     if (result.values.length === 0) return null;
-    const obj: Record<string, unknown> = {};
-    result.columns.forEach((col, i) => {
-      obj[col] = result.values[0][i];
-    });
-    return {
+    return this.mapColumns<ScheduleRunRow>(result, (obj) => ({
       id: obj.id as number,
       report_type: obj.report_type as string,
       report_date: obj.report_date as string,
@@ -433,7 +427,7 @@ private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): Sc
       is_catch_up: obj.is_catch_up === 1 || obj.is_catch_up === true,
       target_jid: obj.target_jid as string,
       error_message: obj.error_message as string | null,
-    };
+    }));
   }
 
   private mapColumns<T>(

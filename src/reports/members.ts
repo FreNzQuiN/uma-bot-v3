@@ -14,9 +14,6 @@ import { formatDateWIB } from '../utils/timezone';
 import { buildFooter, buildDateStr, buildReportHeader } from './format';
 import { getLeftMembers } from '../data/member-history';
 
-/**
- * @param db - Optional database for querying left members history
- */
 export async function generateMembersReport(
   snapshot: Snapshot,
   config: BotConfig,

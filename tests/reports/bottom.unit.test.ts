@@ -3,11 +3,11 @@
  *
  * Tests the bottom report through unit-level verification.
  * Uses real snapshot (examples/snapshot-june-12.json, 34 members).
- * Uses loadConfig() to match real config.yaml values.
+ * Uses getDefaultConfig() for deterministic Zod defaults.
  */
 
 import { generateBottomReport } from '../../src/reports/bottom';
-import { loadConfig } from '../../src/config';
+import { getDefaultConfig } from '../../src/config';
 import { getDataDayFromSnapshot } from '../../src/data/snapshot';
 import {
   getMonthlyGain,
@@ -23,11 +23,11 @@ let config: BotConfig;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
-  config = loadConfig();
+  config = getDefaultConfig();
 });
 
 function makeConfig(overrides: Partial<Omit<BotConfig, 'requirements' | 'memberStatus'> & { requirements?: Partial<BotConfig['requirements']>; memberStatus?: Partial<BotConfig['memberStatus']> }> = {}): BotConfig {
-  const base = loadConfig();
+  const base = getDefaultConfig();
   return {
     ...base,
     ...overrides,

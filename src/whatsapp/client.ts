@@ -82,7 +82,6 @@ function createBaileysLogger() {
 
     error: (obj: unknown, msg?: string) => {
       const message = msg || (typeof obj === 'string' ? obj : '');
-      // Suppress known-handled errors — Baileys manages these internally via retry
       for (const pattern of suppressPatterns) {
         if (message.includes(pattern)) return;
       }
@@ -140,9 +139,6 @@ export class WhatsAppClient {
     this.getConfig = getConfig;
   }
 
-  /**
-   * Get current connection state for debugging.
-   */
   getConnectionState(): string {
     return this.connectionState;
   }
@@ -189,9 +185,6 @@ export class WhatsAppClient {
       this.sock = null;
     }
 
-    // Suppress libsignal's noisy console.error calls for Bad MAC decryption failures.
-    // libsignal/src/session_cipher.js writes directly to console.error (bypassing pino).
-    // Baileys handles these internally with retry requests — the console noise is redundant.
     suppressLibsignalErrors();
 
     // Dynamic imports outside Promise constructor to avoid async antipattern.
@@ -221,9 +214,6 @@ export class WhatsAppClient {
 
     const { version } = await fetchLatestBaileysVersion();
 
-    // Custom logger adapter routing Baileys logs through our structured logger.
-    // Baileys logs decryption failures at error level internally, but they are
-    // handled via retry — logging them as errors is misleading noise.
     const logger = createBaileysLogger();
 
     this.sock = makeWASocket({
@@ -328,7 +318,7 @@ export class WhatsAppClient {
             await handler(msg as IncomingMessage);
           } catch (err) {
             recordMessageFailed();
-            log.warn('WhatsApp', `Message handler error: ${err instanceof Error ? err.message : String(err)}`);
+            log.warn('WhatsApp', 'Message handler error', err);
           }
         }
       }
@@ -386,11 +376,11 @@ export class WhatsAppClient {
                 log.info('WhatsApp', `Deleted stale session (${reasonLabel}) — reconnecting for QR scan`);
               }
             } catch (error) {
-              log.warn('WhatsApp', `Failed to delete stale auth directory: ${error instanceof Error ? error.message : String(error)}`);
+              log.warn('WhatsApp', 'Failed to delete stale auth directory', error);
             }
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after ${reasonLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
+                log.error('WhatsApp', `Reconnection after ${reasonLabel} failed`, err);
               });
             }, 2000);
           } else if (statusCode === DisconnectReason.restartRequired) {
@@ -402,7 +392,7 @@ export class WhatsAppClient {
             this.sock = null;
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after restartRequired failed: ${err instanceof Error ? err.message : String(err)}`);
+                log.error('WhatsApp', 'Reconnection after restartRequired failed', err);
               });
             }, delay);
           } else {
@@ -419,7 +409,7 @@ export class WhatsAppClient {
             this.sock = null;
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection failed: ${err instanceof Error ? err.message : String(err)}`);
+                log.error('WhatsApp', 'Reconnection failed', err);
               });
             }, delay);
           }
@@ -484,7 +474,7 @@ export class WhatsAppClient {
           recordMessageResponded();
           return messageId;
         } catch (err) {
-          log.warn('WhatsApp', `Edit failed, sending as new message: ${err instanceof Error ? err.message : String(err)}`);
+          log.warn('WhatsApp', 'Edit failed, sending as new message', err);
           // Fall through to send as new
         }
       }
@@ -497,8 +487,8 @@ export class WhatsAppClient {
       try {
         const key = { id: messageId, remoteJid: jid, fromMe: true };
         await this.sock.sendMessage(jid, { delete: key });
-      } catch {
-        // Best effort — loading message might already be gone
+      } catch (err) {
+        log.debug('WhatsApp', 'Failed to delete loading message (best effort)', err);
       }
     }
 

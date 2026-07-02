@@ -14,8 +14,6 @@ import {
   getMonthlyGain,
   isTransferMember,
 } from '../data/daily-fans';
-import { getDataDayFromSnapshot } from '../data/snapshot';
-
 export { computeTierData } from '../data/daily-fans';
 
 /**
@@ -28,9 +26,7 @@ export function computeMembers(
   snapshot: Snapshot,
   config: BotConfig
 ): ComputedMember[] {
-  const latestDataDay = getDataDayFromSnapshot(snapshot);
-
-  const membersWithGain: (ComputedMember & { monthlyGain: number })[] =
+  const membersWithGain: ComputedMember[] =
     snapshot.members.map((member) => {
       const dailyFans = member.daily_fans;
       const latestPositiveDay = getLatestDataDay(dailyFans);
@@ -42,8 +38,6 @@ export function computeMembers(
 
       const isTransfer = isTransferMember(member);
 
-      // Status = activity only. 'stale' only when no data at all.
-      // Report-specific stale is computed per-report.
       let status: MemberStatus = 'active';
       if (latestPositiveDay === 0) status = 'stale';
 
@@ -75,12 +69,14 @@ export function computeMembers(
   // If snapshot has more members than member_count, the extra members are
   // ghosts who left the club. Among all active members, the bottom
   // ghostCount by monthly gain are reclassified as 'left'.
-  const ghostCount = Math.max(
-    0,
-    snapshot.members.length - snapshot.circle.member_count
-  );
+  // Guard: skip ghost detection if member_count is unreliable (0 or negative)
+  // or if the gap is unreasonably large (more than half the roster)
+  const memberCount = snapshot.circle.member_count;
+  const ghostCount = memberCount > 0
+    ? Math.max(0, snapshot.members.length - memberCount)
+    : 0;
 
-  if (ghostCount > 0) {
+  if (ghostCount > 0 && ghostCount < snapshot.members.length * 0.5) {
     const candidates = [...membersWithGain]
       .sort((a, b) => a.monthlyGain - b.monthlyGain);
 

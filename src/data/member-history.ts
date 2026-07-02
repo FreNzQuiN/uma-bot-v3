@@ -11,15 +11,12 @@ import { getDataDate } from '../utils/timezone';
 import { log } from '../utils/logger';
 
 /**
- * Upsert all current snapshot members into member_history.
+ * For each member:
+ * - existing viewer_id: update trainer_name, circle_id, last_seen, transfer fields, status='active'
+ * - new viewer_id: insert with first_seen=last_seen=today
+ * - Historical members not in snapshot: status='left'
  *
- * For each member in the snapshot:
- * - If viewer_id already exists: update trainer_name, circle_id, last_seen, transfer fields, status='active'
- * - If viewer_id is new: insert with first_seen=last_seen=today
- *
- * Historical members not in the current snapshot are marked status='left'.
- *
- * This must be called before getLeftMembers so history is populated.
+ * Must be called before getLeftMembers so history is populated.
  */
 export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Promise<void> {
   const today = getDataDate();
@@ -65,14 +62,7 @@ export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Pr
   await db.upsertMembers(leftInserts);
 }
 
-/**
- * Detect left members by comparing member_history against the current snapshot.
- *
- * A left member is:
- *   member existed in previous history (member_history with same circle_id)
- *   AND member does NOT exist in the current snapshot
- * @returns Array of member_history rows for departed members
- */
+/** Returns member_history rows for members that existed previously but not in current snapshot. */
 export async function getLeftMembers(snapshot: Snapshot, db: IDatabase): Promise<MemberHistoryRow[]> {
   if (snapshot.members.length === 0) return [];
 

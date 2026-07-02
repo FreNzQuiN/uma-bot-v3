@@ -11,7 +11,7 @@
  */
 
 import { generateCompareReport } from '../../src/reports/compare';
-import { getDefaultConfig, loadConfig } from '../../src/config';
+import { getDefaultConfig } from '../../src/config';
 import { computeMembers } from '../../src/reports/compute';
 import { getDataDayFromSnapshot } from '../../src/data/snapshot';
 import type { Snapshot, BotConfig } from '../../src/types';
@@ -23,12 +23,7 @@ let config: BotConfig;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
-  // Use loadConfig if config.yaml exists, otherwise defaults
-  try {
-    config = loadConfig();
-  } catch {
-    config = getDefaultConfig();
-  }
+  config = getDefaultConfig();
 });
 
 
@@ -52,7 +47,7 @@ function buildMember(
 ): Snapshot['members'][0] {
   return {
     id: memberIdCounter++,
-    circle_id: 232229195,
+    circle_id: 99999,
     viewer_id: memberIdCounter + 1000000,
     trainer_name: name,
     shame_score: null,

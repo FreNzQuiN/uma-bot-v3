@@ -221,24 +221,24 @@ class Logger {
     }
   }
 
+  private formatErr(err: unknown): string {
+    return err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
+  }
+
   debug(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
-    this.write('debug', tag, message + suffix);
+    this.write('debug', tag, message + this.formatErr(err));
   }
 
   info(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
-    this.write('info', tag, message + suffix);
+    this.write('info', tag, message + this.formatErr(err));
   }
 
   warn(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
-    this.write('warn', tag, message + suffix);
+    this.write('warn', tag, message + this.formatErr(err));
   }
 
   error(tag: string, message: string, err?: unknown): void {
-    const suffix = err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
-    this.write('error', tag, message + suffix);
+    this.write('error', tag, message + this.formatErr(err));
   }
 }
 

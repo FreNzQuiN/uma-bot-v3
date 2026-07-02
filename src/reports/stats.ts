@@ -8,8 +8,8 @@
 import { Snapshot, BotConfig } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeRollingAverage, countActiveDays } from '../data/daily-fans';
-import { formatNumber } from '../utils/format';
+import { countActiveDays } from '../data/daily-fans';
+import { formatNumber, sanitizeName } from '../utils/format';
 import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
 
 export function generateStatsReport(
@@ -96,8 +96,8 @@ export function generateStatsReport(
     const sortedByGain = [...activeMembers].sort((a, b) => b.monthlyGain - a.monthlyGain);
     const topMember = sortedByGain[0];
     const lowestMember = sortedByGain[sortedByGain.length - 1];
-    lines.push(`🏆 Top: ${topMember.trainerName} — ${formatNumber(topMember.monthlyGain)}`);
-    lines.push(`📉 Lowest aktif: ${lowestMember.trainerName} — ${formatNumber(lowestMember.monthlyGain)}`);
+    lines.push(`🏆 Top: ${sanitizeName(topMember.trainerName)} — ${formatNumber(topMember.monthlyGain)}`);
+    lines.push(`📉 Lowest aktif: ${sanitizeName(lowestMember.trainerName)} — ${formatNumber(lowestMember.monthlyGain)}`);
     lines.push('');
   }
 

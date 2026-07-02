@@ -5,7 +5,7 @@
  * Focuses on members who may need attention or encouragement.
  */
 
-import { Snapshot, BotConfig, RankedMember } from '../types';
+import { Snapshot, BotConfig } from '../types';
 import type { ComputedMember } from '../types';
 import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
@@ -34,9 +34,7 @@ export function generateBottomReport(
   const { monthlyFans, weeklyFans } = config.requirements;
   const daysInMonth = new Date(snapshot.members[0].year, snapshot.members[0].month, 0).getDate();
   const daysElapsed = dataDay;
-  const monthlyTarget = monthlyFans;
-
-  lines.push(`🎯 Target bulanan: ${formatNumber(monthlyTarget)}`);
+  lines.push(`🎯 Target bulanan: ${formatNumber(monthlyFans)}`);
   if (weeklyFans > 0) {
     lines.push(`🎯 Target mingguan: ${formatNumber(weeklyFans)}`);
   }
@@ -46,13 +44,13 @@ export function generateBottomReport(
   for (let i = 0; i < bottomCount; i++) {
     const m = contributing[i];
     const transferBadge = m.isTransfer ? ' 🔄' : '';
-    const deficit = monthlyTarget - m.monthlyGain;
+    const deficit = monthlyFans - m.monthlyGain;
     const deficitStr = deficit > 0 ? ` (kurang ${formatNumber(deficit)})` : ' ✅';
     const projectedMonthEnd =
       daysElapsed > 0
         ? Math.round((m.monthlyGain / daysElapsed) * daysInMonth)
         : 0;
-    const projStr = projectedMonthEnd < monthlyTarget
+    const projStr = projectedMonthEnd < monthlyFans
       ? ` → ~${formatNumber(projectedMonthEnd)}`
       : '';
     lines.push(

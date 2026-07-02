@@ -483,7 +483,7 @@ describe('CatchUpManager', () => {
 
       expect(sendReport.mock.calls.length).toBeGreaterThan(0);
       for (const call of sendReport.mock.calls) {
-        expect(call[1]).toEqual({ isCatchUp: true });
+        expect(call[1]).toEqual(expect.objectContaining({ isCatchUp: true }));
       }
     });
 
@@ -565,7 +565,7 @@ describe('CatchUpManager', () => {
 
       expect(sendReport.mock.calls.length).toBeGreaterThan(0);
       for (const call of sendReport.mock.calls) {
-        expect(call[1]).toEqual({ isCatchUp: true });
+        expect(call[1]).toEqual(expect.objectContaining({ isCatchUp: true }));
       }
     });
   });

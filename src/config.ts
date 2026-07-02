@@ -28,6 +28,7 @@ const ConfigSchema = z.object({
     maxDailyOffset: z.number().int().min(0).default(31),
     maxWeeklyOffset: z.number().int().min(0).default(5),
     maxMonthlyOffset: z.number().int().min(0).default(12),
+    maxAnalyzeOffset: z.number().int().min(0).default(12),
   }).default({}),
 
   admins: z.array(z.string()).default([]),

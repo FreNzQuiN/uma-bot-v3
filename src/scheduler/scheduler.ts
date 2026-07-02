@@ -155,9 +155,8 @@ export class Scheduler {
   }
 
   start(): void {
-    this.stop(); // clear any existing tasks
+    this.stop();
 
-    // Daily schedule
     if (this.config.schedule.daily.enabled) {
       const dailyCron = this.getDailyCron();
       try {
@@ -179,7 +178,7 @@ export class Scheduler {
           } catch (error) {
             log.error('Scheduler', 'Daily report failed', error);
           }
-        });
+        }, { timezone: this.config.timezone });
         this.tasks.push(task);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -187,7 +186,6 @@ export class Scheduler {
       }
     }
 
-    // Weekly schedule — skip only when daily is enabled AND same time (daily handler combines them)
     if (this.config.schedule.weekly.enabled) {
       const weeklyCron = this.getWeeklyCron();
       try {
@@ -215,7 +213,7 @@ export class Scheduler {
           } catch (error) {
             log.error('Scheduler', 'Weekly report failed', error);
           }
-        });
+        }, { timezone: this.config.timezone });
         this.tasks.push(task);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -223,7 +221,6 @@ export class Scheduler {
       }
     }
 
-    // Monthly schedule — skip only when daily is enabled AND same time (daily handler combines them)
     if (this.config.schedule.monthly.enabled) {
       const monthlyCron = this.getMonthlyCron();
       try {
@@ -251,7 +248,7 @@ export class Scheduler {
           } catch (error) {
             log.error('Scheduler', 'Monthly report failed', error);
           }
-        });
+        }, { timezone: this.config.timezone });
         this.tasks.push(task);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

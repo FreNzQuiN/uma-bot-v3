@@ -3,24 +3,33 @@
  *
  * Uses Playwright to solve Cloudflare Turnstile, then fetches data
  * through the browser context (same-origin with cookies).
+ *
+ * Browser lifecycle:
+ * - ensureSession() launches browser + context + page, cached for ~4 minutes
+ * - closeSession() tears down in reverse order: page → context → browser → force-kill
+ * - Each close step uses timeout to prevent hanging on unresponsive Chrome
  */
 
-import type { Browser, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
+import type { ChildProcess } from 'child_process';
 import type { Snapshot } from '../types';
 import { log } from '../utils/logger';
 
 const BASE_URL = 'https://uma.moe';
-const SESSION_CACHE_MS = 240_000; // 4 minutes
+const SESSION_CACHE_MS = 240_000;
+const CLOSE_TIMEOUT_MS = 5_000;
 
 export interface UmaMoeClientOptions {
-  tokenCacheMs?: number;
+  sessionCacheMs?: number;
 }
 
 export class UmaMoeClient {
   private page: Page | null = null;
+  private context: BrowserContext | null = null;
   private browser: Browser | null = null;
   private sessionObtainedAt: number = 0;
   private options: UmaMoeClientOptions;
+  private pendingSession: Promise<void> | null = null;
 
   constructor(options?: UmaMoeClientOptions) {
     this.options = options ?? {};
@@ -28,48 +37,61 @@ export class UmaMoeClient {
 
   isSessionValid(): boolean {
     if (!this.page) return false;
-    return Date.now() - this.sessionObtainedAt < (this.options.tokenCacheMs ?? SESSION_CACHE_MS);
+    return Date.now() - this.sessionObtainedAt < (this.options.sessionCacheMs ?? SESSION_CACHE_MS);
   }
 
-  /**
-   * Open a Playwright browser session to uma.moe.
-   * Turnstile solves automatically and sets warmup cookie.
-   */
   async ensureSession(): Promise<void> {
     if (this.isSessionValid()) return;
+    if (this.pendingSession) {
+      try { await this.pendingSession; } catch (err) {
+        log.debug('UmaMoe', 'Previous session attempt failed, retrying', err);
+      }
+      if (this.isSessionValid()) return;
+    }
 
+    this.pendingSession = this._launchSession();
+    try {
+      await this.pendingSession;
+    } finally {
+      this.pendingSession = null;
+    }
+  }
+
+  private async _launchSession(): Promise<void> {
     await this.closeSession();
 
     const { chromium } = await import('playwright');
+    let browser: Browser | null = null;
+    let context: BrowserContext | null = null;
 
     try {
-      this.browser = await chromium.launch({
+      browser = await chromium.launch({
         headless: true,
         args: ['--disable-blink-features=AutomationControlled'],
       });
 
-      const context = await this.browser.newContext({
+      context = await browser.newContext({
         userAgent:
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       });
 
-      this.page = await context.newPage();
+      const page = await context.newPage();
 
-      await this.page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 30_000 });
+      await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 30_000 });
+      await page.waitForTimeout(5000);
 
-      await this.page.waitForTimeout(5000);
-
+      this.browser = browser;
+      this.context = context;
+      this.page = page;
       this.sessionObtainedAt = Date.now();
+      log.info('UmaMoe', 'Browser session established');
     } catch (err) {
-      await this.closeSession();
+      log.warn('UmaMoe', 'Browser session failed', err);
+      await UmaMoeClient.teardownBrowser(context, browser);
       throw err;
     }
   }
 
-  /**
-   * Fetch circle data through the browser context.
-   * Same-origin requests automatically include the warmup cookie.
-   */
   async fetchCircleData(circleId: number, year: number, month: number): Promise<Snapshot> {
     log.debug('UmaMoe', `Fetching circle ${circleId} for ${year}-${String(month).padStart(2, '0')}`);
     await this.ensureSession();
@@ -80,7 +102,9 @@ export class UmaMoeClient {
   }
 
   private async _fetchWithRetry(url: string, attempt: number): Promise<Snapshot> {
-    const page = this.page!;
+    const page = this.page;
+    if (!page) throw new Error('No active browser session');
+
     try {
       const result = await page.evaluate(async (fetchUrl: string) => {
         const controller = new AbortController();
@@ -110,10 +134,9 @@ export class UmaMoeClient {
       return result as Snapshot;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // Retry on 401/403 (token expired)
       if (attempt < 2 && (msg.includes('HTTP 401') || msg.includes('HTTP 403'))) {
-        log.warn('UmaMoe', `Session expired (${msg}), re-establishing and retrying...`);
-        this.sessionObtainedAt = 0; // Force re-auth
+        log.warn('UmaMoe', `Session expired (${msg}), re-authenticating (attempt ${attempt + 1})`);
+        this.sessionObtainedAt = 0;
         await this.ensureSession();
         return this._fetchWithRetry(url, attempt + 1);
       }
@@ -122,14 +145,53 @@ export class UmaMoeClient {
   }
 
   async closeSession(): Promise<void> {
-    if (this.browser) {
-      try {
-        await this.browser.close();
-      } catch {
-        // Ignore close errors
+    const context = this.context;
+    const browser = this.browser;
+    this.page = null;
+    this.context = null;
+    this.browser = null;
+
+    await UmaMoeClient.teardownBrowser(context, browser);
+  }
+
+  private static async teardownBrowser(
+    context: BrowserContext | null,
+    browser: Browser | null,
+  ): Promise<void> {
+    if (context) {
+      try { await withTimeout(context.close(), CLOSE_TIMEOUT_MS); } catch (err) {
+        log.debug('UmaMoe', 'Context close failed', err);
       }
-      this.browser = null;
-      this.page = null;
+    }
+    if (browser) {
+      try {
+        await withTimeout(browser.close(), CLOSE_TIMEOUT_MS);
+      } catch (err) {
+        log.debug('UmaMoe', 'Browser close timed out, force-killing', err);
+        UmaMoeClient.forceKillBrowser(browser);
+      }
     }
   }
+
+  private static forceKillBrowser(browser: Browser): void {
+    const proc = (browser as Browser & { process(): ChildProcess | null }).process();
+    if (proc && !proc.killed) {
+      try {
+        proc.kill('SIGTERM');
+        log.warn('UmaMoe', `Force-killed Chrome process (PID ${proc.pid})`);
+      } catch (err) {
+        log.debug('UmaMoe', 'SIGTERM failed, process may already be dead', err);
+      }
+    }
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Operation timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
 }

@@ -2,7 +2,6 @@
  * Member comparison report generator for Uma Club Bot v3.
  *
  * Compares two members side by side on various metrics.
- * Uses WhatsApp formatting (*bold*, not Markdown).
  */
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
@@ -40,8 +39,8 @@ export function generateCompareReport(
 
   // Show current week's gain only (not total of all weeks)
   const currentWeekNum = getWeekForDay(latestDataDay);
-  const weeklyGainA = memberA.weeklyGains[currentWeekNum - 1] || 0;
-  const weeklyGainB = memberB.weeklyGains[currentWeekNum - 1] || 0;
+  const weeklyGainA = memberA.weeklyGains[currentWeekNum - 1] ?? 0;
+  const weeklyGainB = memberB.weeklyGains[currentWeekNum - 1] ?? 0;
 
   const badgeA = memberA.isTransfer ? ' 🔄' : '';
   const badgeB = memberB.isTransfer ? ' 🔄' : '';

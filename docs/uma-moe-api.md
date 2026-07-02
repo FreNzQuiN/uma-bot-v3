@@ -175,11 +175,20 @@ day_gain = daily_fans[today] - daily_fans[yesterday]
 
 #### `GET /api/v4/circles/list`
 
-List all tracked circles ranked by monthly performance. Returns the full list (no pagination).
+List tracked circles ranked by monthly performance. Paginated (100 per page).
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| page | integer | No | Page number (0-indexed, default: 0) |
 
 **Response:**
 ```json
 {
+  "total": 5000,
+  "page": 0,
+  "limit": 100,
+  "total_pages": 50,
   "circles": [
     {
       "circle_id": 717148109,
@@ -205,6 +214,8 @@ List all tracked circles ranked by monthly performance. Returns the full list (n
   ]
 }
 ```
+
+**Note:** `total` is the total number of tracked circles, not a string. `limit` is always 100.
 
 ---
 
@@ -484,5 +495,3 @@ Count total inheritance records and support card accounts.
 7. **Search `total` is a string** — returns `"over 10000"` instead of an integer (soft cap)
 8. **Veterans endpoint requires UUID** — not numeric viewer_id. Returns 400 with numeric IDs
 9. **`/api/tasks` is listed in health but returns 404** — likely deprecated or internal-only
-
-

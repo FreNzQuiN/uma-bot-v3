@@ -11,7 +11,6 @@ import { Snapshot } from '../types';
 import { formatDateWIB } from '../utils/timezone';
 import { log } from '../utils/logger';
 
-/** Base directory name under which snapshots are stored (relative to root). */
 const SNAPSHOTS_DIR = 'data/snapshots';
 
 let cachedLatestSnapshot: Snapshot | null = null;
@@ -91,8 +90,7 @@ export function saveSnapshot(
 
   fs.mkdirSync(dir, { recursive: true });
 
-  // Write to temp file then rename for atomicity.
-  // This prevents corrupt files if the process crashes mid-write.
+  // Prevents corrupt files if the process crashes mid-write.
   const tmpPath = filePath + '.tmp';
   fs.writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), 'utf-8');
   fs.renameSync(tmpPath, filePath);
@@ -131,7 +129,6 @@ export function loadSnapshot(
 
     return parsed;
   } catch (err) {
-    // Corrupt JSON or any parse error
     log.debug('Snapshot', `Failed to load ${dataDay}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
@@ -249,13 +246,7 @@ export function getLatestSnapshotDate(
   return dates[0];
 }
 
-/**
- * Build the user-facing stale snapshot message in Indonesian.
- * Returns empty string if no snapshot date is available.
- *
- * @param snapshotDate - WIB date string like "2026-06-10" or null
- * @returns Indonesian message or empty string
- */
+/** Returns empty string if no snapshot date is available. */
 export function staleSnapshotMessage(snapshotDate: string | null): string {
   if (!snapshotDate) return '';
 
@@ -263,7 +254,6 @@ export function staleSnapshotMessage(snapshotDate: string | null): string {
   return `Data uma.moe lagi tidak bisa diambil.\nAku pakai snapshot terakhir: ${formatted}.`;
 }
 
-// Re-export ensureMonthSnapshot from its dedicated module to preserve the public API.
 // The function itself lives in ./ensure-snapshot.ts to avoid a data → api dependency.
 export { ensureMonthSnapshot } from './ensure-snapshot';
 

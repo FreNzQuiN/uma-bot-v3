@@ -66,6 +66,7 @@ commands:
   maxDailyOffset: 31
   maxWeeklyOffset: 5
   maxMonthlyOffset: 12
+  maxAnalyzeOffset: 12
 ```
 
 | Field | Type | Default | Description |
@@ -74,6 +75,8 @@ commands:
 | `maxDailyOffset` | `number` | `31` | Max day offset for `/daily` (e.g., `/daily -3`) |
 | `maxWeeklyOffset` | `number` | `5` | Max week offset for `/weekly` |
 | `maxMonthlyOffset` | `number` | `12` | Max month offset for `/monthly` |
+| `maxAnalyzeOffset` | `number` | `12` | Max month offset for `/analyze` (e.g., `/analyze Nama -1`) |
+| `maxTierOffset` | `number` | `12` | Max month offset for `/tier` |
 
 ---
 

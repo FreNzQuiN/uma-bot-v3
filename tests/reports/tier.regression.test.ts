@@ -1,5 +1,5 @@
 import type { Snapshot } from '../../src/types';
-import { computeTierData } from '../../src/reports/tier';
+import { computeTierData } from '../../src/data/daily-fans';
 import { loadRealSnapshot } from '../_helpers';
 
 const realSnapshot: Snapshot = loadRealSnapshot();

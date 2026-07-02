@@ -2,18 +2,18 @@
  * Member analysis report generator for Uma Club Bot v3.
  *
  * Deep-dive analysis of a single member's performance.
- * Uses WhatsApp formatting (*bold*, not Markdown).
  */
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
-import { getDataDayFromSnapshot } from '../data/snapshot';
+import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
+import { formatDateWIB, getTargetMonth } from '../utils/timezone';
 import { buildDateStr, buildFooter } from './format';
 import {
   computeRollingAverage,
   countActiveDays,
 } from '../data/daily-fans';
+import { computeMembers } from './compute';
 
 const TREND_UP_THRESHOLD = 1.1;   // 10% above 7-day avg = upward trend
 const TREND_DOWN_THRESHOLD = 0.9; // 10% below 7-day avg = downward trend
@@ -22,11 +22,30 @@ export function generateAnalyzeReport(
   snapshot: Snapshot,
   config: BotConfig,
   computedMembers: ComputedMember[],
-  name: string
+  name: string,
+  offset: number = 0
 ): string {
-  const latestDataDay = getDataDayFromSnapshot(snapshot);
+  // Handle offset by loading previous month snapshot if available
+  let activeSnapshot = snapshot;
+  let activeMembers = computedMembers;
+  const absOffset = Math.abs(offset);
+  if (absOffset > 0 && snapshot.members.length > 0) {
+    const { year: snapYear, month: snapMonth } = snapshot.members[0];
+    const { year: targetYear, month: targetMonth } = getTargetMonth(snapYear, snapMonth, offset);
+    const prevSnapshots = loadMonthSnapshots(targetYear, targetMonth);
+    if (prevSnapshots.length > 0) {
+      activeSnapshot = prevSnapshots[prevSnapshots.length - 1];
+      activeMembers = computeMembers(activeSnapshot, config);
+    }
+  }
 
-  const member = computedMembers.find((m) => m.trainerName === name) ?? null;
+  if (!activeSnapshot.members || activeSnapshot.members.length === 0) {
+    return 'ℹ️ Data belum tersedia untuk bulan ini.';
+  }
+
+  const latestDataDay = getDataDayFromSnapshot(activeSnapshot);
+
+  const member = activeMembers.find((m) => m.trainerName === name) ?? null;
   if (!member) {
     return `❌ "${name}" tidak ditemukan. Cek ejaan nama.`;
   }
@@ -51,14 +70,14 @@ export function generateAnalyzeReport(
     ? `✅ Memenuhi (${formatNumber(member.monthlyGain)} / ${formatNumber(monthlyReq)})`
     : `❌ Kurang ${formatNumber(monthlyReq - member.monthlyGain)} lagi`;
 
-  const { year, month } = snapshot.members[0];
+  const { year, month } = activeSnapshot.members[0];
   const daysInFullMonth = new Date(year, month, 0).getDate();
   const daysElapsed = daysInMonth;
   const projected = daysElapsed > 0
     ? Math.round((member.monthlyGain / daysElapsed) * daysInFullMonth)
     : 0;
 
-  const dateStr = buildDateStr(snapshot, latestDataDay);
+  const dateStr = buildDateStr(activeSnapshot, latestDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
   const transferBadge = member.isTransfer ? ' 🔄' : '';
@@ -94,6 +113,6 @@ export function generateAnalyzeReport(
   lines.push(`• Proyeksi akhir bulan: ~${formatNumber(projected)}`);
 
   lines.push('');
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, buildDateStr(activeSnapshot)));
   return lines.join('\n');
 }

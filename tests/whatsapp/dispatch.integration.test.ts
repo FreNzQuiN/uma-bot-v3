@@ -21,6 +21,15 @@ jest.mock('../../src/config', () => {
   return { ...actual, saveConfig: jest.fn() };
 });
 
+// Mock loadMonthSnapshots for /analyze offset tests
+jest.mock('../../src/data/snapshot', () => {
+  const actual = jest.requireActual('../../src/data/snapshot');
+  return { ...actual, loadMonthSnapshots: jest.fn() };
+});
+
+import { loadMonthSnapshots } from '../../src/data/snapshot';
+const mockLoadMonthSnapshots = loadMonthSnapshots as jest.MockedFunction<typeof loadMonthSnapshots>;
+
 
 const ADMIN_JID = '6281234567890@s.whatsapp.net';
 const NON_ADMIN_JID = '6289999999999@s.whatsapp.net';
@@ -622,6 +631,94 @@ describe('setupCommandHandler', () => {
     expect(sentMessages[1].text).toContain('Analyze');
     expect(sentMessages[1].text).toContain('Alice');
   });
+
+  // ── /analyze offset tests ────────────────────────────────
+
+  it('/analyze Alice -1 extracts offset from last arg and generates report', async () => {
+    // Build previous month snapshot with Alice
+    const prevSnapshot: Snapshot = {
+      ...snapshot,
+      members: [{
+        ...snapshot.members[0],
+        year: 2026,
+        month: 5,
+        daily_fans: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 100, 150, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      }],
+    };
+    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+
+    const getSnapshot = () => snapshot;
+    setupCommandHandler(mockClient, config, mockDb, getSnapshot);
+
+    const msg = makeMessage({ message: { conversation: '/analyze Alice -1' } });
+    await messageHandler!(msg);
+
+    expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
+    expect(sentMessages[1].text).toContain('Analyze');
+    expect(sentMessages[1].text).toContain('Alice');
+    expect(mockLoadMonthSnapshots).toHaveBeenCalledWith(2026, 5);
+  });
+
+  it('/analyze Alice -99 rejected when exceeding maxAnalyzeOffset', async () => {
+    const getSnapshot = () => snapshot;
+    setupCommandHandler(mockClient, config, mockDb, getSnapshot);
+
+    const msg = makeMessage({ message: { conversation: '/analyze Alice -99' } });
+    await messageHandler!(msg);
+
+    expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(1);
+    expect(sentMessages[0].text).toMatch(/maksimal|max|Offset/i);
+  });
+
+  it('/analyze Alice (no offset) still works — regression guard', async () => {
+    const getSnapshot = () => snapshot;
+    setupCommandHandler(mockClient, config, mockDb, getSnapshot);
+
+    const msg = makeMessage({ message: { conversation: '/analyze Alice' } });
+    await messageHandler!(msg);
+
+    expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
+    expect(sentMessages[1].text).toContain('Analyze');
+    expect(sentMessages[1].text).toContain('Alice');
+  });
+
+  it('/analyze Alice -1 -2 — only last numeric arg is offset', async () => {
+    // -2 is the offset, -1 is part of the name (though unlikely to match)
+    // Since name "Alice -1" won't resolve, should show "tidak ditemukan"
+    const getSnapshot = () => snapshot;
+    setupCommandHandler(mockClient, config, mockDb, getSnapshot);
+
+    const msg = makeMessage({ message: { conversation: '/analyze Alice -1 -2' } });
+    await messageHandler!(msg);
+
+    expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
+    // Name "Alice -1" won't resolve → error
+    expect(sentMessages[1].text).toContain('tidak ditemukan');
+  });
+
+  it('/analyze Alice -1 where Alice not in previous month → tidak ditemukan', async () => {
+    // Previous month has Bob but not Alice
+    const prevSnapshot: Snapshot = {
+      ...snapshot,
+      members: [{
+        ...snapshot.members.find(m => m.trainer_name === 'Bob')!,
+        year: 2026,
+        month: 5,
+      }],
+    };
+    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+
+    const getSnapshot = () => snapshot;
+    setupCommandHandler(mockClient, config, mockDb, getSnapshot);
+
+    const msg = makeMessage({ message: { conversation: '/analyze Alice -1' } });
+    await messageHandler!(msg);
+
+    expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
+    expect(sentMessages[1].text).toContain('tidak ditemukan');
+  });
+
+  // ── End offset tests ────────────────────────────────────
 
   it('resolves case-insensitive names for /compare via dispatch', async () => {
     const getSnapshot = () => snapshot;

@@ -37,8 +37,13 @@ describe('Full weekly report output (offset=0, W2)', () => {
   let lines: string[];
 
   beforeAll(() => {
+    mockCurrentDate(2026, 6, 13);
     report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     lines = report.split('\n');
+  });
+
+  afterAll(() => {
+    restoreDateMocks();
   });
 
   it('prints the full report for visual verification', () => {
@@ -325,7 +330,12 @@ describe('Line-by-line verification of W2 report', () => {
   let report: string;
 
   beforeAll(() => {
+    mockCurrentDate(2026, 6, 13);
     report = generateWeeklyReport(snapshot, config, computedMembers, 0);
+  });
+
+  afterAll(() => {
+    restoreDateMocks();
   });
 
   it('report contains bold header', () => {

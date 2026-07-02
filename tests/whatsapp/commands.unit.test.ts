@@ -95,6 +95,66 @@ describe('parseCommand', () => {
       });
     });
 
+    it('resolves /d alias to daily', () => {
+      const result = parseCommand('/d', DEFAULT_PREFIXES);
+      expect(result).toEqual({
+        command: 'daily',
+        args: [],
+        offset: null,
+        raw: '/d',
+      });
+    });
+
+    it('resolves /d 1 alias to daily with offset', () => {
+      const result = parseCommand('/d 1', DEFAULT_PREFIXES);
+      expect(result).toEqual({
+        command: 'daily',
+        args: ['1'],
+        offset: 1,
+        raw: '/d 1',
+      });
+    });
+
+    it('resolves /w alias to weekly', () => {
+      const result = parseCommand('/w', DEFAULT_PREFIXES);
+      expect(result).toEqual({
+        command: 'weekly',
+        args: [],
+        offset: null,
+        raw: '/w',
+      });
+    });
+
+    it('resolves /w -1 alias to weekly with offset', () => {
+      const result = parseCommand('/w -1', DEFAULT_PREFIXES);
+      expect(result).toEqual({
+        command: 'weekly',
+        args: ['-1'],
+        offset: -1,
+        raw: '/w -1',
+      });
+    });
+
+    it('resolves /m alias to monthly', () => {
+      const result = parseCommand('/m', DEFAULT_PREFIXES);
+      expect(result).toEqual({
+        command: 'monthly',
+        args: [],
+        offset: null,
+        raw: '/m',
+      });
+    });
+
+    it('resolves /m -2 alias to monthly with offset', () => {
+      const result = parseCommand('/m -2', DEFAULT_PREFIXES);
+      expect(result).toEqual({
+        command: 'monthly',
+        args: ['-2'],
+        offset: -2,
+        raw: '/m -2',
+      });
+    });
+
     it('parses /ranks', () => {
       const result = parseCommand('/ranks', DEFAULT_PREFIXES);
       expect(result).toEqual({

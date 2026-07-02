@@ -25,6 +25,8 @@ commands:
   maxDailyOffset: 31
   maxWeeklyOffset: 5
   maxMonthlyOffset: 12
+  # Maximum offset for /analyze (0 = disabled)
+  maxAnalyzeOffset: 12
 
 # ============================================================
 # Access control

@@ -181,7 +181,11 @@ export class CatchUpManager {
     });
 
     try {
-      const result = await sendReport(reportType, { isCatchUp: true });
+      const options: { isCatchUp: boolean; offset?: number } = { isCatchUp: true };
+      if (reportType === 'monthly') {
+        options.offset = -1;
+      }
+      const result = await sendReport(reportType, options);
       const alerts = Array.isArray(result) ? result : [];
       await this.db.updateRunStatus(runId, 'sent');
       await this.db.save();
