@@ -319,7 +319,7 @@ export function computeTierData(snapshot: Snapshot): TierData {
   }
 
   if (fans_to_next_tier > 0 && daysLeft > 0) {
-    if (currentPace >= requiredPace) {
+    if (currentPace >= requiredPace && projectedOutcome !== 'demotion_risk') {
       projectedOutcome = 'promote';
     } else if (projectedOutcome !== 'demotion_risk') {
       projectedOutcome = 'stay';
