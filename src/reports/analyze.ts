@@ -5,15 +5,15 @@
  */
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
-import { getDataDayFromSnapshot, loadMonthSnapshot } from '../data/snapshot';
+import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB, getTargetMonth } from '../utils/timezone';
+import { formatDateWIB } from '../utils/timezone';
 import { buildDateStr, buildFooter } from './format';
 import {
   computeRollingAverage,
   countActiveDays,
 } from '../data/daily-fans';
-import { computeMembers } from './compute';
+import { loadHistoricalSnapshot } from './helpers';
 
 const TREND_UP_THRESHOLD = 1.1;   // 10% above 7-day avg = upward trend
 const TREND_DOWN_THRESHOLD = 0.9; // 10% below 7-day avg = downward trend
@@ -25,19 +25,9 @@ export function generateAnalyzeReport(
   name: string,
   offset: number = 0
 ): string {
-  // Handle offset by loading previous month snapshot if available
-  let activeSnapshot = snapshot;
-  let activeMembers = computedMembers;
-  const absOffset = Math.abs(offset);
-  if (absOffset > 0 && snapshot.members.length > 0) {
-    const { year: snapYear, month: snapMonth } = snapshot.members[0];
-    const { year: targetYear, month: targetMonth } = getTargetMonth(snapYear, snapMonth, offset);
-    const prevSnapshot = loadMonthSnapshot(targetYear, targetMonth);
-    if (prevSnapshot) {
-      activeSnapshot = prevSnapshot;
-      activeMembers = computeMembers(activeSnapshot, config);
-    }
-  }
+  const { activeSnapshot, effectiveMembers } = loadHistoricalSnapshot(
+    snapshot, computedMembers, config, offset
+  );
 
   if (!activeSnapshot.members || activeSnapshot.members.length === 0) {
     return 'ℹ️ Data belum tersedia untuk bulan ini.';
@@ -45,7 +35,7 @@ export function generateAnalyzeReport(
 
   const latestDataDay = getDataDayFromSnapshot(activeSnapshot);
 
-  const member = activeMembers.find((m) => m.trainerName === name) ?? null;
+  const member = effectiveMembers.find((m) => m.trainerName === name) ?? null;
   if (!member) {
     return `❌ "${name}" tidak ditemukan. Cek ejaan nama.`;
   }

@@ -7,12 +7,11 @@
 
 import { Snapshot, BotConfig, RankedMember } from '../types';
 import type { ComputedMember } from '../types';
-import { getDataDayFromSnapshot, loadMonthSnapshot } from '../data/snapshot';
+import { getDataDayFromSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from './format';
 import { INDONESIAN_MONTHS } from '../utils/timezone';
-import { computeMembers } from './compute';
-import { getTargetMonth } from '../utils/timezone';
+import { loadHistoricalSnapshot } from './helpers';
 
 function formatMonthYear(month: number, year: number): string {
   return `${INDONESIAN_MONTHS[month - 1]} ${year}`;
@@ -29,27 +28,9 @@ export function generateMonthlyReport(
     return 'ℹ️ *Monthly Report*\nData bulan ini belum tersedia.';
   }
 
-  // Handle offset by loading previous month snapshot if available
-  let activeSnapshot = snapshot;
-  let fallbackWarning = '';
-  const absOffset = Math.abs(offset);
-  if (absOffset > 0) {
-    const { year: snapYear, month: snapMonth } = snapshot.members[0];
-    const { year: targetYear, month: targetMonth } = getTargetMonth(snapYear, snapMonth, offset);
-    const prevSnapshot = loadMonthSnapshot(targetYear, targetMonth);
-    if (prevSnapshot) {
-      activeSnapshot = prevSnapshot;
-    } else {
-      // Target snapshot unavailable — use current with warning
-      fallbackWarning = `⚠️ Data bulan ${formatMonthYear(targetYear, targetMonth)} belum tersedia, menampilkan data terkini.\n`;
-    }
-  }
-
-  // When viewing a historical month, recompute gains from that snapshot
-  let effectiveMembers = computedMembers;
-  if (activeSnapshot !== snapshot) {
-    effectiveMembers = computeMembers(activeSnapshot, config);
-  }
+  const { activeSnapshot, effectiveMembers, fallbackWarning } = loadHistoricalSnapshot(
+    snapshot, computedMembers, config, offset, formatMonthYear
+  );
 
   if (activeSnapshot.members.length === 0) {
     return 'ℹ️ *Monthly Report*\nData bulan ini belum tersedia.';
