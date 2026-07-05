@@ -13,6 +13,7 @@ import type {
   MemberHistoryInsert,
   RankHistoryInsert,
 } from './types';
+import { mapScheduleRunRow, mapMemberHistoryRow, mapRankHistoryRow } from './mappers';
 import initSqlJs, { Database as SqlJsDatabase, QueryExecResult, BindParams } from 'sql.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import * as path from 'path';
@@ -417,71 +418,31 @@ async save(): Promise<void> {
 
   private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): ScheduleRunRow | null {
     if (result.values.length === 0) return null;
-    return this.mapColumns<ScheduleRunRow>(result, (obj) => ({
-      id: obj.id as number,
-      report_type: obj.report_type as string,
-      report_date: obj.report_date as string,
-      scheduled_at: obj.scheduled_at as string,
-      sent_at: obj.sent_at as string | null,
-      status: obj.status as ScheduleRunRow['status'],
-      is_catch_up: obj.is_catch_up === 1 || obj.is_catch_up === true,
-      target_jid: obj.target_jid as string,
-      error_message: obj.error_message as string | null,
-    }));
+    return mapScheduleRunRow(this.rowToObj(result));
   }
 
-  private mapColumns<T>(
-    result: { columns: string[]; values: unknown[][] },
-    mapper: (obj: Record<string, unknown>) => T,
-    index: number = 0
-  ): T {
+  private rowToObj(result: { columns: string[]; values: unknown[][] }, index: number = 0): Record<string, unknown> {
     const obj: Record<string, unknown> = {};
     result.columns.forEach((col, i) => {
       obj[col] = result.values[index][i];
     });
-    return mapper(obj);
+    return obj;
   }
 
   private rowToMemberHistory(result: { columns: string[]; values: unknown[][] }): MemberHistoryRow | null {
     if (result.values.length === 0) return null;
-    return this.mapColumns(result, (obj) => ({
-      viewer_id: obj.viewer_id as number,
-      trainer_name: obj.trainer_name as string,
-      circle_id: obj.circle_id as number,
-      first_seen: obj.first_seen as string,
-      last_seen: obj.last_seen as string,
-      previous_circle_id: obj.previous_circle_id as number | null,
-      previous_circle_name: obj.previous_circle_name as string | null,
-      status: obj.status as MemberHistoryRow['status'],
-    }));
+    return mapMemberHistoryRow(this.rowToObj(result));
   }
 
   private rowsToMemberHistory(result: { columns: string[]; values: unknown[][] }): MemberHistoryRow[] {
     return result.values.map((_, idx) =>
-      this.mapColumns<MemberHistoryRow>(result, (obj) => ({
-        viewer_id: obj.viewer_id as number,
-        trainer_name: obj.trainer_name as string,
-        circle_id: obj.circle_id as number,
-        first_seen: obj.first_seen as string,
-        last_seen: obj.last_seen as string,
-        previous_circle_id: obj.previous_circle_id as number | null,
-        previous_circle_name: obj.previous_circle_name as string | null,
-        status: obj.status as MemberHistoryRow['status'],
-      }), idx)
+      mapMemberHistoryRow(this.rowToObj(result, idx))
     );
   }
 
   private rowsToRankHistory(result: { columns: string[]; values: unknown[][] }): RankHistoryRow[] {
     return result.values.map((_, idx) =>
-      this.mapColumns<RankHistoryRow>(result, (obj) => ({
-        date: obj.date as string,
-        circle_id: obj.circle_id as number,
-        monthly_rank: obj.monthly_rank as number,
-        monthly_point: obj.monthly_point as number,
-        club_rank: obj.club_rank as number,
-        fans_to_next_tier: obj.fans_to_next_tier as number,
-        fans_to_lower_tier: obj.fans_to_lower_tier as number,
-      }), idx)
+      mapRankHistoryRow(this.rowToObj(result, idx))
     );
   }
 }
