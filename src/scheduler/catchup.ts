@@ -18,6 +18,47 @@ import { groupByCollision } from './helpers';
 const REPORT_TYPES = ['daily', 'weekly', 'monthly'] as const;
 
 /**
+ * Compute the most recent scheduled date for a report type.
+ *
+ * Weekly: the latest configured day ≤ today, or last day of previous month
+ * if no scheduled day has passed yet. Monthly: the configured day of the
+ * current month if it has passed, otherwise the same day last month.
+ * Daily: always yesterday.
+ */
+function getMostRecentScheduledDate(reportType: string, config: BotConfig): string {
+  switch (reportType) {
+    case 'daily':
+      return getYesterdayDate();
+    case 'weekly': {
+      const todayDay = getDataDay();
+      const weeklyDays = config.schedule.weekly.days;
+      for (const day of [...weeklyDays].sort((a, b) => b - a)) {
+        if (day <= todayDay) {
+          return `${getDataYear()}-${String(getDataMonth()).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
+      }
+      const lastDay = Math.max(...weeklyDays);
+      const jstMonth = getDataMonth();
+      const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
+      const prevYear = jstMonth === 1 ? getDataYear() - 1 : getDataYear();
+      return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
+    case 'monthly': {
+      const monthlyDay = config.schedule.monthly.day;
+      const jstMonth = getDataMonth();
+      if (getDataDay() >= monthlyDay) {
+        return `${getDataYear()}-${String(jstMonth).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
+      }
+      const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
+      const prevYear = jstMonth === 1 ? getDataYear() - 1 : getDataYear();
+      return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
+    }
+    default:
+      return getDataDate();
+  }
+}
+
+/**
  * Calculate yesterday's date in YYYY-MM-DD (data timezone: JST).
  */
 function getYesterdayDate(): string {
@@ -103,65 +144,9 @@ export class CatchUpManager {
    */
   private async isReportMissed(reportType: string): Promise<boolean> {
     const lastRun = await this.db.getLastRun(reportType);
-
-    switch (reportType) {
-      case 'daily': {
-        // Daily should run every day. Missed if last run is before yesterday.
-        // A run on today or yesterday means the report is covered.
-        const yesterdayStr = getYesterdayDate();
-        if (!lastRun) return true;
-        return lastRun.report_date < yesterdayStr;
-      }
-
-      case 'weekly': {
-        const todayDay = getDataDay();
-        const weeklyDays = this.config.schedule.weekly.days;
-
-        let mostRecentScheduledDay = 0;
-        for (const day of [...weeklyDays].sort((a, b) => b - a)) {
-          if (day <= todayDay) {
-            mostRecentScheduledDay = day;
-            break;
-          }
-        }
-
-        if (mostRecentScheduledDay === 0) {
-          const lastDay = Math.max(...weeklyDays);
-          const jstYear = getDataYear();
-          const jstMonth = getDataMonth();
-          const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
-          const prevYear = jstMonth === 1 ? jstYear - 1 : jstYear;
-          const lastScheduledDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-          if (!lastRun) return true;
-          return lastRun.report_date < lastScheduledDate;
-        }
-
-        const thisMonth = `${getDataYear()}-${String(getDataMonth()).padStart(2, '0')}-${String(mostRecentScheduledDay).padStart(2, '0')}`;
-        if (!lastRun) return true;
-        return lastRun.report_date < thisMonth;
-      }
-
-      case 'monthly': {
-        const monthlyDay = this.config.schedule.monthly.day;
-
-        if (getDataDay() >= monthlyDay) {
-          const thisMonth = `${getDataYear()}-${String(getDataMonth()).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
-          if (!lastRun) return true;
-          return lastRun.report_date < thisMonth;
-        }
-
-        const jstYear = getDataYear();
-        const jstMonth = getDataMonth();
-        const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
-        const prevYear = jstMonth === 1 ? jstYear - 1 : jstYear;
-        const lastMonthStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
-        if (!lastRun) return true;
-        return lastRun.report_date < lastMonthStr;
-      }
-
-      default:
-        return false;
-    }
+    const scheduledDate = getMostRecentScheduledDate(reportType, this.config);
+    if (!lastRun) return true;
+    return lastRun.report_date < scheduledDate;
   }
 
   private async executeSingleReport(
@@ -296,36 +281,7 @@ export class CatchUpManager {
    * For daily: yesterday. For weekly/monthly: the most recent scheduled day.
    */
   private getMissedDate(reportType: string): string {
-    switch (reportType) {
-      case 'daily':
-        return getYesterdayDate();
-      case 'weekly': {
-        const todayDay = getDataDay();
-        const weeklyDays = this.config.schedule.weekly.days;
-        for (const day of [...weeklyDays].sort((a, b) => b - a)) {
-          if (day <= todayDay) {
-            return `${getDataYear()}-${String(getDataMonth()).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          }
-        }
-        const lastDay = Math.max(...weeklyDays);
-        const jstMonth = getDataMonth();
-        const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
-        const prevYear = jstMonth === 1 ? getDataYear() - 1 : getDataYear();
-        return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-      }
-      case 'monthly': {
-        const monthlyDay = this.config.schedule.monthly.day;
-        const jstMonth2 = getDataMonth();
-        if (getDataDay() >= monthlyDay) {
-          return `${getDataYear()}-${String(jstMonth2).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
-        }
-        const prevMonth2 = jstMonth2 === 1 ? 12 : jstMonth2 - 1;
-        const prevYear2 = jstMonth2 === 1 ? getDataYear() - 1 : getDataYear();
-        return `${prevYear2}-${String(prevMonth2).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
-      }
-      default:
-        return getDataDate();
-    }
+    return getMostRecentScheduledDate(reportType, this.config);
   }
 
   private isReportEnabled(reportType: string): boolean {
