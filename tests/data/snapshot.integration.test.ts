@@ -6,7 +6,7 @@ import {
   saveSnapshot,
   loadSnapshot,
   loadLatestSnapshot,
-  loadMonthSnapshots,
+  loadMonthSnapshot,
   snapshotExists,
   getDataDayFromSnapshot,
   staleSnapshotMessage,
@@ -262,10 +262,10 @@ describe('loadLatestSnapshot', () => {
 });
 
 
-describe('loadMonthSnapshots', () => {
-  test('returns empty array when no snapshots exist', () => {
-    const result = loadMonthSnapshots(2026, 6, tmpDir);
-    expect(result).toEqual([]);
+describe('loadMonthSnapshot', () => {
+  test('returns null when no snapshots exist', () => {
+    const result = loadMonthSnapshot(2026, 6, tmpDir);
+    expect(result).toBeNull();
   });
 
   test('returns only snapshots for the given month', () => {
@@ -277,9 +277,9 @@ describe('loadMonthSnapshots', () => {
     saveSnapshot(snap2, '2026-06-11', tmpDir);
     saveSnapshot(snap3, '2026-07-01', tmpDir);
 
-    const result = loadMonthSnapshots(2026, 6, tmpDir);
-    expect(result).toHaveLength(1);
-    expect(result[0].club_rank).toBe(2); // latest (June 11)
+    const result = loadMonthSnapshot(2026, 6, tmpDir);
+    expect(result).not.toBeNull();
+    expect(result!.club_rank).toBe(2); // latest (June 11)
   });
 
   test('returns snapshots sorted by date ascending', () => {
@@ -292,15 +292,15 @@ describe('loadMonthSnapshots', () => {
     saveSnapshot(snap1, '2026-06-05', tmpDir);
     saveSnapshot(snap2, '2026-06-10', tmpDir);
 
-    const result = loadMonthSnapshots(2026, 6, tmpDir);
-    expect(result).toHaveLength(1);
-    expect(result[0].club_rank).toBe(3); // June 15 (latest)
+    const result = loadMonthSnapshot(2026, 6, tmpDir);
+    expect(result).not.toBeNull();
+    expect(result!.club_rank).toBe(3); // June 15 (latest)
   });
 
-  test('returns empty for month with no data', () => {
+  test('returns null for month with no data', () => {
     saveSnapshot(makeSnapshot(), '2026-06-11', tmpDir);
-    const result = loadMonthSnapshots(2026, 8, tmpDir);
-    expect(result).toEqual([]);
+    const result = loadMonthSnapshot(2026, 8, tmpDir);
+    expect(result).toBeNull();
   });
 });
 

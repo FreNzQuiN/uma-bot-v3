@@ -10,8 +10,9 @@ import type { IDatabase } from '../db/types';
 import type { UmaMoeClient } from '../api/uma-moe';
 import type { WhatsAppClient } from '../whatsapp/client';
 import { detectAlerts, formatAlerts, type Alert } from '../alerts/alerts';
-import { saveSnapshot, ensureMonthSnapshot, getDataDayFromSnapshot, setCachedSnapshot } from '../data/snapshot';
-import { getDataDate, getDataDateComponents, getTargetMonth } from '../utils/timezone';
+import { ensureMonthSnapshot, getDataDayFromSnapshot, setCachedSnapshot } from '../data/snapshot';
+import { fetchAndSaveSnapshot } from '../data/fetch-snapshot';
+import { getDataDateComponents, getTargetMonth } from '../utils/timezone';
 import { computeMembers } from '../reports/compute';
 import { generateCombinedReport } from '../reports/combined';
 import { generateReportString } from '../reports/registry';
@@ -103,6 +104,7 @@ export class ReportOrchestrator {
    * Month-alignment + stale data pre-fetch.
    * If the snapshot is from a different month, or data is 2+ days behind,
    * fetch fresh data from uma.moe. Returns the (possibly refreshed) snapshot.
+   * On fetch failure, returns existing snapshot (never throws).
    */
   async alignSnapshotToMonth(
     type: string,
@@ -111,49 +113,28 @@ export class ReportOrchestrator {
   ): Promise<Snapshot> {
     if (snapshot.members.length === 0) return snapshot;
 
-    if (type === 'daily' || type === 'weekly') {
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      if (snapYear !== curYear || snapMonth !== curMonth) {
-        try {
-          log.info('Report', `Snapshot is from ${snapYear}-${snapMonth}, fetching current month ${curYear}-${curMonth}`);
-          const freshSnapshot = await this.umaMoe.fetchCircleData(config.circleId, curYear, curMonth);
-          if (freshSnapshot.members.length > 0) {
-            saveSnapshot(freshSnapshot, getDataDate());
-            setCachedSnapshot(freshSnapshot);
-            snapshot = freshSnapshot;
-            log.info('Report', `Fresh data fetched for ${type} report`);
-          } else {
-            log.warn('Report', 'Fresh fetch returned empty snapshot, keeping existing data');
-          }
-        } catch (err) {
-          log.warn('Report', `Cannot fetch fresh data for ${type} report (snapshot is from previous month)`, err);
-          throw new Error(`Tidak ada data untuk ${type} report bulan ini. Data terakhir: ${snapYear}-${snapMonth}`);
-        }
-      }
-    }
+    if (type !== 'daily' && type !== 'weekly') return snapshot;
 
-    if ((type === 'daily' || type === 'weekly') && snapshot) {
+    const { year: curYear, month: curMonth } = getDataDateComponents();
+    const { year: snapYear, month: snapMonth } = snapshot.members[0];
+    const monthMismatch = snapYear !== curYear || snapMonth !== curMonth;
+
+    if (monthMismatch) {
+      log.info('Report', `Snapshot is from ${snapYear}-${snapMonth}, fetching current month ${curYear}-${curMonth}`);
+    } else {
       const dataDay = getDataDayFromSnapshot(snapshot);
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      const { year: curYear, month: curMonth, day: curDay } = getDataDateComponents();
-      if (snapYear === curYear && snapMonth === curMonth && dataDay < curDay - 1) {
-        try {
-          log.info('Report', `Snapshot data day ${dataDay} is stale (current day ${curDay}), fetching fresh`);
-          const freshSnapshot = await this.umaMoe.fetchCircleData(config.circleId, curYear, curMonth);
-          if (freshSnapshot.members.length > 0) {
-            saveSnapshot(freshSnapshot, getDataDate());
-            setCachedSnapshot(freshSnapshot);
-            snapshot = freshSnapshot;
-          } else {
-            log.warn('Report', 'Stale refresh returned empty snapshot, keeping existing data');
-          }
-        } catch (err) {
-          log.warn('Report', `Failed to refresh stale data, using existing snapshot`, err);
-        }
-      }
+      const { day: curDay } = getDataDateComponents();
+      if (dataDay >= curDay - 1) return snapshot;
+      log.info('Report', `Snapshot data day ${dataDay} is stale (current day ${curDay}), fetching fresh`);
     }
 
+    const result = await fetchAndSaveSnapshot(this.umaMoe, config.circleId, curYear, curMonth);
+    if (result.snapshot) {
+      setCachedSnapshot(result.snapshot);
+      return result.snapshot;
+    }
+
+    log.warn('Report', `Cannot fetch fresh data for ${type} report, using existing snapshot`);
     return snapshot;
   }
 

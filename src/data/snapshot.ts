@@ -40,19 +40,11 @@ export function setCachedSnapshot(snapshot: Snapshot | null): void {
   cachedLatestSnapshot = snapshot;
 }
 
-/**
- * Invalidate the snapshot cache. Next getSnapshot() call will re-read from disk.
- */
-export function invalidateSnapshotCache(): void {
-  if (cachedLatestSnapshot) {
-    log.debug('Snapshot', 'Cache invalidated');
-  }
-  cachedLatestSnapshot = null;
-}
+
 
 /**
  * Build the full path for a snapshot file.
- * @param dataDay WIB date string e.g. "2026-06-11"
+ * @param dataDay date string (YYYY-MM-DD)
  * @param rootDir Base directory (default: project root)
  */
 function buildSnapshotPath(dataDay: string, rootDir: string): string {
@@ -76,7 +68,7 @@ function isValidSnapshot(data: unknown): data is Snapshot {
 /**
  * Save a snapshot to disk.
  *
- * @param dataDay - WIB date string like "2026-06-11"
+ * @param dataDay - date string (YYYY-MM-DD)
  * @param rootDir - Base project directory (for testing; defaults to process.cwd())
  * @returns The file path that was saved
  */
@@ -103,7 +95,7 @@ export function saveSnapshot(
 /**
  * Load a snapshot from disk.
  *
- * @param dataDay - WIB date string like "2026-06-11"
+ * @param dataDay - date string (YYYY-MM-DD)
  * @param rootDir - Base project directory (for testing; defaults to process.cwd())
  * @returns Parsed Snapshot or null if file doesn't exist or is invalid
  */
@@ -152,36 +144,34 @@ export function loadLatestSnapshot(
 }
 
 /**
- * Load all snapshots for a given year/month, sorted by date ascending.
+ * Load the latest snapshot for a given year/month.
  *
  * @param year - e.g. 2026
  * @param month - e.g. 6
  * @param rootDir - Base project directory (for testing; defaults to process.cwd())
- * @returns Array of Snapshots sorted by date ascending
+ * @returns The latest Snapshot for the month, or null if none exist
  */
-export function loadMonthSnapshots(
+export function loadMonthSnapshot(
   year: number,
   month: number,
   rootDir: string = process.cwd()
-): Snapshot[] {
+): Snapshot | null {
   const monthDir = path.join(rootDir, SNAPSHOTS_DIR, String(year), String(month).padStart(2, '0'));
-  if (!fs.existsSync(monthDir)) return [];
+  if (!fs.existsSync(monthDir)) return null;
 
   const files = fs.readdirSync(monthDir).filter((f) => f.endsWith('.json')).sort();
-  if (files.length === 0) return [];
+  if (files.length === 0) return null;
 
-  // Only read the latest snapshot — callers only use the last element
   const latestFile = files[files.length - 1];
   const day = latestFile.replace('.json', '');
   const dataDay = `${year}-${String(month).padStart(2, '0')}-${day}`;
-  const snap = loadSnapshot(dataDay, rootDir);
-  return snap ? [snap] : [];
+  return loadSnapshot(dataDay, rootDir);
 }
 
 /**
  * Check if a snapshot file exists for the given date.
  *
- * @param dataDay - WIB date string like "2026-06-11"
+ * @param dataDay - date string (YYYY-MM-DD)
  * @param rootDir - Base project directory (for testing; defaults to process.cwd())
  * @returns true if file exists
  */

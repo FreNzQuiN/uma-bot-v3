@@ -7,7 +7,7 @@
 
 import { Snapshot, BotConfig, RankedMember } from '../types';
 import type { ComputedMember } from '../types';
-import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
+import { getDataDayFromSnapshot, loadMonthSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader, buildStaleSection } from './format';
 import { INDONESIAN_MONTHS } from '../utils/timezone';
@@ -36,9 +36,9 @@ export function generateMonthlyReport(
   if (absOffset > 0) {
     const { year: snapYear, month: snapMonth } = snapshot.members[0];
     const { year: targetYear, month: targetMonth } = getTargetMonth(snapYear, snapMonth, offset);
-    const prevSnapshots = loadMonthSnapshots(targetYear, targetMonth);
-    if (prevSnapshots.length > 0) {
-      activeSnapshot = prevSnapshots[prevSnapshots.length - 1]; // latest snapshot for that month
+    const prevSnapshot = loadMonthSnapshot(targetYear, targetMonth);
+    if (prevSnapshot) {
+      activeSnapshot = prevSnapshot;
     } else {
       // Target snapshot unavailable — use current with warning
       fallbackWarning = `⚠️ Data bulan ${formatMonthYear(targetYear, targetMonth)} belum tersedia, menampilkan data terkini.\n`;

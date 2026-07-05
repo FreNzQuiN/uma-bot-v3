@@ -5,7 +5,7 @@
  */
 
 import type { Snapshot, BotConfig, ComputedMember } from '../types';
-import { getDataDayFromSnapshot, loadMonthSnapshots } from '../data/snapshot';
+import { getDataDayFromSnapshot, loadMonthSnapshot } from '../data/snapshot';
 import { formatNumber, sanitizeName } from '../utils/format';
 import { formatDateWIB, getTargetMonth } from '../utils/timezone';
 import { buildDateStr, buildFooter } from './format';
@@ -32,9 +32,9 @@ export function generateAnalyzeReport(
   if (absOffset > 0 && snapshot.members.length > 0) {
     const { year: snapYear, month: snapMonth } = snapshot.members[0];
     const { year: targetYear, month: targetMonth } = getTargetMonth(snapYear, snapMonth, offset);
-    const prevSnapshots = loadMonthSnapshots(targetYear, targetMonth);
-    if (prevSnapshots.length > 0) {
-      activeSnapshot = prevSnapshots[prevSnapshots.length - 1];
+    const prevSnapshot = loadMonthSnapshot(targetYear, targetMonth);
+    if (prevSnapshot) {
+      activeSnapshot = prevSnapshot;
       activeMembers = computeMembers(activeSnapshot, config);
     }
   }

@@ -19,9 +19,10 @@ import { CatchUpManager } from './scheduler/catchup';
 import { WhatsAppClient } from './whatsapp/client';
 import { setupCommandHandler } from './whatsapp/dispatch';
 
-import { loadLatestSnapshot, saveSnapshot, getLatestSnapshotDate, staleSnapshotMessage, ensureMonthSnapshot, getDataDayFromSnapshot, getCachedSnapshot, setCachedSnapshot } from './data/snapshot';
+import { loadLatestSnapshot, ensureMonthSnapshot, getCachedSnapshot, setCachedSnapshot } from './data/snapshot';
+import { fetchAndSaveSnapshot } from './data/fetch-snapshot';
 import { updateMemberHistory } from './data/member-history';
-import { getDataDate, getDataDateComponents, getDisplayDateComponents, getTargetMonth } from './utils/timezone';
+import { getDataDate, getDataDateComponents, getTargetMonth } from './utils/timezone';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
 import { recordConfigReload, recordSchedulerRestart } from './runtime';
@@ -184,58 +185,26 @@ async function main() {
   }, 5000);
   log.info('Config', 'Watching config.yaml for changes (polling every 5s)');
 
+  const { year: currentYear, month: currentMonth } = getDataDateComponents();
   const todayStr = getDataDate();
-  const { year: currentYear, month: currentMonth, day: currentDay } = getDataDateComponents();
 
-  const latestSnap = loadLatestSnapshot();
-  if (latestSnap && latestSnap.members.length > 0) setCachedSnapshot(latestSnap);
-  let needFetch = true;
-  if (latestSnap && latestSnap.members.length > 0) {
-    const { year: snapYear, month: snapMonth } = latestSnap.members[0];
-    const latestDataDay = getDataDayFromSnapshot(latestSnap);
-    if (snapYear === currentYear && snapMonth === currentMonth && latestDataDay >= currentDay - 1) {
-      needFetch = false;
-      log.debug('Data', `Latest snapshot data day ${latestDataDay} >= ${currentDay - 1}, skipping fetch`);
-    }
-  }
+  // Current month
+  const currentResult = await fetchAndSaveSnapshot(umaMoe, config.circleId, currentYear, currentMonth);
+  if (currentResult.snapshot) setCachedSnapshot(currentResult.snapshot);
 
-  if (!needFetch) {
-    log.debug('Data', `Data is fresh, skipping fetch`);
-  } else {
-    try {
-      log.info('Data', `No snapshot for ${todayStr} — fetching from uma.moe...`);
-      const snapshot = await umaMoe.fetchCircleData(config.circleId, currentYear, currentMonth);
-      if (snapshot.members.length === 0) {
-        log.warn('Data', 'Fetched snapshot has no members, not caching — will retry next cycle');
-      } else {
-        saveSnapshot(snapshot, todayStr);
-        setCachedSnapshot(snapshot);
-        log.info('Data', `Snapshot saved for ${todayStr}`);
-      }
-    } catch (error) {
-      log.error('Data', 'Failed to fetch fresh data', error);
-      const latestDate = getLatestSnapshotDate();
-      const staleMsg = staleSnapshotMessage(latestDate);
-      if (staleMsg) {
-        log.warn('Data', staleMsg);
-      } else {
-        log.debug('Data', 'Using existing snapshots');
-      }
-    }
-  }
-
-  const offsets = [1, 2];
-  for (const offset of offsets) {
+  // Past months
+  for (const offset of [1, 2]) {
     try {
       let prevMonth = currentMonth - offset;
       let prevYear = currentYear;
       while (prevMonth <= 0) { prevMonth += 12; prevYear--; }
-      await ensureMonthSnapshot(umaMoe, config.circleId, prevYear, prevMonth);
+      await fetchAndSaveSnapshot(umaMoe, config.circleId, prevYear, prevMonth);
     } catch (error) {
       log.warn('Data', `Failed to pre-fetch month -${offset}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
+  // Load latest for member history + rank history
   const latestSnapshot = loadLatestSnapshot();
   if (latestSnapshot && latestSnapshot.members.length > 0) setCachedSnapshot(latestSnapshot);
   if (latestSnapshot) {
@@ -267,17 +236,12 @@ async function main() {
 
   const onDataFetch = async () => {
     try {
-      const currentConfig = getConfig();
-      const { year: currentYear, month: currentMonth, day: currentDay } = getDisplayDateComponents(currentConfig.timezone);
-      const snapshot = await umaMoe.fetchCircleData(currentConfig.circleId, currentYear, currentMonth);
-      if (snapshot.members.length === 0) {
-        log.warn('Data', 'Scheduled fetch returned empty snapshot, not caching');
-        return;
+      const { year, month } = getDataDateComponents();
+      const result = await fetchAndSaveSnapshot(umaMoe, getConfig().circleId, year, month);
+      if (result.snapshot) {
+        setCachedSnapshot(result.snapshot);
       }
-      const todayStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
-      saveSnapshot(snapshot, todayStr);
-      setCachedSnapshot(snapshot);
-      log.info('Data', 'Scheduled data fetch completed');
+      log.info('Data', `Scheduled data fetch: ${result.saved ? 'saved' : result.reason}`);
     } catch (error) {
       log.error('Data', 'Scheduled data fetch failed', error);
     }

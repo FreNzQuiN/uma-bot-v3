@@ -19,19 +19,19 @@ import {
 let snapshot: Snapshot;
 let config: BotConfig;
 let computedMembers: ReturnType<typeof computeMembers>;
-let loadMonthSnapshotsSpy: jest.SpyInstance;
+let loadMonthSnapshotSpy: jest.SpyInstance;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
   computedMembers = computeMembers(snapshot, config);
-  loadMonthSnapshotsSpy = jest.spyOn(
-    require('../../../src/data/snapshot'), 'loadMonthSnapshots'
-  ).mockReturnValue([]);
+  loadMonthSnapshotSpy = jest.spyOn(
+    require('../../../src/data/snapshot'), 'loadMonthSnapshot'
+  ).mockReturnValue(null);
 });
 
 afterAll(() => {
-  loadMonthSnapshotsSpy.mockRestore();
+  loadMonthSnapshotSpy.mockRestore();
 });
 
 

@@ -1,12 +1,17 @@
 import { ReportOrchestrator } from '../../src/orchestrator/report-orchestrator';
 import { makeConfig, loadRealSnapshot, mockCurrentDate, restoreDateMocks } from '../_helpers';
 import type { Alert } from '../../src/alerts/alerts';
+import { fetchAndSaveSnapshot } from '../../src/data/fetch-snapshot';
 
 // ── Module-level mocks ─────────────────────────────────────
 jest.mock('../../src/data/snapshot', () => {
   const actual = jest.requireActual('../../src/data/snapshot');
   return { ...actual, saveSnapshot: jest.fn() };
 });
+
+jest.mock('../../src/data/fetch-snapshot');
+
+const mockedFetchSnapshot = fetchAndSaveSnapshot as jest.MockedFunction<typeof fetchAndSaveSnapshot>;
 
 // ── Mock factories ────────────────────────────────────────────
 
@@ -201,7 +206,10 @@ describe('ReportOrchestrator — deliverAlerts', () => {
 
 
 describe('ReportOrchestrator — alignSnapshotToMonth', () => {
-  afterEach(() => restoreDateMocks());
+  afterEach(() => {
+    restoreDateMocks();
+    mockedFetchSnapshot.mockClear();
+  });
 
   it('returns snapshot unchanged for monthly type', async () => {
     mockCurrentDate(2026, 6, 15);
@@ -226,51 +234,48 @@ describe('ReportOrchestrator — alignSnapshotToMonth', () => {
   it('fetches fresh data when daily snapshot is from different month', async () => {
     mockCurrentDate(2026, 7, 5);
     const freshSnapshot = loadRealSnapshot();
-    const mockFetch = jest.fn().mockResolvedValue(freshSnapshot);
+    mockedFetchSnapshot.mockResolvedValue({ snapshot: freshSnapshot, saved: true });
     const { orch, config } = makeOrchestrator();
-    (orch as any).umaMoe = { fetchCircleData: mockFetch };
     const snapshot = loadRealSnapshot();
 
     const result = await orch.alignSnapshotToMonth('daily', snapshot, config);
 
-    expect(mockFetch).toHaveBeenCalled();
+    expect(mockedFetchSnapshot).toHaveBeenCalled();
     expect(result).toBe(freshSnapshot);
   });
 
   it('fetches fresh data when weekly snapshot is from different month', async () => {
     mockCurrentDate(2026, 7, 5);
     const freshSnapshot = loadRealSnapshot();
-    const mockFetch = jest.fn().mockResolvedValue(freshSnapshot);
+    mockedFetchSnapshot.mockResolvedValue({ snapshot: freshSnapshot, saved: true });
     const { orch, config } = makeOrchestrator();
-    (orch as any).umaMoe = { fetchCircleData: mockFetch };
     const snapshot = loadRealSnapshot();
 
     await orch.alignSnapshotToMonth('weekly', snapshot, config);
 
-    expect(mockFetch).toHaveBeenCalled();
+    expect(mockedFetchSnapshot).toHaveBeenCalled();
   });
 
   it('does NOT fetch when snapshot month matches for ranks type', async () => {
     mockCurrentDate(2026, 6, 12);
-    const mockFetch = jest.fn();
     const { orch, config } = makeOrchestrator();
-    (orch as any).umaMoe = { fetchCircleData: mockFetch };
     const snapshot = loadRealSnapshot();
 
     await orch.alignSnapshotToMonth('ranks', snapshot, config);
 
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockedFetchSnapshot).not.toHaveBeenCalled();
   });
 
-  it('throws when fresh data fetch fails for month misalignment', async () => {
+  it('returns existing snapshot when fresh data fetch fails for month misalignment', async () => {
     mockCurrentDate(2026, 7, 5);
-    const mockFetch = jest.fn().mockRejectedValue(new Error('network error'));
+    mockedFetchSnapshot.mockResolvedValue({ snapshot: null, saved: false, reason: 'fetch_failed' });
     const { orch, config } = makeOrchestrator();
-    (orch as any).umaMoe = { fetchCircleData: mockFetch };
     const snapshot = loadRealSnapshot();
 
-    await expect(orch.alignSnapshotToMonth('daily', snapshot, config))
-      .rejects.toThrow('Tidak ada data untuk daily report bulan ini');
+    const result = await orch.alignSnapshotToMonth('daily', snapshot, config);
+
+    expect(result).toBe(snapshot);
+    expect(mockedFetchSnapshot).toHaveBeenCalled();
   });
 
   it('returns empty snapshot unchanged without fetching', async () => {

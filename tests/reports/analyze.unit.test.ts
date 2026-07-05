@@ -527,12 +527,12 @@ describe('generateAnalyzeReport — weekly gains', () => {
 
 jest.mock('../../src/data/snapshot', () => {
   const actual = jest.requireActual('../../src/data/snapshot');
-  return { ...actual, loadMonthSnapshots: jest.fn() };
+  return { ...actual, loadMonthSnapshot: jest.fn() };
 });
 
-import { loadMonthSnapshots } from '../../src/data/snapshot';
+import { loadMonthSnapshot } from '../../src/data/snapshot';
 
-const mockLoadMonthSnapshots = loadMonthSnapshots as jest.MockedFunction<typeof loadMonthSnapshots>;
+const mockLoadMonthSnapshots = loadMonthSnapshot as jest.MockedFunction<typeof loadMonthSnapshot>;
 
 describe('generateAnalyzeReport — offset support', () => {
   afterEach(() => {
@@ -557,7 +557,7 @@ describe('generateAnalyzeReport — offset support', () => {
       ...snapshot,
       members: [prevMember],
     };
-    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+    mockLoadMonthSnapshots.mockReturnValue(prevSnapshot);
 
     const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
 
@@ -583,7 +583,7 @@ describe('generateAnalyzeReport — offset support', () => {
       ...snapshot,
       members: [prevMember],
     };
-    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+    mockLoadMonthSnapshots.mockReturnValue(prevSnapshot);
 
     const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
 
@@ -593,7 +593,7 @@ describe('generateAnalyzeReport — offset support', () => {
   });
 
   it('previous month snapshot unavailable → fallback to current data', () => {
-    mockLoadMonthSnapshots.mockReturnValue([]);
+    mockLoadMonthSnapshots.mockReturnValue(null);
 
     const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
 
@@ -607,7 +607,7 @@ describe('generateAnalyzeReport — offset support', () => {
       ...snapshot,
       members: [],
     };
-    mockLoadMonthSnapshots.mockReturnValue([emptySnapshot]);
+    mockLoadMonthSnapshots.mockReturnValue(emptySnapshot);
 
     const report = generateAnalyzeReport(snapshot, config, computeMembers(snapshot, config), 'Ryu', -1);
 

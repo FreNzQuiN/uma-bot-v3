@@ -21,14 +21,14 @@ jest.mock('../../src/config', () => {
   return { ...actual, saveConfig: jest.fn() };
 });
 
-// Mock loadMonthSnapshots for /analyze offset tests
+// Mock loadMonthSnapshot for /analyze offset tests
 jest.mock('../../src/data/snapshot', () => {
   const actual = jest.requireActual('../../src/data/snapshot');
-  return { ...actual, loadMonthSnapshots: jest.fn() };
+  return { ...actual, loadMonthSnapshot: jest.fn() };
 });
 
-import { loadMonthSnapshots } from '../../src/data/snapshot';
-const mockLoadMonthSnapshots = loadMonthSnapshots as jest.MockedFunction<typeof loadMonthSnapshots>;
+import { loadMonthSnapshot } from '../../src/data/snapshot';
+const mockLoadMonthSnapshots = loadMonthSnapshot as jest.MockedFunction<typeof loadMonthSnapshot>;
 
 
 const ADMIN_JID = '6281234567890@s.whatsapp.net';
@@ -645,7 +645,7 @@ describe('setupCommandHandler', () => {
         daily_fans: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 100, 150, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       }],
     };
-    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+    mockLoadMonthSnapshots.mockReturnValue(prevSnapshot);
 
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);
@@ -706,7 +706,7 @@ describe('setupCommandHandler', () => {
         month: 5,
       }],
     };
-    mockLoadMonthSnapshots.mockReturnValue([prevSnapshot]);
+    mockLoadMonthSnapshots.mockReturnValue(prevSnapshot);
 
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);

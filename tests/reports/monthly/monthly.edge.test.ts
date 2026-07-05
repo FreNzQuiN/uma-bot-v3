@@ -17,24 +17,24 @@ import {
 let snapshot: Snapshot;
 let config: BotConfig;
 let computedMembers: ReturnType<typeof computeMembers>;
-let loadMonthSnapshotsSpy: jest.SpyInstance;
+let loadMonthSnapshotSpy: jest.SpyInstance;
 
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
   computedMembers = computeMembers(snapshot, config);
-  loadMonthSnapshotsSpy = jest.spyOn(
-    require('../../../src/data/snapshot'), 'loadMonthSnapshots'
-  ).mockReturnValue([]);
+  loadMonthSnapshotSpy = jest.spyOn(
+    require('../../../src/data/snapshot'), 'loadMonthSnapshot'
+  ).mockReturnValue(null);
 });
 
 afterAll(() => {
-  loadMonthSnapshotsSpy.mockRestore();
+  loadMonthSnapshotSpy.mockRestore();
 });
 
 
 describe('Offset handling', () => {
-  // loadMonthSnapshots is already mocked globally to return []
+  // loadMonthSnapshot is already mocked globally to return []
   // so historical month data won't be loaded from disk
 
   it('offset=0 uses current snapshot', () => {
@@ -71,9 +71,9 @@ describe('Calendar-month offset calculation', () => {
       dataComponentsSpy.mockRestore();
       dataComponentsSpy = undefined as unknown as jest.SpyInstance;
     }
-    // Reset loadMonthSnapshots back to global default (return [])
+    // Reset loadMonthSnapshot back to global default (return null)
     // DO NOT call mockRestore() — that would remove the global mock.
-    loadMonthSnapshotsSpy.mockReturnValue([]);
+    loadMonthSnapshotSpy.mockReturnValue(null);
   });
 
   it('offset=-1 on July 1 calculates target as June', () => {
@@ -82,11 +82,11 @@ describe('Calendar-month offset calculation', () => {
       require('../../../src/utils/timezone'), 'getDataDateComponents'
     ).mockReturnValue({ year: 2026, month: 7, day: 1 });
     // Override global mock: return our snapshot for June
-    loadMonthSnapshotsSpy.mockImplementation((...args: unknown[]) => {
+    loadMonthSnapshotSpy.mockImplementation((...args: unknown[]) => {
       const year = args[0] as number;
       const month = args[1] as number;
-      if (year === 2026 && month === 6) return [snapshot];
-      return [];
+      if (year === 2026 && month === 6) return snapshot;
+      return null;
     });
 
     const report = generateMonthlyReport(snapshot, config, computedMembers, -1);
@@ -100,7 +100,7 @@ describe('Calendar-month offset calculation', () => {
     dataComponentsSpy = jest.spyOn(
       require('../../../src/utils/timezone'), 'getDataDateComponents'
     ).mockReturnValue({ year: 2027, month: 1, day: 1 });
-    // Global loadMonthSnapshots already returns [], so Dec 2026 is empty.
+    // Global loadMonthSnapshot already returns [], so Dec 2026 is empty.
     // Falls back to current (June 2026)
     const report = generateMonthlyReport(snapshot, config, computedMembers, -1);
     expect(report).toContain('📅 *Monthly Report — Juni 2026*');

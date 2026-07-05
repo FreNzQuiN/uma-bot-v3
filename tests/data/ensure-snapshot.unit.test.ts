@@ -1,28 +1,19 @@
 /**
  * Tests for ensureMonthSnapshot — bridges data layer (snapshot I/O)
  * and API layer (uma.moe fetch).
+ *
+ * ensureMonthSnapshot delegates to fetchAndSaveSnapshot, so we mock
+ * that module directly.
  */
 
 import { ensureMonthSnapshot } from '../../src/data/ensure-snapshot';
-import { loadMonthSnapshots, saveSnapshot } from '../../src/data/snapshot';
-import { getDataDate, getDataDateComponents } from '../../src/utils/timezone';
+import { fetchAndSaveSnapshot } from '../../src/data/fetch-snapshot';
 import type { UmaMoeClient } from '../../src/api/uma-moe';
 import type { Snapshot } from '../../src/types';
 
-jest.mock('../../src/data/snapshot', () => ({
-  loadMonthSnapshots: jest.fn(),
-  saveSnapshot: jest.fn(),
-}));
+jest.mock('../../src/data/fetch-snapshot');
 
-jest.mock('../../src/utils/timezone', () => ({
-  getDataDate: jest.fn(),
-  getDataDateComponents: jest.fn(),
-}));
-
-const mockedLoad = loadMonthSnapshots as jest.MockedFunction<typeof loadMonthSnapshots>;
-const mockedSave = saveSnapshot as jest.MockedFunction<typeof saveSnapshot>;
-const mockedGetDataDate = getDataDate as jest.MockedFunction<typeof getDataDate>;
-const mockedGetDataDateComponents = getDataDateComponents as jest.MockedFunction<typeof getDataDateComponents>;
+const mockedFetch = fetchAndSaveSnapshot as jest.MockedFunction<typeof fetchAndSaveSnapshot>;
 
 
 function makeSnapshot(circleId: number = 100): Snapshot {
@@ -71,59 +62,45 @@ function makeMockUmaMoe(apiSnapshot: Snapshot): UmaMoeClient {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedGetDataDateComponents.mockReturnValue({ year: 2026, month: 6, day: 12 });
-  mockedGetDataDate.mockReturnValue('2026-06-12');
 });
 
 describe('ensureMonthSnapshot', () => {
-  it('returns cached snapshot when cache exists and circle_id matches', async () => {
+  it('returns cached snapshot when fetchAndSaveSnapshot returns existing', async () => {
     const cached = makeSnapshot(100);
-    mockedLoad.mockReturnValue([cached]);
+    mockedFetch.mockResolvedValue({ snapshot: cached, saved: false, reason: 'fresh' });
 
     const umaMoe = makeMockUmaMoe(makeSnapshot(100));
     const result = await ensureMonthSnapshot(umaMoe, 100, 2026, 6, '/tmp/test');
 
     expect(result).toBe(cached);
-    expect(mockedLoad).toHaveBeenCalledWith(2026, 6, '/tmp/test');
-    expect(umaMoe.fetchCircleData).not.toHaveBeenCalled();
+    expect(mockedFetch).toHaveBeenCalledWith(umaMoe, 100, 2026, 6, { rootDir: '/tmp/test' });
   });
 
-  it('fetches from API when cache is empty', async () => {
-    mockedLoad.mockReturnValue([]);
+  it('returns fetched snapshot when fetchAndSaveSnapshot saves new data', async () => {
+    const fresh = makeSnapshot(100);
+    mockedFetch.mockResolvedValue({ snapshot: fresh, saved: true });
 
-    const apiSnapshot = makeSnapshot(100);
-    const umaMoe = makeMockUmaMoe(apiSnapshot);
-    mockedSave.mockReturnValue('/tmp/test/data/snapshots/2026/06/12.json');
-
+    const umaMoe = makeMockUmaMoe(fresh);
     const result = await ensureMonthSnapshot(umaMoe, 100, 2026, 6, '/tmp/test');
 
-    expect(result).toBe(apiSnapshot);
-    expect(umaMoe.fetchCircleData).toHaveBeenCalledWith(100, 2026, 6);
-    expect(mockedSave).toHaveBeenCalled();
+    expect(result).toBe(fresh);
   });
 
-  it('fetches from API when cached circle_id does not match', async () => {
-    const cached = makeSnapshot(999);
-    mockedLoad.mockReturnValue([cached]);
+  it('throws when fetchAndSaveSnapshot returns null snapshot', async () => {
+    mockedFetch.mockResolvedValue({ snapshot: null, saved: false, reason: 'fetch_failed' });
 
-    const apiSnapshot = makeSnapshot(100);
-    const umaMoe = makeMockUmaMoe(apiSnapshot);
-    mockedSave.mockReturnValue('/tmp/test/data/snapshots/2026/06/12.json');
+    const umaMoe = makeMockUmaMoe(makeSnapshot(100));
 
-    const result = await ensureMonthSnapshot(umaMoe, 100, 2026, 6, '/tmp/test');
-
-    expect(result).toBe(apiSnapshot);
-    expect(umaMoe.fetchCircleData).toHaveBeenCalledWith(100, 2026, 6);
+    await expect(ensureMonthSnapshot(umaMoe, 100, 2026, 6, '/tmp/test'))
+      .rejects.toThrow('No snapshot available for 2026-06');
   });
 
-  it('saves snapshot to disk after fetching', async () => {
-    mockedLoad.mockReturnValue([]);
+  it('passes rootDir through to fetchAndSaveSnapshot', async () => {
+    mockedFetch.mockResolvedValue({ snapshot: makeSnapshot(100), saved: false });
 
-    const apiSnapshot = makeSnapshot(100);
-    const umaMoe = makeMockUmaMoe(apiSnapshot);
+    const umaMoe = makeMockUmaMoe(makeSnapshot(100));
+    await ensureMonthSnapshot(umaMoe, 100, 2026, 6, '/custom/path');
 
-    await ensureMonthSnapshot(umaMoe, 100, 2026, 6, '/tmp/test');
-
-    expect(mockedSave).toHaveBeenCalledWith(apiSnapshot, '2026-06-12', '/tmp/test');
+    expect(mockedFetch).toHaveBeenCalledWith(umaMoe, 100, 2026, 6, { rootDir: '/custom/path' });
   });
 });

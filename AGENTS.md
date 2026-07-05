@@ -97,7 +97,6 @@ Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer toke
 
 | Gotcha | Why it matters |
 |--------|---------------|
-| **No `dist/` in git** | Must `npm run build` before `npm start`. `npm run dev` works without building. |
 | **Snapshot immutability** | Never mutate saved snapshots. Reports recompute from the array each time. |
 | **Month boundaries** | Monthly reports use offset=-1 (previous month). Pre-fetching is automatic. |
 | **Combined reports** | On collision days (daily + weekly), a single combined message is sent. |
@@ -107,8 +106,8 @@ Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer toke
 | **Config hot-reload** | Polls mtime every 5s. Schedule changes restart scheduler automatically. |
 | **Baileys doesn't clean up** | Tests use `--forceExit` because Baileys sockets don't close cleanly. |
 | **User-facing language** | Indonesian (`id`). All reports, alerts, and bot responses. |
-| **All times are WIB** | Asia/Jakarta (UTC+7). uma.moe data updates at ~22:00 WIB. |
-| **Message splitting** | WhatsApp 4096-char limit. Long reports split at newline boundaries. |
+| **JST as Server Time** | User can configure display time in config, uma.moe data updates at ~00:00 JST. |
+| **Message Management** | Keep Display Text short and concise. Long reports split at newline boundaries. |
 
 ---
 
