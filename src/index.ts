@@ -26,9 +26,8 @@ import { getDataDate, getDataDateComponents, getTargetMonth } from './utils/time
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { log } from './utils/logger';
 import { recordConfigReload, recordSchedulerRestart } from './runtime';
-import { computeMembers } from './reports/compute';
+
 import { ReportOrchestrator } from './orchestrator/report-orchestrator';
-import { preFetchMonthlySnapshot } from './scheduler/helpers';
 
 const PID_FILE = 'data/bot.pid';
 
@@ -247,32 +246,7 @@ async function main() {
     }
   };
 
-  scheduler = new Scheduler(getConfig, db, (type, options) => orchestrator.sendReport(type, options), async (types) => {
-    const snapshot = getSnapshot();
-    if (!snapshot) return;
-
-    const currentConfig = getConfig();
-
-    if (types.includes('monthly')) {
-      const { year: snapYear, month: snapMonth } = snapshot.members[0];
-      await preFetchMonthlySnapshot(
-        (y, m) => ensureMonthSnapshot(umaMoe, currentConfig.circleId, y, m),
-        1,
-        'combined report',
-        snapYear,
-        snapMonth
-      );
-    }
-
-    const computedMembers = computeMembers(snapshot, currentConfig);
-    const combined = orchestrator.generateCombinedReportString(types, snapshot, currentConfig, computedMembers);
-    await orchestrator.deliverReport(combined, types.join('+'));
-
-    for (const type of types) {
-      orchestrator.processAlertsForReport(type, snapshot, currentConfig, computedMembers)
-        .catch((err) => log.error('Alert', `Background alert processing failed for ${type}`, err));
-    }
-  }, onDataFetch);
+  scheduler = new Scheduler(getConfig, db, (type, options) => orchestrator.sendReport(type, options), (types) => orchestrator.sendScheduledCombinedReport(types), onDataFetch);
   scheduler.start();
   log.info('Scheduler', `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(',')}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`);
 

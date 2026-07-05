@@ -211,6 +211,38 @@ export class ReportOrchestrator {
     return [];
   }
 
+  /**
+   * Generate and deliver a scheduled combined report (no catch-up marker).
+   * Alerts fire-and-forget — don't block report delivery.
+   */
+  async sendScheduledCombinedReport(types: string[]): Promise<void> {
+    const snapshot = this.getSnapshot();
+    if (!snapshot) return;
+    if (snapshot.members.length === 0) return;
+
+    const config = this.getConfig();
+
+    if (types.includes('monthly')) {
+      const { year: snapYear, month: snapMonth } = snapshot.members[0];
+      await preFetchMonthlySnapshot(
+        (y, m) => ensureMonthSnapshot(this.umaMoe, config.circleId, y, m),
+        1,
+        'combined report',
+        snapYear,
+        snapMonth
+      );
+    }
+
+    const computedMembers = computeMembers(snapshot, config);
+    const combined = this.generateCombinedReportString(types, snapshot, config, computedMembers);
+    await this.deliverReport(combined, types.join('+'));
+
+    for (const type of types) {
+      this.processAlertsForReport(type, snapshot, config, computedMembers)
+        .catch((err) => log.error('Alert', `Background alert processing failed for ${type}`, err));
+    }
+  }
+
   async sendCombinedCatchUp(types: string[]): Promise<Alert[]> {
     const snapshot = this.getSnapshot();
     if (!snapshot) throw new Error('No snapshot available for combined catch-up report');
