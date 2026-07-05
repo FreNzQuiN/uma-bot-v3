@@ -117,8 +117,9 @@ class Logger {
     }
     const ts = this.cachedFormatter.format(now);
     const ms = String(now.getMilliseconds()).padStart(3, '0');
+    const sanitized = message.replace(/[\r\n]+/g, ' ');
     const tagStr = tag ? ` [${tag}]` : '';
-    return `[${ts}.${ms}] [${level.toUpperCase()}]${tagStr} ${message}`;
+    return `[${ts}.${ms}] [${level.toUpperCase()}]${tagStr} ${sanitized}`;
   }
 
   private getColor(level: LogLevel): string {
@@ -149,7 +150,7 @@ class Logger {
     }
 
     const fileLine = this.formatLine(level, tag, message);
-    this.writeToFile(fileLine);
+    this.writeToFile(fileLine, level);
   }
 
   /**
@@ -161,25 +162,26 @@ class Logger {
     return newlineIdx >= 0 ? message.slice(0, newlineIdx) : message;
   }
 
-  private writeToFile(line: string): void {
+  private writeToFile(line: string, level: LogLevel): void {
     if (!this.config.fileOutput) return;
 
     this.ensureLogDir();
 
     try {
       const filePath = this.config.logFile;
+      const fileMsg = (level === 'error' || level === 'warn') ? this.stripStackTrace(line) : line;
 
       if (existsSync(filePath) && this.config.maxFiles > 0) {
         const stat = statSync(filePath);
         const sizeMB = stat.size / (1024 * 1024);
         if (sizeMB >= this.config.maxSizeMB) {
-          appendFileSync(filePath, line + '\n', 'utf-8');
+          appendFileSync(filePath, fileMsg + '\n', 'utf-8');
           setImmediate(() => this.rotate(filePath));
           return;
         }
       }
 
-      appendFileSync(filePath, line + '\n', 'utf-8');
+      appendFileSync(filePath, fileMsg + '\n', 'utf-8');
     } catch (err) {
       this.initialized = false;
       const msg = err instanceof Error ? err.message : String(err);

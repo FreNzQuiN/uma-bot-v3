@@ -69,7 +69,7 @@ async function main() {
     if (!existsSync('data')) mkdirSync('data', { recursive: true });
     writeFileSync(PID_FILE, String(process.pid), 'utf-8');
   } catch (err) {
-    log.warn('Bot', `Failed to write PID file: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn('Bot', 'Failed to write PID file', err);
   }
   log.info('Bot', 'Uma Club Bot v3 starting...');
 
@@ -93,7 +93,7 @@ async function main() {
     lastConfigHash = readFileSync(configPath, 'utf-8');
     initialReadOk = true;
   } catch (err) {
-    log.warn('Config', `Could not stat config.yaml at startup: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn('Config', 'Could not stat config.yaml at startup', err);
   }
 
   const umaMoe = new UmaMoeClient();
@@ -180,7 +180,7 @@ async function main() {
         }
       }
     } catch (err) {
-      log.warn('Config', `Config watch poll failed (file may be locked by another process): ${err instanceof Error ? err.message : String(err)}`);
+      log.warn('Config', 'Config watch poll failed (file may be locked by another process)', err);
     }
   }, 5000);
   log.info('Config', 'Watching config.yaml for changes (polling every 5s)');
@@ -200,7 +200,7 @@ async function main() {
       while (prevMonth <= 0) { prevMonth += 12; prevYear--; }
       await fetchAndSaveSnapshot(umaMoe, config.circleId, prevYear, prevMonth);
     } catch (error) {
-      log.warn('Data', `Failed to pre-fetch month -${offset}: ${error instanceof Error ? error.message : String(error)}`);
+      log.warn('Data', `Failed to pre-fetch month -${offset}`, error);
     }
   }
 
@@ -221,7 +221,7 @@ async function main() {
       });
       log.debug('Data', 'Member history and rank history updated');
     } catch (err) {
-      log.warn('Data', `Failed to update member/rank history: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn('Data', 'Failed to update member/rank history', err);
     }
   }
 
@@ -308,7 +308,7 @@ async function main() {
     }
   }).catch((err) => {
     // Unexpected error — loggedOut/badSession now self-heal via auto-reconnect
-    log.error('WhatsApp', `${err instanceof Error ? err.message : String(err)}`);
+    log.error('WhatsApp', 'Unexpected connection error', err);
   });
 
   const cleanup = async () => {
@@ -318,7 +318,7 @@ async function main() {
       await umaMoe.closeSession();
       log.debug('Bot', 'Playwright browser session closed');
     } catch (err) {
-      log.warn('Bot', `Failed to close Playwright session: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn('Bot', 'Failed to close Playwright session', err);
     }
     waClient?.disconnect();
     await db.close();
