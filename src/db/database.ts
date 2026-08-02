@@ -3,6 +3,8 @@
  *
  * Uses sql.js (pure WASM, no native deps).
  * Implements IDatabase for pluggable backend support.
+ * Query SQL is intentionally duplicated with mysql-database.ts where
+ * dialect-specific; shared row mapping lives in ./mappers.
  */
 
 import type {
@@ -27,7 +29,13 @@ import initSqlJs, {
   QueryExecResult,
   BindParams,
 } from "sql.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import {
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  existsSync,
+  mkdirSync,
+} from "fs";
 import * as path from "path";
 import { log } from "../utils/logger";
 
@@ -56,7 +64,17 @@ export class SqliteDatabase implements IDatabase {
 
       if (existsSync(this.dbPath)) {
         const buffer = readFileSync(this.dbPath);
-        this.db = new SQL.Database(buffer);
+        try {
+          this.db = new SQL.Database(buffer);
+        } catch (err) {
+          // Only reachable with a truncated file (crash mid-write before atomic save).
+          // Starting fresh would silently drop alert-dedup and run history.
+          log.error(
+            "DB",
+            `Corrupt database at ${this.dbPath}. Restore from backup or delete the file to start fresh.`,
+          );
+          throw err;
+        }
       } else {
         this.db = new SQL.Database();
       }
@@ -85,9 +103,7 @@ export class SqliteDatabase implements IDatabase {
 
   private execSql(sql: string, params?: BindParams): QueryExecResult[] {
     try {
-      const result = this.ensureDb().exec(sql, params);
-      this.dirty = true;
-      return result;
+      return this.ensureDb().exec(sql, params);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("DB", `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
@@ -434,7 +450,10 @@ export class SqliteDatabase implements IDatabase {
     const db = this.ensureDb();
     const data = db.export();
     const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-    writeFileSync(this.dbPath, buffer);
+    // Atomic write — a crash mid-write leaves a stale .tmp, never a truncated db.
+    const tmpPath = this.dbPath + ".tmp";
+    writeFileSync(tmpPath, buffer);
+    renameSync(tmpPath, this.dbPath);
     this.dirty = false;
   }
 

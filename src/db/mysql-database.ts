@@ -3,6 +3,8 @@
  *
  * Uses mysql2/promise with connection pooling.
  * Implements IDatabase for pluggable backend support.
+ * Query SQL is intentionally duplicated with database.ts where
+ * dialect-specific; shared row mapping lives in ./mappers.
  */
 
 import type {
