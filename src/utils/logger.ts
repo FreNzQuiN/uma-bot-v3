@@ -160,7 +160,7 @@ class Logger {
       const consoleLine = this.formatLine(level, tag, consoleMsg);
       const color = this.getColor(level);
       const reset = "\x1b[0m";
-       
+
       console.log(`${color}${consoleLine}${reset}`);
     }
 
