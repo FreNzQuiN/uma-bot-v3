@@ -44,6 +44,28 @@ function getDataDateForFile(snapshot: Snapshot): string | null {
   return `${member.year}-${p2(member.month)}-${p2(day)}`;
 }
 
+/**
+ * Save a fetched snapshot to disk and log the save.
+ * Returns the derived file date, or null when no member exists to derive
+ * one from (nothing is saved in that case). Exceptions from saveSnapshot
+ * propagate — a failed save must surface, not be swallowed.
+ */
+function persistFetched(
+  fetched: Snapshot,
+  monthLabel: string,
+  rootDir: string,
+): string | null {
+  const fileDate = getDataDateForFile(fetched);
+  if (fileDate) {
+    saveSnapshot(fetched, fileDate, rootDir);
+    log.info(
+      "Snapshot",
+      `Saved ${monthLabel} (${fetched.members.length} members) as ${fileDate}`,
+    );
+  }
+  return fileDate;
+}
+
 /** Current-month snapshot with dataDay === 0 or dataDay < currentJstDay - 1. */
 function isSnapshotStale(snapshot: Snapshot): boolean {
   const dataDay = getDataDayFromSnapshot(snapshot);
@@ -212,14 +234,7 @@ export async function fetchAndSaveSnapshot(
     // Past month or data too old — single attempt, no retry
     const result = await fetchOnce(umaMoe, circleId, year, month, existing);
     if ("fetched" in result) {
-      const fileDate = getDataDateForFile(result.fetched);
-      if (fileDate) {
-        saveSnapshot(result.fetched, fileDate, rootDir);
-        log.info(
-          "Snapshot",
-          `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
-        );
-      }
+      const fileDate = persistFetched(result.fetched, monthLabel, rootDir);
       return { snapshot: result.fetched, saved: fileDate !== null };
     }
     log.warn("Snapshot", `Fetch failed for ${monthLabel}: ${result.error}`);
@@ -236,14 +251,7 @@ export async function fetchAndSaveSnapshot(
     const result = await fetchOnce(umaMoe, circleId, year, month, existing);
 
     if ("fetched" in result) {
-      const fileDate = getDataDateForFile(result.fetched);
-      if (fileDate) {
-        saveSnapshot(result.fetched, fileDate, rootDir);
-        log.info(
-          "Snapshot",
-          `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
-        );
-      }
+      const fileDate = persistFetched(result.fetched, monthLabel, rootDir);
 
       if (!isDataFreshEnough(result.fetched)) {
         const fetchedDay = getDataDayFromSnapshot(result.fetched);
