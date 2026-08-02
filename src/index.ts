@@ -342,12 +342,24 @@ async function main() {
     `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(",")}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`,
   );
 
-  // Retries forever on network errors; rejects only for loggedOut/badSession
-  waClient
-    .connect()
-    .then(async () => {
-      log.info("WhatsApp", "Connected — running catch-up");
+  // Retries forever on network errors; rejects on pre-open close so the
+  // promise never hangs. Internal reconnects continue regardless — the poll
+  // below starts catch-up after the first successful "open" of any attempt.
+  waClient.connect().catch((err) => {
+    log.error(
+      "WhatsApp",
+      "Connection error during startup — reconnecting in background",
+      err,
+    );
+  });
 
+  const runPostConnectTasks = async () => {
+    while (!waClient.isConnected()) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    log.info("WhatsApp", "Connected — running catch-up");
+
+    try {
       const catchUp = new CatchUpManager(db, getConfig);
       const missed = await catchUp.detectMissedReports();
 
@@ -391,11 +403,42 @@ async function main() {
         // Catch-up disabled — record skipped so future detection won't re-trigger
         await catchUp.recordSkippedReports(missed);
       }
-    })
-    .catch((err) => {
-      // Unexpected error — loggedOut/badSession now self-heal via auto-reconnect
-      log.error("WhatsApp", "Unexpected connection error", err);
-    });
+
+      // Post-catch-up: participants are now known, so session pruning can't
+      // hit active members' files.
+      try {
+        await waClient.runAuthMaintenance();
+      } catch (err) {
+        log.warn("WhatsApp", "Auth maintenance after catch-up failed", err);
+      }
+
+      try {
+        const lastDaily = await db.getLastSuccessfulRun("daily");
+        let lastActivityTs: number | null = null;
+        if (lastDaily) {
+          lastActivityTs = new Date(
+            lastDaily.sent_at ?? lastDaily.scheduled_at,
+          ).getTime();
+        }
+        if (
+          lastActivityTs === null ||
+          Date.now() - lastActivityTs > 7 * 24 * 60 * 60 * 1000
+        ) {
+          log.warn(
+            "WhatsApp",
+            "Bot was inactive >7 days — WhatsApp revokes sessions after ~14 days offline; QR rescan may be required",
+          );
+        }
+      } catch (err) {
+        log.warn("WhatsApp", "Failed to check last activity", err);
+      }
+    } catch (err) {
+      // Unexpected error — connection drops self-heal via auto-reconnect
+      log.error("WhatsApp", "Post-connect tasks failed", err);
+    }
+  };
+
+  void runPostConnectTasks();
 
   const cleanup = async () => {
     log.info("Bot", "Shutting down...");

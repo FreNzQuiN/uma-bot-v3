@@ -7,7 +7,10 @@
  * createBaileysLogger is NOT exported — tested indirectly through connect().
  */
 
-import { WhatsAppClient } from "../../src/whatsapp/client";
+import {
+  WhatsAppClient,
+  getBadSessionDecision,
+} from "../../src/whatsapp/client";
 import { getDefaultConfig } from "../../src/config";
 import type { BotConfig } from "../../src/types";
 
@@ -43,6 +46,12 @@ jest.mock("../../src/utils/format", () => ({
 jest.mock("../../src/whatsapp/auth-cleanup", () => ({
   runAuthCleanup: jest.fn(),
   deleteCorruptedSenderKey: jest.fn().mockReturnValue(false),
+  backupCreds: jest.fn().mockReturnValue(true),
+  restoreCredsBackup: jest.fn().mockReturnValue(false),
+  isCredsUsable: jest.fn().mockReturnValue(true),
+  resetSignalState: jest.fn().mockReturnValue({ deleted: 0, errors: 0 }),
+  pruneStaleSignalState: jest.fn().mockReturnValue({ deleted: 0, errors: 0 }),
+  pruneStaleSenderKeys: jest.fn().mockReturnValue({ deleted: 0, errors: 0 }),
 }));
 
 import { splitMessage } from "../../src/utils/format";
@@ -518,6 +527,49 @@ describe("WhatsAppClient", () => {
     it("does not throw when sock is already null", () => {
       const client = new WhatsAppClient(getConfig);
       expect(() => client.disconnect()).not.toThrow();
+    });
+  });
+
+  describe("getBadSessionDecision", () => {
+    const HOUR = 60 * 60 * 1000;
+
+    it("returns reconnect with count 1 on first badSession", () => {
+      expect(getBadSessionDecision(0, null, Date.now())).toEqual({
+        action: "reconnect",
+        count: 1,
+      });
+    });
+
+    it("returns reset-signal on second badSession within the window", () => {
+      const now = Date.now();
+      expect(getBadSessionDecision(1, now - 10_000, now)).toEqual({
+        action: "reset-signal",
+        count: 2,
+      });
+    });
+
+    it("returns wipe on third badSession within the window", () => {
+      const now = Date.now();
+      expect(getBadSessionDecision(2, now - 10_000, now)).toEqual({
+        action: "wipe",
+        count: 3,
+      });
+    });
+
+    it("resets the window when the last badSession is older than 1h", () => {
+      const now = Date.now();
+      expect(getBadSessionDecision(2, now - 2 * HOUR, now)).toEqual({
+        action: "reconnect",
+        count: 1,
+      });
+    });
+
+    it("stays at wipe for counts beyond 3 within the window", () => {
+      const now = Date.now();
+      expect(getBadSessionDecision(5, now - 10_000, now)).toEqual({
+        action: "wipe",
+        count: 6,
+      });
     });
   });
 });

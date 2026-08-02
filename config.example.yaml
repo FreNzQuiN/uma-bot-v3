@@ -160,6 +160,19 @@ logging:
   console: true
 
 # ============================================================
+# WhatsApp auth state
+# ============================================================
+auth:
+  # WhatsApp auth state retention: session/sender/identity keys older than this many days are pruned (min 14)
+  retentionDays: 30
+  # Long-downtime purge: if creds.json hasn't been touched for this many days,
+  # all signal state (sessions/sender-keys/identity-keys) is deleted on connect
+  # so the bot starts fresh instead of draining a stale offline backlog. creds
+  # (identity) and pre-keys are kept — no QR rescan. WhatsApp revokes sessions
+  # after ~14 days of phone inactivity, hence the default.
+  purgeAfterDays: 14
+
+# ============================================================
 # Database backend
 # ============================================================
 database:

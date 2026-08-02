@@ -195,6 +195,11 @@ export interface BotConfig {
       ssl: boolean;
     };
   };
+
+  auth: {
+    retentionDays: number;
+    purgeAfterDays: number;
+  };
 }
 
 export interface ScheduleRunRow {

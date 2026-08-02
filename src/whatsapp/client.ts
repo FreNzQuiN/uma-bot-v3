@@ -9,7 +9,7 @@ import type { WASocket } from "@whiskeysockets/baileys";
 import type { BotConfig } from "../types";
 import { log } from "../utils/logger";
 import { splitMessage } from "../utils/format";
-import { rmSync, existsSync } from "node:fs";
+import { rmSync, existsSync, readdirSync } from "node:fs";
 import {
   recordReconnect,
   recordMessageReceived,
@@ -21,7 +21,52 @@ import {
   getRuntimeStats,
   recordConnectionState,
 } from "../runtime";
-import { runAuthCleanup, deleteCorruptedSenderKey } from "./auth-cleanup";
+import {
+  runAuthCleanup,
+  deleteCorruptedSenderKey,
+  backupCreds,
+  restoreCredsBackup,
+  isCredsUsable,
+  resetSignalState,
+  pruneStaleSignalState,
+  pruneStaleSenderKeys,
+  resolveProtectedLids,
+  shouldPurgeSignalState,
+  writeLastConnect,
+} from "./auth-cleanup";
+
+/** badSession attempts within this window escalate: reconnect → reset → wipe. */
+const BAD_SESSION_WINDOW_MS = 60 * 60 * 1000;
+
+/** Interval for periodic auth directory maintenance while connected. */
+const AUTH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+export type BadSessionAction = "reconnect" | "reset-signal" | "wipe";
+
+export interface BadSessionDecision {
+  action: BadSessionAction;
+  count: number;
+}
+
+/**
+ * Escalation ladder for badSession (500) disconnects.
+ *
+ * Within the 1h window: 1st → plain reconnect, 2nd → surgical signal state
+ * reset, 3rd → full wipe + QR. After the window expires the count restarts.
+ */
+export function getBadSessionDecision(
+  currentCount: number,
+  firstTs: number | null,
+  now: number,
+): BadSessionDecision {
+  const inWindow = firstTs !== null && now - firstTs <= BAD_SESSION_WINDOW_MS;
+  const count = inWindow ? currentCount + 1 : 1;
+  let action: BadSessionAction;
+  if (count >= 3) action = "wipe";
+  else if (count === 2) action = "reset-signal";
+  else action = "reconnect";
+  return { action, count };
+}
 
 export interface IncomingMessage {
   key: {
@@ -132,6 +177,12 @@ export class WhatsAppClient {
   private lastMessageCount = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private authDir = process.env.WA_SESSION_DIR ?? "data/auth";
+  private badSessionCount = 0;
+  private firstBadSessionTs: number | null = null;
+  private authMaintenanceTimer: ReturnType<typeof setInterval> | null = null;
+  private authMaintenanceRunning = false;
+  /** Cached auth dir file count — refreshed on connect, maintenance, and wipe. */
+  private authFileCount = 0;
   private chats = new Map<
     string,
     { jid: string; name: string; type: "dm" | "group" }
@@ -178,9 +229,24 @@ export class WhatsAppClient {
       const mem = process.memoryUsage();
       log.info(
         "WhatsApp",
-        `♥ heartbeat: state=${this.connectionState} jid=${jidInfo} msgs=${rt.messagesReceived} (+${msgsSinceLast} since last check) reconnects=${rt.reconnectCount} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB`,
+        `♥ heartbeat: state=${this.connectionState} jid=${jidInfo} msgs=${rt.messagesReceived} (+${msgsSinceLast} since last check) reconnects=${rt.reconnectCount} authFiles=${this.authFileCount} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB`,
       );
     }, 30_000);
+  }
+
+  /**
+   * Refresh the cached auth file count.
+   *
+   * Called on connect, after auth maintenance, and after a wipe. The heartbeat
+   * logs this instead of readdirSync on a 3.6k-file directory every 30s.
+   */
+  private refreshAuthFileCount(): void {
+    try {
+      this.authFileCount = readdirSync(this.authDir).length;
+    } catch {
+      // auth dir can be absent between wipe and reconnect — not an error
+      this.authFileCount = 0;
+    }
   }
 
   private stopHeartbeat(): void {
@@ -188,6 +254,7 @@ export class WhatsAppClient {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    this.stopAuthMaintenance();
   }
 
   /**
@@ -228,16 +295,36 @@ export class WhatsAppClient {
       mkdirSync(authDir, { recursive: true });
     }
 
-    // Prune stale lid-mapping files and log auth directory health.
+    // Prune stale lid-mapping/pre-key files and log auth directory health.
     runAuthCleanup(authDir);
+
+    // creds.json is the only file whose loss forces a QR re-scan. runAuthCleanup
+    // already backs it up when usable; only restore here, when corrupt at startup.
+    if (!isCredsUsable(authDir) && restoreCredsBackup(authDir)) {
+      log.info("WhatsApp", "restored creds.json from backup");
+    }
+
+    // Long downtime → every Signal session is stale (members changed devices,
+    // sessions rotated, LID migration happened). Keeping them guarantees
+    // decrypt failures against the queued backlog. Purge all signal state so
+    // the bot starts fresh: sessions/sender-keys/identity-keys re-establish
+    // on demand via pre-key exchange. creds.json (identity, no QR) and
+    // pre-keys (needed to decrypt sessions established while offline) are kept.
+    if (shouldPurgeSignalState(authDir, this.getConfig().auth.purgeAfterDays)) {
+      const reset = resetSignalState(authDir);
+      log.info(
+        "WhatsApp",
+        `Long downtime detected — purged ${reset.deleted} stale signal files, starting fresh`,
+      );
+      this.refreshAuthFileCount();
+    }
 
     // Load auth state — creds.json provides identity keys; session-*.json
     // contain Signal Protocol sessions for DM and group contacts.
-    // DO NOT delete session files — they are required for group sender-key
-    // distribution. Without them, the bot cannot encrypt sender-key messages
-    // for group members' devices, causing infinite retry loops.
-    // Stale DM sessions are handled by Baileys' built-in retry mechanism
-    // (re-establishes sessions via pre-key exchange when decryption fails).
+    // Sessions are pruned by age (auth.retentionDays) once group
+    // participants are known, and re-established automatically via pre-key
+    // exchange when a message arrives — rc13's enableAutoSessionRecreation
+    // + MessageRetryManager handle missing sessions on demand.
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
     const { version } = await fetchLatestBaileysVersion();
@@ -409,7 +496,22 @@ export class WhatsAppClient {
           clearTimeout(timeout);
           log.info("WhatsApp", "Connected successfully");
           this.reconnectAttempts = 0;
+          this.badSessionCount = 0;
+          this.firstBadSessionTs = null;
           this.startHeartbeat();
+          // Started here (not after the connect() await) so a socket that opens
+          // after the 120s connect timeout still gets the 24h maintenance cycle.
+          this.startAuthMaintenance();
+          // Connection rewrote creds.json via creds.update events — capture the
+          // now-verified-good state before the socket can crash mid-write.
+          if (isCredsUsable(authDir)) {
+            backupCreds(authDir);
+          }
+          // Record the successful connection so the next startup can measure
+          // genuine downtime (creds.json mtime is rewritten every connect and
+          // would mask weeks-old sessions after repeated restarts).
+          writeLastConnect(authDir);
+          this.refreshAuthFileCount();
           if (sock.user?.id) {
             log.info(
               "WhatsApp",
@@ -435,37 +537,77 @@ export class WhatsAppClient {
           recordDisconnect(reasonName, errMsg);
           this.stopHeartbeat();
 
-          if (
-            statusCode === DisconnectReason.loggedOut ||
-            statusCode === DisconnectReason.badSession
-          ) {
-            const reasonLabel =
-              statusCode === DisconnectReason.loggedOut
-                ? "logout"
-                : "badSession";
+          // Settle the connect() promise when the socket closes before "open".
+          // No-op after a successful open (promise already resolved). Without
+          // this, a pre-open close hangs connect() forever and index.ts's
+          // post-connect flow (catch-up) never runs for that boot.
+          if (!(lastDisconnect?.error instanceof Error)) {
+            reject(
+              new Error(
+                `Connection closed before open: ${reasonName} — ${errMsg}`,
+              ),
+            );
+          } else {
+            reject(lastDisconnect.error);
+          }
+
+          if (statusCode === DisconnectReason.loggedOut) {
+            // Session revoked on the server (phone or WhatsApp Web devices).
+            // No local state can fix this — wipe and force a fresh QR login.
             clearTimeout(timeout);
             this.sock = null;
-            // Delete stale auth so next connect() shows QR instead of failing
-            try {
-              if (existsSync(this.authDir)) {
-                rmSync(this.authDir, { recursive: true, force: true });
-                log.info(
-                  "WhatsApp",
-                  `Deleted stale session (${reasonLabel}) — reconnecting for QR scan`,
-                );
-              }
-            } catch (error) {
+            log.error(
+              "WhatsApp",
+              "Session revoked server-side — QR rescan required",
+            );
+            this.badSessionCount = 0;
+            this.firstBadSessionTs = null;
+            this.wipeAuthDir("logout");
+            setTimeout(() => {
+              this.connect().catch((err) => {
+                log.error("WhatsApp", `Reconnection after logout failed`, err);
+              });
+            }, 2000);
+          } else if (statusCode === DisconnectReason.badSession) {
+            // Escalate: 1st plain reconnect, 2nd surgical signal reset,
+            // 3rd full wipe + QR. Bad sessions are often transient —
+            // wiping on the first occurrence forces an avoidable QR scan.
+            clearTimeout(timeout);
+            this.sock = null;
+            const decision = getBadSessionDecision(
+              this.badSessionCount,
+              this.firstBadSessionTs,
+              Date.now(),
+            );
+            this.badSessionCount = decision.count;
+            if (decision.count === 1) {
+              this.firstBadSessionTs = Date.now();
+            }
+            if (decision.action === "reset-signal") {
+              const reset = resetSignalState(this.authDir);
               log.warn(
                 "WhatsApp",
-                "Failed to delete stale auth directory",
-                error,
+                `badSession (attempt ${decision.count}/3) — surgical signal state reset (deleted ${reset.deleted} files)`,
+              );
+            } else if (decision.action === "wipe") {
+              log.error(
+                "WhatsApp",
+                `badSession (attempt ${decision.count}/3) — full session wipe, QR rescan required`,
+              );
+              this.wipeAuthDir("badSession");
+              this.badSessionCount = 0;
+              this.firstBadSessionTs = null;
+            } else {
+              log.warn(
+                "WhatsApp",
+                `badSession (attempt ${decision.count}/3) — reconnecting without state reset`,
               );
             }
             setTimeout(() => {
               this.connect().catch((err) => {
                 log.error(
                   "WhatsApp",
-                  `Reconnection after ${reasonLabel} failed`,
+                  `Reconnection after badSession failed`,
                   err,
                 );
               });
@@ -490,6 +632,14 @@ export class WhatsAppClient {
               });
             }, delay);
           } else {
+            // connectionReplaced: another client took over — nothing local
+            // to fix, just reconnect and keep going.
+            if (statusCode === DisconnectReason.connectionReplaced) {
+              log.warn(
+                "WhatsApp",
+                "Another connection replaced this session — plain reconnect",
+              );
+            }
             // Network error (connectionClosed, timedOut, etc.) — keep retrying
             // with capped backoff. Only loggedOut/badSession reject (user must re-scan QR).
             const delay = Math.min(
@@ -694,8 +844,115 @@ export class WhatsAppClient {
     this.messageHandlers.push(handler);
   }
 
+  /**
+   * Delete the entire auth directory.
+   * Only for terminal states (loggedOut, 3rd badSession) — forces QR re-scan.
+   */
+  private wipeAuthDir(reasonLabel: string): void {
+    try {
+      if (existsSync(this.authDir)) {
+        rmSync(this.authDir, { recursive: true, force: true });
+        log.info(
+          "WhatsApp",
+          `Deleted stale session (${reasonLabel}) — reconnecting for QR scan`,
+        );
+      }
+      this.refreshAuthFileCount();
+    } catch (error) {
+      log.warn("WhatsApp", "Failed to delete stale auth directory", error);
+    }
+  }
+
+  /**
+   * Periodic auth maintenance while connected: age-prune signal state.
+   * Protected sets come from config + live group participants.
+   *
+   * When groupFetchAllParticipating throws, session/identity pruning is
+   * skipped (without participant info we can't tell active members from
+   * stale ones); sender-key pruning still runs with config groups.
+   */
+  async runAuthMaintenance(): Promise<void> {
+    if (!this.isConnected() || this.authMaintenanceRunning) return;
+    this.authMaintenanceRunning = true;
+    try {
+      const config = this.getConfig();
+      const protectedGroups = new Set<string>([
+        ...config.groups.command,
+        ...config.groups.announcement,
+        ...config.groups.alertAdmin,
+      ]);
+      const protectedJids = new Set<string>();
+      for (const lid of resolveProtectedLids(this.authDir, config.admins)) {
+        protectedJids.add(lid);
+      }
+
+      let participantsLoaded = false;
+      try {
+        const groups = await this.sock!.groupFetchAllParticipating();
+        for (const group of Object.values(groups)) {
+          protectedGroups.add(group.id);
+          for (const participant of group.participants ?? []) {
+            const numeric = participant.id.replace(/@.*/, "");
+            if (numeric) protectedJids.add(numeric);
+          }
+        }
+        participantsLoaded = true;
+      } catch (err) {
+        log.warn(
+          "WhatsApp",
+          "groupFetchAllParticipating failed — session pruning skipped this cycle, sender-key pruning with config groups only",
+          err,
+        );
+      }
+
+      const maxAgeMs = config.auth.retentionDays * 86_400_000;
+      if (participantsLoaded) {
+        const signalResult = pruneStaleSignalState(
+          this.authDir,
+          protectedJids,
+          protectedGroups,
+          maxAgeMs,
+        );
+        log.info(
+          "WhatsApp",
+          `Auth maintenance: pruned ${signalResult.deleted} stale signal files (${signalResult.errors} errors)`,
+        );
+      } else {
+        const senderResult = pruneStaleSenderKeys(
+          this.authDir,
+          protectedGroups,
+          maxAgeMs,
+        );
+        log.info(
+          "WhatsApp",
+          `Auth maintenance (degraded): pruned ${senderResult.deleted} stale sender-keys (${senderResult.errors} errors)`,
+        );
+      }
+      this.refreshAuthFileCount();
+    } finally {
+      this.authMaintenanceRunning = false;
+    }
+  }
+
+  private startAuthMaintenance(): void {
+    this.stopAuthMaintenance();
+    this.authMaintenanceTimer = setInterval(() => {
+      this.runAuthMaintenance().catch((err) => {
+        log.warn("WhatsApp", "Auth maintenance failed", err);
+      });
+    }, AUTH_MAINTENANCE_INTERVAL_MS);
+  }
+
+  private stopAuthMaintenance(): void {
+    if (this.authMaintenanceTimer) {
+      clearInterval(this.authMaintenanceTimer);
+      this.authMaintenanceTimer = null;
+    }
+  }
+
   disconnect(): void {
     this.stopHeartbeat();
+    this.stopAuthMaintenance();
     this.connectionState = "disconnected";
     this.messageCache.clear();
     if (this.sock) {

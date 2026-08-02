@@ -174,6 +174,18 @@ npm run pm2:restart    # rebuild + restart
 
 Single instance (no clustering — the bot has WebSocket state). Auto-restart on crash. Memory limit: 400MB (safety net). Boot persistence via `pm2-windows-startup`.
 
+#### WhatsApp auth lifecycle
+
+The auth directory (`data/auth/`) is kept bounded so the bot runs for months without a QR re-scan:
+
+- **Age-based pruning** (24h cycle + after catch-up): `session-*`, `sender-key-*`, `identity-key-*` files older than `auth.retentionDays` (default 30) are deleted. Protected: configured admins/groups (PN and LID forms, resolved via the lid-mapping cache) and every participant of live fetched groups — active members' sessions are never pruned. If the group fetch fails, session pruning is skipped entirely that cycle (degraded mode: sender-keys pruned with config groups only).
+- **No pre-key pruning**: `pre-key-*.json` files are managed by Baileys alone (deleted on consumption). Pruning by upload state is unsafe — a pre-key file may be needed to decrypt a message that was queued while the bot was offline (consumed server-side during the outage, still unread locally). The bot's intermittent uptime makes this the norm, not the edge case.
+- **Surgical badSession recovery**: 1st badSession → plain reconnect; 2nd within 1h → delete signal state only (sessions/sender-keys/identity-keys, creds kept — Baileys re-establishes them via pre-key exchange); 3rd → full wipe + QR. Replaces the old behavior of wiping everything on the first badSession.
+- **creds.json backup/restore**: backed up on connect and on every successful connection; restored when corrupt. Baileys writes creds.json non-atomically (no tmp+rename) — a crash mid-write previously forced a QR re-scan.
+- **Hard ceiling**: WhatsApp revokes sessions server-side after ~14 days of phone-side inactivity. No code can prevent this — the bot warns at startup if the last run was >7 days ago.
+
+The sql.js auth-store option was rejected: it dumps the whole in-memory store on every save — worse than flat files for this purpose.
+
 ### Docker
 
 ```bash

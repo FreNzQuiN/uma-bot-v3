@@ -187,6 +187,13 @@ const ConfigSchema = z.object({
         .default({}),
     })
     .default({}),
+
+  auth: z
+    .object({
+      retentionDays: z.number().int().min(14).default(30),
+      purgeAfterDays: z.number().int().min(1).default(14),
+    })
+    .default({}),
 });
 
 export function getDefaultConfig(): BotConfig {

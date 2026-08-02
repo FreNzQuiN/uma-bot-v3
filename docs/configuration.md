@@ -441,6 +441,25 @@ database:
 
 ---
 
+### `auth`
+
+WhatsApp auth state retention. The bot prunes stale `session-*`, `sender-key-*`, and `identity-key-*` files from the auth directory (24-hour maintenance cycle while connected, plus once after startup catch-up) so the directory stays bounded during months-long operation.
+
+```yaml
+auth:
+  retentionDays: 30
+```
+
+| Field           | Type     | Default | Description                                                                |
+| --------------- | -------- | ------- | -------------------------------------------------------------------------- |
+| `retentionDays` | `number` | `30`    | Session/sender/identity keys older than this many days are pruned (min 14) |
+
+Protected from pruning: configured admins/groups and every participant of the bot's live groups (matching both PN and LID forms via the lid-mapping cache). `creds.json` is never pruned — it is backed up on connect and restored automatically if corrupted. Pre-key files are never pruned: Baileys deletes them on consumption, and deleting uploaded-but-unconsumed pre-keys would break decryption of messages queued while the bot was offline.
+
+**Live-reloadable:** Yes — changes apply on the next maintenance cycle.
+
+---
+
 ## Environment Variables
 
 Optional, set in `.env` or shell:
