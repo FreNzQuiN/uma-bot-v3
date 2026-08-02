@@ -38,8 +38,26 @@ import {
 /** badSession attempts within this window escalate: reconnect → reset → wipe. */
 const BAD_SESSION_WINDOW_MS = 60 * 60 * 1000;
 
-/** Interval for periodic auth directory maintenance while connected. */
+/** Maintenance cadence while connected. */
 const AUTH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** 3rd badSession in the window triggers the full wipe. */
+const BAD_SESSION_WIPE_THRESHOLD = 3;
+
+/** Liveness heartbeat log interval — 30 seconds. */
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
+/** Timeout for the initial connection (QR scan + auth). */
+const CONNECT_TIMEOUT_MS = 120_000;
+
+/** Delay before reconnecting after a logout or badSession reset. */
+const RECONNECT_AFTER_RESET_MS = 2000;
+
+/** Reconnect backoff cap — 5 minutes. */
+const MAX_RECONNECT_DELAY_MS = 300_000;
+
+/** Milliseconds per day, for retention-based age math. */
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type BadSessionAction = "reconnect" | "reset-signal" | "wipe";
 
@@ -62,7 +80,7 @@ export function getBadSessionDecision(
   const inWindow = firstTs !== null && now - firstTs <= BAD_SESSION_WINDOW_MS;
   const count = inWindow ? currentCount + 1 : 1;
   let action: BadSessionAction;
-  if (count >= 3) action = "wipe";
+  if (count >= BAD_SESSION_WIPE_THRESHOLD) action = "wipe";
   else if (count === 2) action = "reset-signal";
   else action = "reconnect";
   return { action, count };
@@ -89,9 +107,6 @@ export type MessageHandler = (msg: IncomingMessage) => Promise<void>;
  * libsignal/src/session_cipher.js writes decryption failures directly to
  * console.error (bypassing pino). These are handled internally by Baileys
  * via retry requests — the console output is redundant noise.
- *
- * This monkey-patch filters out known libsignal patterns while letting all
- * other console.error calls through.
  */
 let _libsignalSuppressed = false;
 function suppressLibsignalErrors(): void {
@@ -113,14 +128,9 @@ function suppressLibsignalErrors(): void {
 }
 
 /**
- * Create a logger adapter for Baileys that routes through our structured logger.
- *
- * Baileys internally logs decryption failures ("failed to decrypt message")
- * at error level, but handles them via automatic retry requests. Treating
- * these as errors is misleading — they are normal operational noise.
- *
- * This adapter silently drops those known-handled errors while routing all
- * other Baileys log output through our structured logger at appropriate levels.
+ * Baileys logs decryption failures ("failed to decrypt message") at error
+ * level but handles them via automatic retry requests — treating them as
+ * errors is misleading, they are normal operational noise.
  */
 function createBaileysLogger() {
   const suppressPatterns = ["failed to decrypt message", "unexpected error in"];
@@ -181,7 +191,6 @@ export class WhatsAppClient {
   private firstBadSessionTs: number | null = null;
   private authMaintenanceTimer: ReturnType<typeof setInterval> | null = null;
   private authMaintenanceRunning = false;
-  /** Cached auth dir file count — refreshed on connect, maintenance, and wipe. */
   private authFileCount = 0;
   private chats = new Map<
     string,
@@ -194,8 +203,8 @@ export class WhatsAppClient {
    * when a recipient device requests a retry (fixes "Waiting for this message").
    */
   private messageCache = new Map<string, Record<string, unknown>>();
-  private static readonly MESSAGE_CACHE_MAX = 2000;
-  private static readonly MESSAGE_CACHE_EVICT = 500;
+  static readonly MESSAGE_CACHE_MAX = 2000;
+  static readonly MESSAGE_CACHE_EVICT = 500;
 
   constructor(getConfig: () => BotConfig) {
     this.getConfig = getConfig;
@@ -213,10 +222,6 @@ export class WhatsAppClient {
     );
   }
 
-  /**
-   * Start periodic heartbeat logging to confirm the bot is alive.
-   * Logs connection state and message count every 30 seconds.
-   */
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatInterval = setInterval(() => {
@@ -231,7 +236,7 @@ export class WhatsAppClient {
         "WhatsApp",
         `♥ heartbeat: state=${this.connectionState} jid=${jidInfo} msgs=${rt.messagesReceived} (+${msgsSinceLast} since last check) reconnects=${rt.reconnectCount} authFiles=${this.authFileCount} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB`,
       );
-    }, 30_000);
+    }, HEARTBEAT_INTERVAL_MS);
   }
 
   /**
@@ -258,9 +263,7 @@ export class WhatsAppClient {
   }
 
   /**
-   * Connect to WhatsApp.
    * Resolves only when actually connected (QR scanned + authenticated).
-   * Shows QR code in terminal for scanning.
    */
   async connect(): Promise<void> {
     // End any existing socket before creating a new one.
@@ -274,9 +277,9 @@ export class WhatsAppClient {
 
     suppressLibsignalErrors();
 
-    // Dynamic imports outside Promise constructor to avoid async antipattern.
-    // If any import fails, the outer async method throws properly instead of
-    // leaving the inner Promise hanging forever.
+    // Imports stay outside the connection-wait Promise below: an import
+    // failure throws through the outer async method instead of hanging the
+    // Promise forever, and the Promise wraps only the event wait.
     const Baileys = await import("@whiskeysockets/baileys");
     const makeWASocket = Baileys.default;
     const {
@@ -295,7 +298,6 @@ export class WhatsAppClient {
       mkdirSync(authDir, { recursive: true });
     }
 
-    // Prune stale lid-mapping/pre-key files and log auth directory health.
     runAuthCleanup(authDir);
 
     // creds.json is the only file whose loss forces a QR re-scan. runAuthCleanup
@@ -319,8 +321,8 @@ export class WhatsAppClient {
       this.refreshAuthFileCount();
     }
 
-    // Load auth state — creds.json provides identity keys; session-*.json
-    // contain Signal Protocol sessions for DM and group contacts.
+    // creds.json provides identity keys; session-*.json contain Signal
+    // Protocol sessions for DM and group contacts.
     // Sessions are pruned by age (auth.retentionDays) once group
     // participants are known, and re-established automatically via pre-key
     // exchange when a message arrives — rc13's enableAutoSessionRecreation
@@ -466,12 +468,11 @@ export class WhatsAppClient {
       }
     });
 
-    // Wait for connection — the inner Promise wraps ONLY the event wait,
-    // not the imports. If the event throws, reject() is called properly.
+    // Wait for the connection event — imports above stay outside this Promise.
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(
         () => reject(new Error("Connection timeout")),
-        120_000,
+        CONNECT_TIMEOUT_MS,
       );
 
       sock.ev.on("connection.update", (update: any) => {
@@ -567,11 +568,10 @@ export class WhatsAppClient {
               this.connect().catch((err) => {
                 log.error("WhatsApp", `Reconnection after logout failed`, err);
               });
-            }, 2000);
+            }, RECONNECT_AFTER_RESET_MS);
           } else if (statusCode === DisconnectReason.badSession) {
-            // Escalate: 1st plain reconnect, 2nd surgical signal reset,
-            // 3rd full wipe + QR. Bad sessions are often transient —
-            // wiping on the first occurrence forces an avoidable QR scan.
+            // Bad sessions are often transient — wiping on the first
+            // occurrence forces an avoidable QR scan.
             clearTimeout(timeout);
             this.sock = null;
             const decision = getBadSessionDecision(
@@ -587,12 +587,12 @@ export class WhatsAppClient {
               const reset = resetSignalState(this.authDir);
               log.warn(
                 "WhatsApp",
-                `badSession (attempt ${decision.count}/3) — surgical signal state reset (deleted ${reset.deleted} files)`,
+                `badSession (attempt ${decision.count}/${BAD_SESSION_WIPE_THRESHOLD}) — surgical signal state reset (deleted ${reset.deleted} files)`,
               );
             } else if (decision.action === "wipe") {
               log.error(
                 "WhatsApp",
-                `badSession (attempt ${decision.count}/3) — full session wipe, QR rescan required`,
+                `badSession (attempt ${decision.count}/${BAD_SESSION_WIPE_THRESHOLD}) — full session wipe, QR rescan required`,
               );
               this.wipeAuthDir("badSession");
               this.badSessionCount = 0;
@@ -600,7 +600,7 @@ export class WhatsAppClient {
             } else {
               log.warn(
                 "WhatsApp",
-                `badSession (attempt ${decision.count}/3) — reconnecting without state reset`,
+                `badSession (attempt ${decision.count}/${BAD_SESSION_WIPE_THRESHOLD}) — reconnecting without state reset`,
               );
             }
             setTimeout(() => {
@@ -611,7 +611,7 @@ export class WhatsAppClient {
                   err,
                 );
               });
-            }, 2000);
+            }, RECONNECT_AFTER_RESET_MS);
           } else if (statusCode === DisconnectReason.restartRequired) {
             this.reconnectAttempts = 0;
             const delay = this.baseReconnectDelay;
@@ -640,11 +640,9 @@ export class WhatsAppClient {
                 "Another connection replaced this session — plain reconnect",
               );
             }
-            // Network error (connectionClosed, timedOut, etc.) — keep retrying
-            // with capped backoff. Only loggedOut/badSession reject (user must re-scan QR).
             const delay = Math.min(
               this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-              300_000, // cap at 5 minutes
+              MAX_RECONNECT_DELAY_MS,
             );
             this.reconnectAttempts++;
             log.warn(
@@ -690,13 +688,6 @@ export class WhatsAppClient {
   /**
    * Send or edit a message.
    * Used for command responses: send a loading message, then edit to final result.
-   *
-   * Strategy:
-   * - If messageId provided and single part → edit in-place
-   * - If messageId provided and multi-part → delete loading, send all parts fresh
-   * - If no messageId → send all parts as new messages
-   *
-   * Returns the message ID of the last sent/edited message for future reference.
    */
   async sendOrEdit(
     jid: string,
@@ -792,11 +783,9 @@ export class WhatsAppClient {
   }
 
   /**
-   * Cache a sent message for retry recovery.
-   * When a recipient can't decrypt a message, Baileys calls getMessage to
-   * re-fetch the original so it can re-encrypt with a fresh session.
+   * Cache a sent message for Baileys getMessage retry recovery
+   * (see the getMessage callback doc above).
    */
-
   private cacheSentMessage(
     result: { key?: { id?: string | null }; message?: any } | undefined,
   ): void {
@@ -905,7 +894,7 @@ export class WhatsAppClient {
         );
       }
 
-      const maxAgeMs = config.auth.retentionDays * 86_400_000;
+      const maxAgeMs = config.auth.retentionDays * DAY_MS;
       if (participantsLoaded) {
         const signalResult = pruneStaleSignalState(
           this.authDir,

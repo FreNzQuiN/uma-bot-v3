@@ -44,6 +44,8 @@ function makeConfig(
   };
 }
 
+const WEEKS_PER_MONTH = 30 / 7;
+
 describe("Bottom report: full output and basic structure", () => {
   let report: string;
 
@@ -179,8 +181,8 @@ describe("Bottom report: sort order", () => {
 describe("Bottom report: individual member calculations", () => {
   let report: string;
   let memberLines: string[];
-  const dataDay = 11;
-  const daysInMonth = 30;
+  let dataDay: number;
+  let daysInMonth: number;
 
   beforeAll(() => {
     report = generateBottomReport(
@@ -189,6 +191,12 @@ describe("Bottom report: individual member calculations", () => {
       computeMembers(snapshot, config),
     );
     memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
+    dataDay = getDataDayFromSnapshot(snapshot);
+    daysInMonth = new Date(
+      snapshot.members[0].year,
+      snapshot.members[0].month,
+      0,
+    ).getDate();
   });
 
   function verifyMember(
@@ -202,11 +210,10 @@ describe("Bottom report: individual member calculations", () => {
     const monthlyTarget = config.requirements.monthlyFans;
     const deficit = monthlyTarget - expectedGain;
     const proj = Math.round((expectedGain / dataDay) * daysInMonth);
-    const badge = isTransfer ? " \ud83d\udd04" : "";
+    const badge = isTransfer ? " 🔄" : "";
     const deficitStr =
-      deficit > 0 ? ` (kurang ${formatNumber(deficit)})` : " \u2705";
-    const projStr =
-      proj < monthlyTarget ? ` \u2192 ~${formatNumber(proj)}` : "";
+      deficit > 0 ? ` (kurang ${formatNumber(deficit)})` : " ✅";
+    const projStr = proj < monthlyTarget ? ` → ~${formatNumber(proj)}` : "";
     const expected = `${rank}. *${name}*${badge} \u2014 +${expectedGainStr}${deficitStr}${projStr}`;
     expect(line).toBe(expected);
   }
@@ -292,8 +299,8 @@ describe("Bottom report: transfer badges", () => {
       config,
       computeMembers(snapshot, config),
     );
-    expect(report).toContain("*TheTengOne* \ud83d\udd04");
-    expect(report).toContain("*VitoHoow* \ud83d\udd04");
+    expect(report).toContain("*TheTengOne* 🔄");
+    expect(report).toContain("*VitoHoow* 🔄");
   });
 
   it("non-transfer members have no badge", () => {
@@ -305,7 +312,7 @@ describe("Bottom report: transfer badges", () => {
     const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
       if (!line.includes("TheTengOne") && !line.includes("VitoHoow")) {
-        expect(line).not.toContain("\ud83d\udd04");
+        expect(line).not.toContain("🔄");
       }
     }
   });
@@ -364,7 +371,7 @@ describe("Bottom report: edge cases", () => {
       requirements: {
         monthlyFans: 1,
         weeklyFans: 0,
-        weeksInMonthEquivalent: 4.2857,
+        weeksInMonthEquivalent: WEEKS_PER_MONTH,
       },
     });
     const report = generateBottomReport(
@@ -374,9 +381,9 @@ describe("Bottom report: edge cases", () => {
     );
     const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
-      expect(line).toContain("\u2705");
+      expect(line).toContain("✅");
       expect(line).not.toContain("kurang");
-      expect(line).not.toContain("\u2192");
+      expect(line).not.toContain("→");
     }
   });
 
@@ -385,7 +392,7 @@ describe("Bottom report: edge cases", () => {
       requirements: {
         monthlyFans: 0,
         weeklyFans: 0,
-        weeksInMonthEquivalent: 4.2857,
+        weeksInMonthEquivalent: WEEKS_PER_MONTH,
       },
     });
     const report = generateBottomReport(
@@ -395,7 +402,7 @@ describe("Bottom report: edge cases", () => {
     );
     const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
-      expect(line).toContain("\u2705");
+      expect(line).toContain("✅");
     }
   });
 
@@ -404,7 +411,7 @@ describe("Bottom report: edge cases", () => {
       requirements: {
         monthlyFans: 25000000,
         weeklyFans: 5000000,
-        weeksInMonthEquivalent: 4.2857,
+        weeksInMonthEquivalent: WEEKS_PER_MONTH,
       },
     });
     const report = generateBottomReport(
@@ -455,7 +462,7 @@ describe("Bottom report: edge cases", () => {
       requirements: {
         monthlyFans: 1,
         weeklyFans: 0,
-        weeksInMonthEquivalent: 4.2857,
+        weeksInMonthEquivalent: WEEKS_PER_MONTH,
       },
     });
     const report = generateBottomReport(
@@ -465,24 +472,32 @@ describe("Bottom report: edge cases", () => {
     );
     const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
-      expect(line).not.toContain("\u2192");
+      expect(line).not.toContain("→");
     }
   });
 
-  it("uses source data day (11), not an offset", () => {
-    expect(getDataDayFromSnapshot(snapshot)).toBe(11);
-    const report = generateBottomReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-    );
-    expect(report).toContain("Perlu Perhatian");
+  it("projects the month total from the snapshot data day", () => {
+    const dataDay = getDataDayFromSnapshot(snapshot);
+    const daysInMonth = new Date(
+      snapshot.members[0].year,
+      snapshot.members[0].month,
+      0,
+    ).getDate();
+    const members = computeMembers(snapshot, config);
+    const yukil = members.find((m) => m.trainerName === "Yukil")!;
+    const proj = Math.round((yukil.monthlyGain / dataDay) * daysInMonth);
+    const report = generateBottomReport(snapshot, config, members);
+    expect(report).toContain(`→ ~${formatNumber(proj)}`);
   });
 
-  it("daysInMonth=30 for June", () => {
+  it("projects over the fixture month's full length", () => {
     const { year, month } = snapshot.members[0];
-    expect(year).toBe(2026);
-    expect(month).toBe(6);
-    expect(new Date(year, month, 0).getDate()).toBe(30);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const dataDay = getDataDayFromSnapshot(snapshot);
+    const members = computeMembers(snapshot, config);
+    const amanda = members.find((m) => m.trainerName === "Amanda")!;
+    const proj = Math.round((amanda.monthlyGain / dataDay) * daysInMonth);
+    const report = generateBottomReport(snapshot, config, members);
+    expect(report).toContain(`→ ~${formatNumber(proj)}`);
   });
 });

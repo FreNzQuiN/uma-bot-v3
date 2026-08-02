@@ -11,19 +11,16 @@ import {
 
 describe("getDataDate", () => {
   it("returns 2026-06-12 for June 12 03:00 UTC (12:00 JST)", () => {
-    // June 12 03:00 UTC = June 12 12:00 JST
     const date = new Date("2026-06-12T03:00:00Z");
     expect(getDataDate(date)).toBe("2026-06-12");
   });
 
   it("returns 2026-06-01 for June 1 14:00 UTC (23:00 JST)", () => {
-    // June 1 14:00 UTC = June 1 23:00 JST
     const date = new Date("2026-06-01T14:00:00Z");
     expect(getDataDate(date)).toBe("2026-06-01");
   });
 
   it("returns 2026-06-01 for June 1 14:59 UTC (23:59 JST)", () => {
-    // June 1 14:59 UTC = June 1 23:59 JST
     const date = new Date("2026-06-01T14:59:00Z");
     expect(getDataDate(date)).toBe("2026-06-01");
   });

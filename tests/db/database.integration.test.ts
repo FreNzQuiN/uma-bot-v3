@@ -14,7 +14,7 @@ afterEach(async () => {
   await db.close();
 });
 
-// Helper to remove a file and its parent dirs if they are empty
+// Recursive cleanup for temp files and dirs created by these tests
 function rmrfSync(dir: string): void {
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -25,14 +25,13 @@ describe("Database initialization", () => {
   it("creates tables without error", async () => {
     const newDb = new SqliteDatabase(":memory:");
     await newDb.initialize();
-    // Should not throw
     await newDb.close();
   });
 
   it("initialization is idempotent", async () => {
     const newDb = new SqliteDatabase(":memory:");
     await newDb.initialize();
-    await newDb.initialize(); // second call should not fail
+    await newDb.initialize();
     await newDb.close();
   });
 
@@ -97,7 +96,6 @@ describe("Schedule runs", () => {
     });
 
     await db.updateRunStatus(id, "sent");
-    // Verify by checking last successful run
     const last = await db.getLastSuccessfulRun("daily");
     expect(last).not.toBeNull();
   });
@@ -113,7 +111,6 @@ describe("Schedule runs", () => {
     });
 
     await db.updateRunStatus(id, "failed", "WhatsApp disconnected");
-    // Should not appear as successful
     const last = await db.getLastSuccessfulRun("daily");
     expect(last).toBeNull();
   });
@@ -155,7 +152,7 @@ describe("Alert events", () => {
       message: "First alert",
     });
 
-    // Should not throw due to UNIQUE constraint
+    // UNIQUE constraint makes the duplicate insert a no-op
     await db.recordAlert({
       alert_type: "performance_drop",
       event_key: key,
@@ -338,7 +335,6 @@ describe("Persistence round-trip", () => {
   });
 
   it("data survives close and reopen from disk", async () => {
-    // Phase 1: create, populate, save, close
     const db1 = new SqliteDatabase(tmpFile);
     try {
       await db1.initialize();
@@ -366,7 +362,6 @@ describe("Persistence round-trip", () => {
       await db1.close();
     }
 
-    // Phase 2: reopen with same path and verify
     const db2 = new SqliteDatabase(tmpFile);
     try {
       await db2.initialize();
@@ -441,7 +436,6 @@ describe("updateRunStatus sent_at timestamp", () => {
     expect(last).not.toBeNull();
     expect(last!.sent_at).not.toBeNull();
     expect(typeof last!.sent_at).toBe("string");
-    // sent_at should be a valid ISO date string
     expect(new Date(last!.sent_at!).getTime()).not.toBeNaN();
   });
 
@@ -573,7 +567,7 @@ describe("getExistingAlertKeys", () => {
     expect(result.has("pending-key")).toBe(false);
   });
 
-  it('DOES include keys with "suppressed" status', async () => {
+  it('DOES include keys with "sent" or "suppressed" status', async () => {
     const id = await db.recordAlert({
       alert_type: "performance_drop",
       event_key: "suppressed-key",
@@ -583,8 +577,7 @@ describe("getExistingAlertKeys", () => {
       message: "Suppressed alert",
     });
     await db.markAlertSent(id);
-    // Update status to suppressed directly via raw SQL since markAlertSent sets "sent"
-    // Instead, record with suppressed status via the status field
+    // markAlertSent sets "sent"; use the status field for "suppressed"
     const id2 = await db.recordAlert({
       alert_type: "performance_drop",
       event_key: "suppressed-key-2",
@@ -644,14 +637,12 @@ describe("File-based initialize with directory creation", () => {
   it("creates nested directories that do not exist", async () => {
     const dbPath = path.join(tmpDir, "subdir", "data", "bot.db");
 
-    // Parent directories do not exist yet
     expect(fs.existsSync(path.join(tmpDir, "subdir"))).toBe(false);
 
     const testDb = new SqliteDatabase(dbPath);
     try {
       await testDb.initialize();
 
-      // Directory tree should have been created
       expect(fs.existsSync(path.join(tmpDir, "subdir", "data"))).toBe(true);
 
       // sql.js keeps data in-memory; file only appears after save()
@@ -665,7 +656,6 @@ describe("File-based initialize with directory creation", () => {
       await testDb.save();
       expect(fs.existsSync(dbPath)).toBe(true);
 
-      // Reopen and verify data survived
       const db2 = new SqliteDatabase(dbPath);
       try {
         await db2.initialize();
@@ -681,7 +671,6 @@ describe("File-based initialize with directory creation", () => {
   });
 
   it("works when directory already exists", async () => {
-    // Pre-create the directory
     fs.mkdirSync(path.join(tmpDir, "existing"), { recursive: true });
     const dbPath = path.join(tmpDir, "existing", "bot.db");
 
@@ -702,7 +691,6 @@ describe("File-based initialize with directory creation", () => {
       await testDb.close();
     }
 
-    // Verify persisted
     const db2 = new SqliteDatabase(dbPath);
     try {
       await db2.initialize();

@@ -1,4 +1,5 @@
 import type { BotConfig } from "../types";
+import type { IDatabase } from "../db/types";
 import { log } from "../utils/logger";
 import { getTargetMonth } from "../utils/timezone";
 
@@ -18,6 +19,19 @@ export const SCHEDULED_REPORT_TYPES = [
 ] as const;
 export type ScheduledReportType = (typeof SCHEDULED_REPORT_TYPES)[number];
 
+export const PREV_MONTH_OFFSET = -1;
+
+function groupByTime(
+  entries: Array<{ type: string; time: string }>,
+): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const { type, time } of entries) {
+    if (!groups.has(time)) groups.set(time, []);
+    groups.get(time)!.push(type);
+  }
+  return groups;
+}
+
 export function getCollidingTypes(
   dayOfMonth: number,
   config: BotConfig,
@@ -31,11 +45,7 @@ export function getCollidingTypes(
   if (schedule.monthly.enabled && schedule.monthly.day === dayOfMonth)
     enabled.push({ type: "monthly", time: schedule.monthly.time });
 
-  const groups = new Map<string, string[]>();
-  for (const { type, time } of enabled) {
-    if (!groups.has(time)) groups.set(time, []);
-    groups.get(time)!.push(type);
-  }
+  const groups = groupByTime(enabled);
 
   const dailyGroup = Array.from(groups.values()).find((g) =>
     g.includes(SCHEDULED_DAILY),
@@ -53,16 +63,15 @@ export function groupByCollision(
   config: BotConfig,
 ): string[][] {
   const schedule = config.schedule;
-  const timeMap = new Map<string, string[]>();
+  const entries: Array<{ type: string; time: string }> = [];
   for (const reportType of types) {
     let time: string | undefined;
     if (reportType === SCHEDULED_DAILY) time = schedule.daily.time;
     else if (reportType === SCHEDULED_WEEKLY) time = schedule.weekly.time;
     else if (reportType === SCHEDULED_MONTHLY) time = schedule.monthly.time;
-    if (!time) continue;
-    if (!timeMap.has(time)) timeMap.set(time, []);
-    timeMap.get(time)!.push(reportType);
+    if (time) entries.push({ type: reportType, time });
   }
+  const timeMap = groupByTime(entries);
   const groups: string[][] = [];
   for (const [, grouped] of timeMap) {
     grouped.sort(
@@ -73,6 +82,42 @@ export function groupByCollision(
     groups.push(grouped);
   }
   return groups;
+}
+
+/**
+ * True when the daily handler will already send the combined report for
+ * reportType at the same scheduled time, so this handler must skip.
+ */
+export function dailyHandlerWillCombine(
+  collidingTypes: string[],
+  reportType: string,
+  dailyEnabled: boolean,
+): boolean {
+  return (
+    dailyEnabled &&
+    collidingTypes.includes(SCHEDULED_DAILY) &&
+    collidingTypes.includes(reportType)
+  );
+}
+
+export async function recordIndividualRuns(
+  db: IDatabase,
+  types: string[],
+  today: string,
+  scheduledAt: string,
+  targetJid: string,
+  isCatchUp: boolean,
+): Promise<void> {
+  for (const type of types) {
+    await db.recordRun({
+      report_type: type,
+      report_date: today,
+      scheduled_at: scheduledAt,
+      status: "sent",
+      is_catch_up: isCatchUp,
+      target_jid: targetJid,
+    });
+  }
 }
 
 export async function preFetchMonthlySnapshot(

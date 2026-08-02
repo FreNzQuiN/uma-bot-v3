@@ -30,9 +30,6 @@ afterAll(() => {
 });
 
 describe("Offset handling", () => {
-  // loadMonthSnapshot is already mocked globally to return []
-  // so historical month data won't be loaded from disk
-
   it("offset=0 uses current snapshot", () => {
     const report0 = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report0).toContain("📅 *Monthly Report — Juni 2026*");
@@ -41,7 +38,6 @@ describe("Offset handling", () => {
 
   it("offset=1 falls back to current month when no previous month snapshot exists", () => {
     const report1 = generateMonthlyReport(snapshot, config, computedMembers, 1);
-    // Falls back to current (June) snapshot
     expect(report1).toContain("📅 *Monthly Report — Juni 2026*");
   });
 
@@ -63,7 +59,6 @@ describe("Offset handling", () => {
 
   it("offset=2 also falls back to current month", () => {
     const report2 = generateMonthlyReport(snapshot, config, computedMembers, 2);
-    // Falls back to current (June) snapshot
     expect(report2).toContain("📅 *Monthly Report — Juni 2026*");
   });
 });
@@ -82,11 +77,9 @@ describe("Calendar-month offset calculation", () => {
   });
 
   it("offset=-1 on July 1 calculates target as June", () => {
-    // Mock: current date is July 1
     dataComponentsSpy = jest
       .spyOn(require("../../../src/utils/timezone"), "getDataDateComponents")
       .mockReturnValue({ year: 2026, month: 7, day: 1 });
-    // Override global mock: return our snapshot for June
     loadMonthSnapshotSpy.mockImplementation((...args: unknown[]) => {
       const year = args[0] as number;
       const month = args[1] as number;
@@ -101,12 +94,10 @@ describe("Calendar-month offset calculation", () => {
   });
 
   it("offset=-1 on January 1 calculates target as December previous year", () => {
-    // Mock: current date is January 1, 2027
     dataComponentsSpy = jest
       .spyOn(require("../../../src/utils/timezone"), "getDataDateComponents")
       .mockReturnValue({ year: 2027, month: 1, day: 1 });
-    // Global loadMonthSnapshot already returns [], so Dec 2026 is empty.
-    // Falls back to current (June 2026)
+    // Dec 2026 mock returns null → falls back to current snapshot
     const report = generateMonthlyReport(snapshot, config, computedMembers, -1);
     expect(report).toContain("📅 *Monthly Report — Juni 2026*");
   });
@@ -123,8 +114,10 @@ describe("Calendar-month offset calculation", () => {
 });
 
 describe("Empty snapshot guard", () => {
-  it("returns warning for empty members array", () => {
-    const emptySnapshot: Snapshot = {
+  let emptySnapshot: Snapshot;
+
+  beforeAll(() => {
+    emptySnapshot = {
       circle: snapshot.circle,
       members: [],
       club_rank: 8,
@@ -133,6 +126,9 @@ describe("Empty snapshot guard", () => {
       yesterday_fans_to_next_tier: 305715171,
       yesterday_fans_to_lower_tier: 20621702,
     };
+  });
+
+  it("returns warning for empty members array", () => {
     const result = generateMonthlyReport(
       emptySnapshot,
       config,
@@ -143,15 +139,6 @@ describe("Empty snapshot guard", () => {
   });
 
   it("empty warning has no other report content", () => {
-    const emptySnapshot: Snapshot = {
-      circle: snapshot.circle,
-      members: [],
-      club_rank: 8,
-      fans_to_next_tier: 349208495,
-      fans_to_lower_tier: 21848493,
-      yesterday_fans_to_next_tier: 305715171,
-      yesterday_fans_to_lower_tier: 20621702,
-    };
     const result = generateMonthlyReport(
       emptySnapshot,
       config,

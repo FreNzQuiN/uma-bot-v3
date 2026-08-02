@@ -1,7 +1,7 @@
 /**
  * Uma Club Bot v3 — Core Type Definitions
  *
- * Based on uma.moe API response shapes and v3-spec-2.md data model.
+ * Based on uma.moe API response shapes (see docs/uma-moe-api.md).
  */
 
 interface CircleData {
@@ -75,7 +75,7 @@ export interface ComputedMember {
   firstPositiveValue: number;
   monthlyGain: number;
   latestKnownGain: number;
-  weeklyGains: number[]; // gains per week block
+  weeklyGains: number[]; // aligned to WEEK_BLOCKS
 }
 
 export interface RankedMember {

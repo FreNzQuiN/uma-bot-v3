@@ -10,13 +10,16 @@ import type { IDatabase, MemberHistoryInsert } from "../db/types";
 import { getDataDate } from "../utils/timezone";
 import { log } from "../utils/logger";
 
+function isLeftMember(
+  viewerIds: Set<number>,
+  member: MemberHistoryRow,
+): boolean {
+  return !viewerIds.has(member.viewer_id);
+}
+
 /**
- * For each member:
- * - existing viewer_id: update trainer_name, circle_id, last_seen, transfer fields, status='active'
- * - new viewer_id: insert with first_seen=last_seen=today
- * - Historical members not in snapshot: status='left'
- *
- * Must be called before getLeftMembers so history is populated.
+ * Sync snapshot members into history: update existing, insert new, mark missing as 'left'.
+ * Must run before getLeftMembers so history is populated.
  */
 export async function updateMemberHistory(
   snapshot: Snapshot,
@@ -50,7 +53,7 @@ export async function updateMemberHistory(
   await db.upsertMembers(inserts);
 
   const leftInserts: MemberHistoryInsert[] = existingMembers
-    .filter((m) => !currentViewerIds.has(m.viewer_id))
+    .filter((m) => isLeftMember(currentViewerIds, m))
     .map((m) => ({
       viewer_id: m.viewer_id,
       trainer_name: m.trainer_name,
@@ -77,5 +80,5 @@ export async function getLeftMembers(
 
   const historicalMembers = await db.getMembers(circleId);
 
-  return historicalMembers.filter((m) => !currentViewerIds.has(m.viewer_id));
+  return historicalMembers.filter((m) => isLeftMember(currentViewerIds, m));
 }

@@ -19,7 +19,9 @@ import {
 import { formatNumber } from "../../../src/utils/format";
 import { CLUB_TIERS } from "../../../src/types";
 import type { Snapshot, BotConfig } from "../../../src/types";
-import { loadRealSnapshot, TRANSFER_NAMES, STALE_NAMES } from "../../_helpers";
+import { loadRealSnapshot, STALE_NAMES } from "../../_helpers";
+
+const STALE_AFTER_DAYS = 3;
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -69,9 +71,8 @@ describe("Snapshot data fundamentals", () => {
 });
 
 describe("Member classification", () => {
-  it("correctly identifies 4 stale members", () => {
+  it("correctly identifies 5 stale members", () => {
     const latestDataDay = getDataDayFromSnapshot(snapshot);
-    const staleAfterDays = 3;
 
     const staleNames: string[] = [];
     for (const member of snapshot.members) {
@@ -79,12 +80,13 @@ describe("Member classification", () => {
       const isTransfer = isTransferMember(member);
       if (
         !isTransfer &&
-        isStaleForReport(member.daily_fans, latestDataDay, staleAfterDays)
+        isStaleForReport(member.daily_fans, latestDataDay, STALE_AFTER_DAYS)
       ) {
         staleNames.push(member.trainer_name);
       }
     }
 
+    // STALE_NAMES holds the 4 left members; "jgd" is the 5th stale at threshold 3
     expect(staleNames.sort()).toEqual([...STALE_NAMES, "jgd"].sort());
     expect(staleNames.length).toBe(5);
   });
@@ -106,7 +108,7 @@ describe("Member classification", () => {
     expect(transferNames.length).toBe(6);
   });
 
-  it("active + transfer + stale = total members (30 + 4 = 34)", () => {
+  it("active + transfer + stale = total members (23 + 6 + 5 = 34)", () => {
     const latestDataDay = getDataDayFromSnapshot(snapshot);
     let active = 0;
     let stale = 0;
@@ -119,7 +121,7 @@ describe("Member classification", () => {
         transfer++;
       } else if (
         latestPositiveDay === 0 ||
-        isStaleForReport(member.daily_fans, latestDataDay, 3)
+        isStaleForReport(member.daily_fans, latestDataDay, STALE_AFTER_DAYS)
       ) {
         stale++;
       } else {

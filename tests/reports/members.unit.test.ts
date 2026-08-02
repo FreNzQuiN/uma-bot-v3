@@ -1,10 +1,9 @@
 /**
  * Tests for members report generator.
  *
- * Covers: basic report generation, left members section when DB provided,
- * edge cases (no DB, empty left members, Unicode names),
- * sort order verification against real snapshot data,
- * badge logic, format correctness, and adversarial scenarios.
+ * Covers: basic report generation, edge cases (no DB, empty members,
+ * Unicode names), badge logic, sort order against real snapshot data,
+ * and plain-text formatting.
  */
 
 import { readFileSync } from "fs";
@@ -14,87 +13,10 @@ import { computeMembers } from "../../src/reports/compute";
 import { formatNumber } from "../../src/utils/format";
 import { getDefaultConfig } from "../../src/config";
 import type { Snapshot, BotConfig, MemberData } from "../../src/types";
+import { makeCumulativeFans, makeSnapshot } from "../_helpers";
 
 const ROOT = join(__dirname, "..");
 
-function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
-  return {
-    circle: {
-      circle_id: 100,
-      name: "TestClub",
-      comment: "",
-      leader_viewer_id: 1,
-      leader_name: "Leader",
-      member_count: 2,
-      join_style: 0,
-      policy: 0,
-      created_at: "",
-      last_updated: "2026-06-12T14:00:00Z",
-      monthly_rank: 100,
-      monthly_point: 1000000,
-      last_month_rank: null,
-      last_month_point: null,
-      archived: false,
-      yesterday_updated: null,
-      yesterday_points: null,
-      yesterday_rank: null,
-      live_points: null,
-      live_rank: null,
-      last_live_update: null,
-    },
-    members: [
-      {
-        id: 1,
-        circle_id: 100,
-        viewer_id: 1001,
-        trainer_name: "Alice",
-        shame_score: null,
-        year: 2026,
-        month: 6,
-        daily_fans: makeCumulativeFans([
-          100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100,
-        ]),
-        last_updated: "2026-06-12",
-      },
-      {
-        id: 2,
-        circle_id: 100,
-        viewer_id: 1002,
-        trainer_name: "Bob",
-        shame_score: null,
-        year: 2026,
-        month: 6,
-        daily_fans: makeCumulativeFans([
-          50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550,
-        ]),
-        last_updated: "2026-06-12",
-      },
-    ],
-    club_rank: 8,
-    fans_to_next_tier: 500000,
-    fans_to_lower_tier: 50000,
-    yesterday_fans_to_next_tier: 600000,
-    yesterday_fans_to_lower_tier: 40000,
-    ...overrides,
-  };
-}
-
-/**
- * Build a 32-element cumulative daily_fans array from an array of daily values.
- * dailyValues[0] = day1 total, dailyValues[1] = day2 total, etc.
- * Remaining entries are 0.
- */
-function makeCumulativeFans(dailyValues: number[]): number[] {
-  const arr = new Array(32).fill(0);
-  for (let i = 0; i < dailyValues.length && i < 32; i++) {
-    arr[i] = dailyValues[i];
-  }
-  return arr;
-}
-
-/**
- * Create a member with previous_circle info (transfer member).
- */
 function makeTransferMember(
   overrides: Partial<MemberData> & { viewer_id: number; trainer_name: string },
 ): MemberData {
@@ -112,9 +34,6 @@ function makeTransferMember(
   };
 }
 
-/**
- * Create a stale member (old last_updated, only early days have data).
- */
 function makeStaleMember(
   overrides: Partial<MemberData> & { viewer_id: number; trainer_name: string },
 ): MemberData {
@@ -404,7 +323,7 @@ describe("generateMembersReport", () => {
       expect(report).not.toContain("(dari");
     });
 
-    it("left member has 🚪 badge", async () => {
+    it("stale member stays stale when ghost count is zero", async () => {
       const snapshot = makeSnapshot({
         members: [
           {
@@ -427,10 +346,7 @@ describe("generateMembersReport", () => {
         computeMembers(snapshot, config),
       );
 
-      // Status is 'stale' (no positive days), but with member_count gap=0,
-      // stays stale. If member_count was 0, would be 'left'.
-      // This test uses a custom snapshot where ghostCount = max(0, 1 - 2) = 0
-      // so status stays 'stale' and gets ⚠️ badge.
+      // ghostCount = max(0, 1 - 2) = 0 → status stays 'stale', not 'left'
       expect(report).toContain("• *Ghost* ⚠️");
     });
   });
@@ -504,7 +420,7 @@ describe("generateMembersReport", () => {
       );
       const lines = report.split("\n").filter((l) => l.startsWith("•"));
 
-      // Both are active (transfers are active with badge), sorted by gain desc
+      // Transfers count as active members with badge
       expect(lines[0]).toContain("TransferHigh");
       expect(lines[1]).toContain("ActiveLow");
     });
@@ -693,10 +609,7 @@ describe("generateMembersReport", () => {
       );
       const memberLines = report.split("\n").filter((l) => l.startsWith("•"));
 
-      // Find boundaries
       const firstLeftIdx = memberLines.findIndex((l) => l.includes("🚪"));
-
-      // All active (including transfers with 🔄) before first left
       expect(firstLeftIdx).toBe(30); // 30 active members (24 regular + 6 transfer)
     });
 

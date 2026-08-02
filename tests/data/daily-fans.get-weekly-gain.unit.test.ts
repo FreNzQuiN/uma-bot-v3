@@ -1,9 +1,3 @@
-/**
- * Tests for getWeeklyGain.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import { getWeeklyGain } from "../../src/data/daily-fans";
 import {
   RYU_DAILY_FANS,
@@ -13,7 +7,6 @@ import {
 } from "./daily-fans.fixtures";
 
 describe("getWeeklyGain", () => {
-  // --- Real data tests ---
   it("returns correct week 1 gain for Ryu", () => {
     // First positive: 316856492 (day 1), Last positive: 329925021 (day 7)
     // Gain = 329925021 - 316856492 = 13068529
@@ -92,11 +85,8 @@ describe("getWeeklyGain", () => {
   });
 
   it("returns correct week 5 gain for a member with late-month data", () => {
-    // Create a member with data only in week 5 (days 29-31)
     const arr = new Array(28).fill(0);
-    arr.push(100000, 105000, 110000); // days 29, 30, 31
-    // First positive: 100000, Last positive: 110000
-    // Gain = 10000
+    arr.push(100000, 105000, 110000);
     expect(getWeeklyGain(arr, 5)).toBe(10000);
   });
 });

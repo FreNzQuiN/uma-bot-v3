@@ -18,6 +18,9 @@ import {
   buildReportHeader,
 } from "./format";
 
+const FIRST_DAY_NO_GAIN_MSG =
+  "ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya";
+
 export function generateDailyReport(
   snapshot: Snapshot,
   config: BotConfig,
@@ -98,9 +101,7 @@ export function generateDailyReport(
   if (staleMembers.length > 0) {
     lines.push("");
     if (contributorCount === 0 && adjustedDataDay <= 1) {
-      lines.push(
-        "ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya",
-      );
+      lines.push(FIRST_DAY_NO_GAIN_MSG);
     } else {
       lines.push("*⚠️ Belum aktif hari ini:*");
       for (const s of staleMembers) {
@@ -110,9 +111,7 @@ export function generateDailyReport(
   } else if (contributorCount === 0 && activeCount > 0) {
     lines.push("");
     if (adjustedDataDay <= 1) {
-      lines.push(
-        "ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya",
-      );
+      lines.push(FIRST_DAY_NO_GAIN_MSG);
     } else {
       lines.push("ℹ️ Hari ini: belum ada kontribusi tercatat");
     }

@@ -18,6 +18,14 @@ function readFileLines(filePath: string): string[] {
   return content.split("\n").filter((line) => line.length > 0);
 }
 
+const TINY_LOG_SIZE = 0.00001;
+
+async function waitForRotation(): Promise<void> {
+  // Rotation is scheduled via setImmediate; double flush guards against flakiness
+  await waitImmediate();
+  await waitImmediate();
+}
+
 beforeEach(() => {
   tmpDir = createTmpDir();
   // Disable console output during tests, but enable file output (pointed at tmp dirs)
@@ -35,7 +43,6 @@ afterEach(() => {
     fileOutput: false,
   });
 
-  // Clean up temp directory
   try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   } catch {
@@ -57,7 +64,6 @@ describe("Logger configure()", () => {
 
     const config = log.getConfig();
     expect(config.maxFiles).toBe(7);
-    // Other defaults preserved
     expect(config.level).toBe("info");
     expect(config.maxSizeMB).toBe(5);
   });
@@ -76,17 +82,14 @@ describe("Logger configure()", () => {
     const logFile1 = path.join(tmpDir, "sub1", "first.log");
     const logFile2 = path.join(tmpDir, "sub2", "second.log");
 
-    // First configure: creates sub1/
     log.configure({ logFile: logFile1 });
     log.info("Test", "first");
     expect(fs.existsSync(path.join(tmpDir, "sub1"))).toBe(true);
 
-    // Change logFile to a new path: should create sub2/ on next write
     log.configure({ logFile: logFile2 });
     log.info("Test", "second");
     expect(fs.existsSync(path.join(tmpDir, "sub2"))).toBe(true);
 
-    // Verify both files have content
     expect(fs.existsSync(logFile1)).toBe(true);
     expect(fs.existsSync(logFile2)).toBe(true);
   });
@@ -206,7 +209,6 @@ describe("Logger file writing", () => {
     // configure() already calls ensureLogDir() which creates the directory
     expect(fs.existsSync(logDir)).toBe(true);
 
-    // info() creates the actual log file
     log.info("Test", "creating file");
     expect(fs.existsSync(logFile)).toBe(true);
   });
@@ -257,18 +259,15 @@ describe("Logger rotation", () => {
   test("rotation triggers when file exceeds maxSizeMB and creates rotated file", async () => {
     const logFile = path.join(tmpDir, "bot.log");
     // Set maxSizeMB very small (~10 bytes) so a single log line triggers rotation
-    log.configure({ logFile, maxSizeMB: 0.00001, maxFiles: 3 });
+    log.configure({ logFile, maxSizeMB: TINY_LOG_SIZE, maxFiles: 3 });
 
     // First write: file doesn't exist yet, so no rotation check
     log.info("Tag", "first write");
     expect(fs.existsSync(logFile)).toBe(true);
 
-    // Second write: file now exceeds 0.00001 MB, triggers rotation
     log.info("Tag", "second write triggers rotation");
 
-    // Rotation is scheduled via setImmediate — wait for it
-    await waitImmediate();
-    await waitImmediate(); // extra flush to be safe
+    await waitForRotation();
 
     // The original file was renamed to bot-1.log
     const rotatedFile = path.join(tmpDir, "bot-1.log");
@@ -284,18 +283,15 @@ describe("Logger rotation", () => {
   test("after rotation, current log entry is not lost", async () => {
     const logFile = path.join(tmpDir, "bot.log");
     const uniqueMessage = `unique-${Date.now()}-payload`;
-    log.configure({ logFile, maxSizeMB: 0.00001, maxFiles: 3 });
+    log.configure({ logFile, maxSizeMB: TINY_LOG_SIZE, maxFiles: 3 });
 
-    // First write creates the file
     log.info("Tag", "filler");
 
     // Second write triggers rotation — the unique message is appended THEN rotated
     log.info("Tag", uniqueMessage);
 
-    await waitImmediate();
-    await waitImmediate();
+    await waitForRotation();
 
-    // The unique message should be in the rotated file (bot-1.log)
     const rotatedFile = path.join(tmpDir, "bot-1.log");
     expect(fs.existsSync(rotatedFile)).toBe(true);
     const rotatedContent = fs.readFileSync(rotatedFile, "utf-8");
@@ -306,45 +302,35 @@ describe("Logger rotation", () => {
     const logFile = path.join(tmpDir, "bot.log");
     // maxFiles=2 means: bot.log + bot-1.log + bot-2.log
     // When bot-2.log exists, it gets deleted before shifting
-    log.configure({ logFile, maxSizeMB: 0.00001, maxFiles: 2 });
+    log.configure({ logFile, maxSizeMB: TINY_LOG_SIZE, maxFiles: 2 });
 
-    // Create the file
     log.info("Tag", "round 1");
-    // Trigger first rotation: bot.log → bot-1.log
     log.info("Tag", "round 1 rotate");
-    await waitImmediate();
-    await waitImmediate();
+    await waitForRotation();
 
     expect(fs.existsSync(path.join(tmpDir, "bot-1.log"))).toBe(true);
 
-    // Write enough to trigger second rotation
     log.info("Tag", "round 2");
     log.info("Tag", "round 2 rotate");
-    await waitImmediate();
-    await waitImmediate();
+    await waitForRotation();
 
-    // After second rotation: bot-1.log should be shifted to bot-2.log
-    // and a new bot-1.log should exist (from the rotated bot.log)
     expect(fs.existsSync(path.join(tmpDir, "bot-2.log"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "bot-1.log"))).toBe(true);
   });
 
   test("rotation does not happen when maxFiles is 0", async () => {
     const logFile = path.join(tmpDir, "bot.log");
-    log.configure({ logFile, maxSizeMB: 0.00001, maxFiles: 0 });
+    log.configure({ logFile, maxSizeMB: TINY_LOG_SIZE, maxFiles: 0 });
 
-    // Write multiple times to exceed size
     log.info("Tag", "line 1");
     log.info("Tag", "line 2");
     log.info("Tag", "line 3");
 
     await waitImmediate();
 
-    // No rotated file should exist
     const rotatedFile = path.join(tmpDir, "bot-1.log");
     expect(fs.existsSync(rotatedFile)).toBe(false);
 
-    // Original file should have all content
     const lines = readFileLines(logFile);
     expect(lines).toHaveLength(3);
   });
@@ -364,6 +350,9 @@ describe("Logger error parameter", () => {
     expect(content).toContain("connection refused");
     expect(content).toContain("Error");
     expect(content).toContain("[ERROR]");
+    // File output keeps the full stack (console strips it, file does not).
+    // Newlines are flattened to spaces by formatLine's message sanitization.
+    expect(content).toContain("    at ");
   });
 
   test("error() with string logs the string", () => {
@@ -397,7 +386,6 @@ describe("Logger error parameter", () => {
     const err = new Error("timeout");
     log.info("API", "request slow", err);
 
-    // err.stack contains newlines, so use raw content
     const content = fs.readFileSync(logFile, "utf-8");
     expect(content).toContain("request slow");
     expect(content).toContain("timeout");

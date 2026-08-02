@@ -7,7 +7,7 @@ import { loadRealSnapshot } from "../_helpers";
 
 const realSnapshot: Snapshot = loadRealSnapshot();
 
-describe("Bug 4: Atomic snapshot writes", () => {
+describe("atomic snapshot writes survive a crash mid-write", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -21,7 +21,7 @@ describe("Bug 4: Atomic snapshot writes", () => {
   it("saveSnapshot writes a valid file that can be read back", () => {
     const snap: Snapshot = {
       ...realSnapshot,
-      members: realSnapshot.members.slice(0, 2), // small subset
+      members: realSnapshot.members.slice(0, 2),
     };
     const savedPath = saveSnapshot(snap, "2026-06-13", tmpDir);
     expect(fs.existsSync(savedPath)).toBe(true);
@@ -49,11 +49,9 @@ describe("Bug 4: Atomic snapshot writes", () => {
     };
     const savedPath = saveSnapshot(snap, "2026-06-13", tmpDir);
 
-    // The file should be complete JSON
     const raw = fs.readFileSync(savedPath, "utf-8");
     expect(() => JSON.parse(raw)).not.toThrow();
 
-    // Check it has the expected structure
     const parsed = JSON.parse(raw);
     expect(parsed).toHaveProperty("circle");
     expect(parsed).toHaveProperty("members");

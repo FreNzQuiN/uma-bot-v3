@@ -21,7 +21,6 @@ async function main() {
 
   const page = await context.newPage();
 
-  // Capture all API responses
   const apiResponses: any[] = [];
   page.on('response', async (response) => {
     const url = response.url();
@@ -46,25 +45,20 @@ async function main() {
   });
   await page.waitForTimeout(3000);
 
-  // Screenshot
   await page.screenshot({ path: 'data/uma-moe-circle.png', fullPage: true });
   console.log('Screenshot saved to data/uma-moe-circle.png');
 
-  // Get page title
   const title = await page.title();
   console.log(`Page title: ${title}`);
 
-  // Get the full HTML (save to file for analysis)
   const html = await page.content();
   const fs = require('fs');
   fs.writeFileSync('data/uma-moe-circle.html', html);
   console.log('HTML saved to data/uma-moe-circle.html');
 
-  // Look for member-related elements
   const memberInfo = await page.evaluate(() => {
     const results: any[] = [];
 
-    // Find all elements with member/trainer/player in class or data attributes
     const allElements = document.querySelectorAll('*');
     const memberKeywords = ['member', 'trainer', 'player', 'circle-member', 'rank-member'];
 
@@ -92,7 +86,6 @@ async function main() {
   console.log('\n--- Member-related elements ---');
   console.log(JSON.stringify(memberInfo, null, 2));
 
-  // Look for any text indicating left/inactive status
   const statusText = await page.evaluate(() => {
     const bodyText = document.body.innerText;
     const lines = bodyText.split('\n').filter((line) => {
@@ -114,7 +107,6 @@ async function main() {
   console.log('\n--- Status-related text ---');
   statusText.forEach((line: string) => console.log(line));
 
-  // Check API responses for any status fields
   console.log('\n--- API Responses ---');
   for (const resp of apiResponses) {
     console.log(`\n${resp.status} ${resp.url}`);
@@ -122,12 +114,10 @@ async function main() {
     if (resp.body?.members) {
       console.log(`Members count: ${resp.body.members.length}`);
 
-      // Check for any status/state/type fields in member objects
       const firstMember = resp.body.members[0];
       if (firstMember) {
         console.log('First member keys:', Object.keys(firstMember));
 
-        // Look for any field that might indicate status
         const statusFields = Object.keys(firstMember).filter((key) => {
           const lower = key.toLowerCase();
           return (
@@ -145,7 +135,6 @@ async function main() {
         }
       }
 
-      // Check all members for any fields not in our snapshot
       const allKeys = new Set<string>();
       for (const member of resp.body.members) {
         for (const key of Object.keys(member)) {

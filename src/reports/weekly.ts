@@ -116,7 +116,7 @@ export function generateWeeklyReport(
     }
   }
 
-  // Stale members (rolling window: consecutive zero-gain days at end of target week)
+  // Stale window over viewed end day: definition in buildStaleSection
   const viewedEndDay = Math.min(block.end, latestDataDay);
   const staleThreshold = config.memberStatus.staleAfterDaysWeekly;
   lines.push(

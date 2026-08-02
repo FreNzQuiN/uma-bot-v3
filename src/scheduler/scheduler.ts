@@ -12,7 +12,10 @@ import type { IDatabase } from "../db/types";
 import { getDataDate, getDisplayDay } from "../utils/timezone";
 import { log } from "../utils/logger";
 import {
+  dailyHandlerWillCombine,
   getCollidingTypes,
+  PREV_MONTH_OFFSET,
+  recordIndividualRuns,
   SCHEDULED_DAILY,
   SCHEDULED_WEEKLY,
   SCHEDULED_MONTHLY,
@@ -142,23 +145,20 @@ export class Scheduler {
       if (this.onCombinedReport) {
         await this.onCombinedReport(pending, options);
       } else {
-        // Fallback: send individually
         for (const type of pending) {
           await this.onReport(type, options);
         }
       }
       await this.db.updateRunStatus(runId, "sent");
       // Record individual runs so catch-up detection doesn't re-send
-      for (const type of pending) {
-        await this.db.recordRun({
-          report_type: type,
-          report_date: today,
-          scheduled_at: scheduledAt,
-          status: "sent",
-          is_catch_up: false,
-          target_jid: targetJid,
-        });
-      }
+      await recordIndividualRuns(
+        this.db,
+        pending,
+        today,
+        scheduledAt,
+        targetJid,
+        false,
+      );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       await this.db.updateRunStatus(runId, "failed", errorMsg);
@@ -231,9 +231,11 @@ export class Scheduler {
               const dailyEnabled = this.config.schedule.daily.enabled;
 
               if (
-                collidingTypes.includes(SCHEDULED_DAILY) &&
-                collidingTypes.includes(SCHEDULED_WEEKLY) &&
-                dailyEnabled
+                dailyHandlerWillCombine(
+                  collidingTypes,
+                  SCHEDULED_WEEKLY,
+                  dailyEnabled,
+                )
               ) {
                 return;
               }
@@ -277,11 +279,12 @@ export class Scheduler {
               const collidingTypes = getCollidingTypes(today, this.config);
               const dailyEnabled = this.config.schedule.daily.enabled;
 
-              // Skip if daily handler will combine with monthly (same time)
               if (
-                collidingTypes.includes(SCHEDULED_DAILY) &&
-                collidingTypes.includes(SCHEDULED_MONTHLY) &&
-                dailyEnabled
+                dailyHandlerWillCombine(
+                  collidingTypes,
+                  SCHEDULED_MONTHLY,
+                  dailyEnabled,
+                )
               ) {
                 return;
               }
@@ -297,7 +300,9 @@ export class Scheduler {
                 return;
               }
 
-              await this.recordAndSend(SCHEDULED_MONTHLY, { offset: -1 });
+              await this.recordAndSend(SCHEDULED_MONTHLY, {
+                offset: PREV_MONTH_OFFSET,
+              });
             } catch (error) {
               log.error("Scheduler", "Monthly report failed", error);
             }

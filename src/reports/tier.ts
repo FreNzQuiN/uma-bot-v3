@@ -6,7 +6,7 @@
  */
 
 import { Snapshot, BotConfig, CLUB_TIERS } from "../types";
-import type { ComputedMember } from "../types";
+import type { ComputedMember, TierData } from "../types";
 import { formatNumber } from "../utils/format";
 import { buildDateStr, buildFooter, buildReportHeader } from "./format";
 import { computeTierData } from "../data/daily-fans";
@@ -22,13 +22,13 @@ export function generateTierReport(
 
   const tier = computeTierData(snapshot);
 
-  const riskEmoji: Record<string, string> = {
+  const riskEmoji: Record<TierData["riskLevel"], string> = {
     LOW: "✅",
     MEDIUM: "⚠️",
     HIGH: "🚨",
   };
 
-  const outcomeText: Record<string, string> = {
+  const outcomeText: Record<TierData["projectedOutcome"], string> = {
     promote: "Promosi 🎉",
     stay: "Bertahan",
     demotion_risk: "Degradasi risk ⚠️",

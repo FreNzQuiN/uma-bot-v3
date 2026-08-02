@@ -12,6 +12,11 @@
 
 import { Snapshot, WEEK_BLOCKS, TierData, CLUB_TIERS } from "../types";
 
+const MAX_DAYS = 31;
+const FALLBACK_DAYS_IN_MONTH = 30;
+const HIGH_RISK_MAX_BUFFER_DAYS = 3;
+const MEDIUM_RISK_MAX_BUFFER_DAYS = 7;
+
 /** Negative values are transfer markers, zero means no data. */
 function isPositive(value: number | undefined): boolean {
   return typeof value === "number" && value > 0;
@@ -32,7 +37,7 @@ function effectiveValue(v: number, includeTransfer: boolean): number {
  * Ignores negative (transfer markers) and zero values.
  */
 export function getLatestDataDay(dailyFans: number[]): number {
-  const maxIndex = Math.min(dailyFans.length, 31) - 1;
+  const maxIndex = Math.min(dailyFans.length, MAX_DAYS) - 1;
   for (let i = maxIndex; i >= 0; i--) {
     if (isPositive(dailyFans[i])) {
       return i + 1;
@@ -94,8 +99,9 @@ export function getDailyGain(
 }
 
 /**
- * Gain = last positive value in block - first positive value in block.
- * Returns 0 if no positive values or only one positive value in the block.
+ * Gain = last positive value in the block - baseline.
+ * Baseline = last positive value before the block, or the first value in the block if none.
+ * Returns 0 if no positive values in the block.
  */
 export function getWeeklyGain(
   dailyFans: number[],
@@ -141,7 +147,7 @@ export function getWeeklyGain(
   return lastPositiveInBlock - baseline;
 }
 
-/** Returns 0 if no positive values or only one (baseline only). */
+/** Returns 0 if there is no data, or data exists on only one day. */
 export function getMonthlyGain(
   dailyFans: number[],
   includeTransfer: boolean = false,
@@ -196,9 +202,8 @@ export function isTransferMember(member: {
 }
 
 /**
- * Compute the rolling average of the last N days of gains.
- * Only counts days where gain can be computed (both current and previous positive).
- * Returns 0 if no valid gain days.
+ * Rolling average of daily gains over the last `days` days ending at latestDataDay.
+ * Only counts days with gain > 0. Returns 0 if no valid gain days.
  */
 export function computeRollingAverage(
   dailyFans: number[],
@@ -210,7 +215,6 @@ export function computeRollingAverage(
     return 0;
   }
 
-  // Collect gains from the last `days` days ending at latestDataDay
   const gains: number[] = [];
   const startDay = Math.max(2, latestDataDay - days + 1); // earliest day we check (day 1 can't have gain)
 
@@ -238,8 +242,8 @@ export function countActiveDays(
   latestDataDay?: number,
   includeTransfer: boolean = false,
 ): number {
-  // Cap at 31 to avoid scanning the unused padding element at index 31
-  const maxDay = latestDataDay ?? Math.min(dailyFans.length, 31);
+  // Avoid scanning the unused padding element at index MAX_DAYS.
+  const maxDay = latestDataDay ?? Math.min(dailyFans.length, MAX_DAYS);
   let count = 0;
   if (
     maxDay >= 1 &&
@@ -257,7 +261,6 @@ export function countActiveDays(
   return count;
 }
 
-/** Resets the counter on any day with positive gain. */
 export function countConsecutiveZeroDaysAtEnd(
   dailyFans: number[],
   latestDataDay: number,
@@ -272,10 +275,8 @@ export function countConsecutiveZeroDaysAtEnd(
 }
 
 /**
- * Check if a member is stale for a specific report type.
- * Uses rolling window of consecutive zero-gain days.
- * @param threshold - Number of consecutive zero days needed to be stale.
- *                    If <= 0, stale check is disabled.
+ * True if the trailing zero-gain streak reaches threshold.
+ * threshold <= 0 disables the check.
  */
 export function isStaleForReport(
   dailyFans: number[],
@@ -286,7 +287,6 @@ export function isStaleForReport(
   return countConsecutiveZeroDaysAtEnd(dailyFans, latestDataDay) >= threshold;
 }
 
-/** Returns the max latest data day across all members. */
 export function getDataDayFromSnapshot(snapshot: Snapshot): number {
   let maxDay = 0;
 
@@ -312,30 +312,25 @@ export function computeTierData(snapshot: Snapshot): TierData {
           snapshot.members[0].month,
           0,
         ).getDate()
-      : 30;
+      : FALLBACK_DAYS_IN_MONTH;
   const daysLeft = Math.max(0, daysInMonth - dataDay);
 
-  // Current pace: total fans accumulated / days elapsed
   const totalFans = snapshot.circle.monthly_point;
   const currentPace = dataDay > 0 ? Math.round(totalFans / dataDay) : 0;
 
-  // Required pace: promotion gap / days left
   const requiredPace =
     daysLeft > 0 ? Math.round(fans_to_next_tier / daysLeft) : 0;
 
-  // Risk assessment per spec:
-  // LOW = buffer >= 7 days of current pace
-  // MEDIUM = buffer >= 3 and < 7 days of current pace
-  // HIGH = buffer < 3 days of current pace
+  // Risk per spec: buffer < 3 days → HIGH, 3–7 → MEDIUM, ≥ 7 → LOW.
   let riskLevel: TierData["riskLevel"] = "LOW";
   let projectedOutcome: TierData["projectedOutcome"] = "unknown";
 
   if (fans_to_lower_tier > 0 && currentPace > 0) {
     const bufferDays = fans_to_lower_tier / currentPace;
-    if (bufferDays < 3) {
+    if (bufferDays < HIGH_RISK_MAX_BUFFER_DAYS) {
       riskLevel = "HIGH";
       projectedOutcome = "demotion_risk";
-    } else if (bufferDays < 7) {
+    } else if (bufferDays < MEDIUM_RISK_MAX_BUFFER_DAYS) {
       riskLevel = "MEDIUM";
       projectedOutcome = "stay";
     } else {

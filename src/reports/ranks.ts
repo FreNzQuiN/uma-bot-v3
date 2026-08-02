@@ -9,6 +9,7 @@ import { Snapshot, BotConfig } from "../types";
 import type { ComputedMember } from "../types";
 import { formatNumber, sanitizeName } from "../utils/format";
 import { buildDateStr, buildFooter, buildReportHeader } from "./format";
+import { TOP_N } from "./helpers";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -24,7 +25,7 @@ export function generateRanksReport(
   const sorted = [...computedMembers]
     .filter((m) => m.status === "active")
     .sort((a, b) => b.monthlyGain - a.monthlyGain)
-    .slice(0, 10);
+    .slice(0, TOP_N);
 
   const lines: string[] = [];
   const header = buildReportHeader(snapshot, `🏆 *Peringkat Bulanan*`);

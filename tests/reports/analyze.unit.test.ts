@@ -15,8 +15,18 @@ import { generateAnalyzeReport } from "../../src/reports/analyze";
 import { getDefaultConfig } from "../../src/config";
 import { computeMembers } from "../../src/reports/compute";
 import { getDataDayFromSnapshot } from "../../src/data/snapshot";
+import { countActiveDays } from "../../src/data/daily-fans";
+import { formatNumber } from "../../src/utils/format";
 import type { Snapshot, BotConfig } from "../../src/types";
-import { loadRealSnapshot } from "../_helpers";
+import {
+  loadRealSnapshot,
+  WHATSAPP_MAX_LENGTH,
+  makeCumulativeFansSeries,
+} from "../_helpers";
+
+const MIN_ANALYSIS_LENGTH = 300;
+const TEST_CIRCLE_ID = 99999;
+const VIEWER_ID_OFFSET = 1_000_000;
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -38,8 +48,8 @@ function buildMember(
 ): Snapshot["members"][0] {
   return {
     id: memberIdCounter++,
-    circle_id: 99999,
-    viewer_id: memberIdCounter + 1000000,
+    circle_id: TEST_CIRCLE_ID,
+    viewer_id: memberIdCounter + VIEWER_ID_OFFSET,
     trainer_name: name,
     shame_score: null,
     year: 2026,
@@ -50,47 +60,27 @@ function buildMember(
   };
 }
 
-function makeCumulativeFans(
-  startValue: number,
-  dailyGain: number,
-  activeDays: number,
-): number[] {
-  const fans: number[] = [];
-  let current = startValue;
-  for (let i = 0; i < 32; i++) {
-    if (i < activeDays) {
-      fans.push(current);
-      current += dailyGain;
-    } else {
-      fans.push(0);
-    }
-  }
-  return fans;
+function reportFor(name: string, offset = 0): string {
+  return generateAnalyzeReport(
+    snapshot,
+    config,
+    computeMembers(snapshot, config),
+    name,
+    offset,
+  );
 }
 
 describe("generateAnalyzeReport — valid member found", () => {
   it("produces analysis with member name in header", () => {
-    // Arrange & Act
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    // Assert
     expect(report).toContain("🔍");
     expect(report).toContain("Ryu");
     expect(report).toMatch(/Analyze: Ryu —/);
   });
 
   it("contains all expected metric sections", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).toContain("*Gain*");
     expect(report).toContain("*Aktivitas*");
@@ -99,12 +89,7 @@ describe("generateAnalyzeReport — valid member found", () => {
   });
 
   it("shows gain metrics with proper labels", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).toMatch(/• Monthly: [\d.,]+[KMB]?/);
     expect(report).toMatch(/• Daily terakhir: [\d.,]+[KMB]?/);
@@ -113,12 +98,7 @@ describe("generateAnalyzeReport — valid member found", () => {
   });
 
   it("shows activity metrics", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).toMatch(/• Hari aktif: \d+\/\d+/);
     expect(report).toMatch(/• Konsistensi: \d+%/);
@@ -126,24 +106,13 @@ describe("generateAnalyzeReport — valid member found", () => {
   });
 
   it("shows weekly breakdown", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    // Should contain W1, W2, etc. with values
     expect(report).toMatch(/• W\d+:/);
   });
 
   it("shows projection and requirement status", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).toMatch(/• Target: [\d.,]+[KMB]?/);
     expect(report).toMatch(/• Status: (✅|❌)/);
@@ -151,12 +120,7 @@ describe("generateAnalyzeReport — valid member found", () => {
   });
 
   it("includes sync footer", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).toContain("⸻");
     expect(report).toMatch(/Terakhir sync:/);
@@ -165,42 +129,24 @@ describe("generateAnalyzeReport — valid member found", () => {
 
 describe("generateAnalyzeReport — member not found", () => {
   it("returns error message when member does not exist", () => {
-    // Arrange & Act
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "ZZZZNOTEXIST",
-    );
+    const report = reportFor("ZZZZNOTEXIST");
 
-    // Assert
     expect(report).toContain("❌");
     expect(report).toContain("ZZZZNOTEXIST");
     expect(report).toContain("tidak ditemukan");
-    // Should NOT contain analysis content
     expect(report).not.toContain("*Gain*");
     expect(report).not.toContain("*Aktivitas*");
   });
 
   it("error message uses Indonesian wording", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "GhostPlayer",
-    );
+    const report = reportFor("GhostPlayer");
 
     expect(report).toMatch(/tidak ditemukan/);
     expect(report).toMatch(/Cek ejaan nama/);
   });
 
   it("error message includes the queried name", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "PhantomX",
-    );
+    const report = reportFor("PhantomX");
 
     expect(report).toContain("PhantomX");
   });
@@ -209,35 +155,20 @@ describe("generateAnalyzeReport — member not found", () => {
 describe("generateAnalyzeReport — transfer members", () => {
   it("shows transfer info for transfer member", () => {
     // Zero transferred from Advent
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Zero",
-    );
+    const report = reportFor("Zero");
 
     expect(report).toContain("🔄");
     expect(report).toContain("Transfer dari Advent");
   });
 
   it("shows transfer badge in title for transfer member", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Zero",
-    );
+    const report = reportFor("Zero");
 
     expect(report).toMatch(/Analyze: Zero 🔄/);
   });
 
   it("does not show transfer line for non-transfer member", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     // Ryu is not a transfer — no "Transfer dari" line
     expect(report).not.toContain("Transfer dari");
@@ -245,12 +176,7 @@ describe("generateAnalyzeReport — transfer members", () => {
 
   it("shows correct previous circle name for different transfers", () => {
     // TheTengOne transferred from Garuda3
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "TheTengOne",
-    );
+    const report = reportFor("TheTengOne");
 
     expect(report).toContain("Transfer dari Garuda3");
   });
@@ -258,7 +184,6 @@ describe("generateAnalyzeReport — transfer members", () => {
 
 describe("generateAnalyzeReport — trend detection", () => {
   it("shows upward trend when recent days are significantly higher than 7-day avg", () => {
-    // Arrange — create a member with accelerating gains
     // Days 1-7: small gains, Days 8-11: big gains → 3-day avg > 7-day avg * 1.1
     const fans = [
       1_000_000,
@@ -277,7 +202,6 @@ describe("generateAnalyzeReport — trend detection", () => {
     const member = buildMember("RisingStar", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -285,12 +209,10 @@ describe("generateAnalyzeReport — trend detection", () => {
       "RisingStar",
     );
 
-    // Assert — trend should be upward
     expect(report).toMatch(/Trend: 📈 naik/);
   });
 
   it("shows downward trend when recent days are significantly lower than 7-day avg", () => {
-    // Arrange — create a member with decelerating gains
     // Days 1-7: big gains, Days 8-11: tiny gains → 3-day avg < 7-day avg * 0.9
     const fans = [
       1_000_000,
@@ -309,7 +231,6 @@ describe("generateAnalyzeReport — trend detection", () => {
     const member = buildMember("FallingStar", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -317,17 +238,14 @@ describe("generateAnalyzeReport — trend detection", () => {
       "FallingStar",
     );
 
-    // Assert — trend should be downward
     expect(report).toMatch(/Trend: 📉 turun/);
   });
 
   it("shows stable trend when 3-day avg is within threshold of 7-day avg", () => {
-    // Arrange — consistent daily gains → 3-day avg ≈ 7-day avg
-    const fans = makeCumulativeFans(1_000_000, 100_000, 11);
+    const fans = makeCumulativeFansSeries(1_000_000, 100_000, 11);
     const member = buildMember("SteadyEddie", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -335,19 +253,16 @@ describe("generateAnalyzeReport — trend detection", () => {
       "SteadyEddie",
     );
 
-    // Assert — trend should be stable
     expect(report).toMatch(/Trend: ➡️ stabil/);
   });
 });
 
 describe("generateAnalyzeReport — consistency", () => {
   it("shows 100% consistency when member was active every day", () => {
-    // Arrange — active all 11 data days
-    const fans = makeCumulativeFans(1_000_000, 100_000, 11);
+    const fans = makeCumulativeFansSeries(1_000_000, 100_000, 11);
     const member = buildMember("PerfectPlayer", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -355,17 +270,14 @@ describe("generateAnalyzeReport — consistency", () => {
       "PerfectPlayer",
     );
 
-    // Assert
     expect(report).toContain("Konsistensi: 100%");
   });
 
   it("shows 0% consistency when member was never active", () => {
-    // Arrange — all zeros
     const fans = new Array(32).fill(0);
     const member = buildMember("LazyPlayer", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -373,19 +285,14 @@ describe("generateAnalyzeReport — consistency", () => {
       "LazyPlayer",
     );
 
-    // Assert
     expect(report).toContain("Konsistensi: 0%");
   });
 
   it("calculates partial consistency correctly", () => {
-    // Arrange — need a snapshot where getDataDayFromSnapshot returns 10,
-    // and the test member has only 5 active days out of those 10.
-    //
-    // countActiveDays counts day 1 if hasValue(fans[0])=true, then days 2+
-    // where getDailyGain > 0 (current > prev > 0).
-    //
-    // Member A (test): days 1-5 active, days 6-10 flat (gain=0)
-    // Member B (helper): ensures snapshot data day = 10
+    // Helper member is active all 10 days → snapshot data day = 10; test
+    // member active only days 1-5 → consistency = 5/10 = 50%.
+    // countActiveDays: day 1 counts if hasValue(fans[0]), days 2+ if
+    // getDailyGain > 0 (current > prev > 0).
     const testFans = [
       1_000_000,
       1_100_000,
@@ -399,12 +306,11 @@ describe("generateAnalyzeReport — consistency", () => {
       1_400_000,
       ...new Array(22).fill(0),
     ];
-    const helperFans = makeCumulativeFans(1_000_000, 100_000, 10);
+    const helperFans = makeCumulativeFansSeries(1_000_000, 100_000, 10);
     const testMember = buildMember("PartTimer", testFans);
     const helperMember = buildMember("Helper", helperFans);
     const customSnapshot = buildSnapshotWithMembers([testMember, helperMember]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -412,19 +318,16 @@ describe("generateAnalyzeReport — consistency", () => {
       "PartTimer",
     );
 
-    // Assert — 5 active out of 10 data days = 50%
     expect(report).toContain("Konsistensi: 50%");
   });
 });
 
 describe("generateAnalyzeReport — requirement status", () => {
   it("shows checkmark when member meets monthly requirement", () => {
-    // Arrange — create a member with very high gains
-    const fans = makeCumulativeFans(0, 10_000_000, 11);
+    const fans = makeCumulativeFansSeries(0, 10_000_000, 11);
     const member = buildMember("Overachiever", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -432,17 +335,14 @@ describe("generateAnalyzeReport — requirement status", () => {
       "Overachiever",
     );
 
-    // Assert — should show ✅ since monthlyGain >> monthlyFans requirement
     expect(report).toMatch(/Status: ✅/);
   });
 
   it("shows X when member does not meet monthly requirement", () => {
-    // Arrange — create a member with zero gains
     const fans = new Array(32).fill(0);
     const member = buildMember("UnderPerformer", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -450,7 +350,6 @@ describe("generateAnalyzeReport — requirement status", () => {
       "UnderPerformer",
     );
 
-    // Assert — should show ❌ since monthlyGain is 0
     expect(report).toMatch(/Status: ❌/);
     expect(report).toContain("Kurang");
   });
@@ -458,12 +357,10 @@ describe("generateAnalyzeReport — requirement status", () => {
 
 describe("generateAnalyzeReport — projection", () => {
   it("projects month-end based on current pace", () => {
-    // Arrange — create a member with known gains
-    const fans = makeCumulativeFans(0, 1_000_000, 10);
+    const fans = makeCumulativeFansSeries(0, 1_000_000, 10);
     const member = buildMember("Pacer", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -471,19 +368,16 @@ describe("generateAnalyzeReport — projection", () => {
       "Pacer",
     );
 
-    // Assert — projection should be shown
     expect(report).toMatch(/Proyeksi akhir bulan: ~/);
-    // The projection should be a formatted number
     expect(report).toContain("Target:");
   });
 
   it("shows zero projection when no data days", () => {
-    // Arrange — all zeros → no data → daysElapsed = 0 → projection = 0
+    // all zeros → no data → daysElapsed = 0 → projection = 0
     const fans = new Array(32).fill(0);
     const member = buildMember("ZeroData", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -491,19 +385,13 @@ describe("generateAnalyzeReport — projection", () => {
       "ZeroData",
     );
 
-    // Assert — projection should show 0
     expect(report).toContain("Proyeksi akhir bulan: ~0");
   });
 });
 
 describe("generateAnalyzeReport — WhatsApp formatting", () => {
   it("does not contain Markdown syntax (##, ```, ---)", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).not.toMatch(/^#{1,6}\s/m);
     expect(report).not.toContain("```");
@@ -511,12 +399,7 @@ describe("generateAnalyzeReport — WhatsApp formatting", () => {
   });
 
   it("uses WhatsApp bold syntax (*text*) for emphasis", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).toMatch(/\*Gain\*/);
     expect(report).toMatch(/\*Aktivitas\*/);
@@ -525,106 +408,66 @@ describe("generateAnalyzeReport — WhatsApp formatting", () => {
   });
 
   it("uses bullet points with • character", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     expect(report).toContain("•");
   });
 
   it("is under 4096 characters (WhatsApp message limit)", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 
   it("report length is reasonable for an analysis (at least 300 chars)", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    expect(report.length).toBeGreaterThan(300);
+    expect(report.length).toBeGreaterThan(MIN_ANALYSIS_LENGTH);
   });
 });
 
 describe("generateAnalyzeReport — numerical accuracy", () => {
   it("formats large numbers with K/M/B suffixes", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
     // Members have gains in millions — should show as M
     expect(report).toMatch(/[\d.]+M/);
   });
 
   it("monthly gain value matches computeMembers output", () => {
-    // Arrange
     const members = computeMembers(snapshot, config);
     const ryu = members.find((m) => m.trainerName === "Ryu");
     expect(ryu).toBeDefined();
 
-    // Act
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    // Assert
-    const { formatNumber } = require("../../src/utils/format");
     expect(report).toContain(formatNumber(ryu!.monthlyGain));
   });
 
   it("active days count is consistent with daily_fans data", () => {
-    // Arrange
     const members = computeMembers(snapshot, config);
     const ryu = members.find((m) => m.trainerName === "Ryu");
     expect(ryu).toBeDefined();
 
     const latestDataDay = getDataDayFromSnapshot(snapshot);
-    const { countActiveDays } = require("../../src/data/daily-fans");
     const expectedActive = countActiveDays(
       ryu!.dailyFans,
       latestDataDay,
       config.requirements.includeTransferDataInCalculation,
     );
 
-    // Act
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    // Assert — should contain "Hari aktif: X/Y"
     expect(report).toContain(`Hari aktif: ${expectedActive}/${latestDataDay}`);
   });
 });
 
 describe("generateAnalyzeReport — edge cases", () => {
   it("handles member with all-zero daily fans", () => {
-    // Arrange
     const fans = new Array(32).fill(0);
     const member = buildMember("GhostMember", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -632,7 +475,6 @@ describe("generateAnalyzeReport — edge cases", () => {
       "GhostMember",
     );
 
-    // Assert — should produce a valid report (not crash)
     expect(report).toContain("🔍");
     expect(report).toContain("GhostMember");
     expect(report).toContain("*Gain*");
@@ -658,7 +500,6 @@ describe("generateAnalyzeReport — edge cases", () => {
     const member = buildMember("SoloPlayer", fans);
     const customSnapshot = buildSnapshotWithMembers([member]);
 
-    // Act
     const report = generateAnalyzeReport(
       customSnapshot,
       config,
@@ -666,69 +507,42 @@ describe("generateAnalyzeReport — edge cases", () => {
       "SoloPlayer",
     );
 
-    // Assert
     expect(report).toContain("🔍");
     expect(report).toContain("Hari aktif: 1/");
     expect(report).toContain("Konsistensi:");
   });
 
   it("handles members with special characters in names", () => {
-    // DOA IBU has a space, Suzuka Kopling has a space
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "DOA IBU",
-    );
+    // "DOA IBU" exercises the space-in-name path
+    const report = reportFor("DOA IBU");
 
     expect(report).toContain("🔍");
     expect(report).toContain("DOA IBU");
     expect(report).toContain("*Gain*");
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 
   it("report is deterministic (same inputs → same output)", () => {
-    const report1 = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
-    const report2 = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report1 = reportFor("Ryu");
+    const report2 = reportFor("Ryu");
 
     expect(report1).toBe(report2);
   });
 
   it("handles member with unicode characters in name", () => {
     // Dyy\u201D has a Unicode right double quotation mark (U+201D)
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Dyy\u201D",
-    );
+    const report = reportFor("Dyy\u201D");
 
     expect(report).toContain("🔍");
     expect(report).toContain("*Gain*");
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 });
 
 describe("generateAnalyzeReport — weekly gains", () => {
   it("shows all 5 weeks in the weekly section", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    // Should contain W1 through W5
     expect(report).toMatch(/W1: [\d.,]+[KMB]?/);
     expect(report).toMatch(/W2: [\d.,]+[KMB]?/);
     expect(report).toMatch(/W3: [\d.,]+[KMB]?/);
@@ -737,19 +551,11 @@ describe("generateAnalyzeReport — weekly gains", () => {
   });
 
   it("weekly gains are separated by pipe character", () => {
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const report = reportFor("Ryu");
 
-    // Weekly gains are joined with " | "
     expect(report).toMatch(/W\d+: [\d.,]+[KMB]? \| W\d+:/);
   });
 });
-
-// ── Offset support (previous month) ────────────────────────
 
 jest.mock("../../src/data/snapshot", () => {
   const actual = jest.requireActual("../../src/data/snapshot");
@@ -768,25 +574,13 @@ describe("generateAnalyzeReport — offset support", () => {
   });
 
   it("offset=0 produces identical output to current behavior (regression)", () => {
-    const withOffset = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-      0,
-    );
-    const withoutOffset = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-    );
+    const withOffset = reportFor("Ryu", 0);
+    const withoutOffset = reportFor("Ryu");
 
     expect(withOffset).toBe(withoutOffset);
   });
 
   it("offset=-1 loads previous month snapshot and generates report", () => {
-    // Build a previous month snapshot with same member
     const prevMember = {
       ...snapshot.members.find((m) => m.trainer_name === "Ryu")!,
       year: 2026,
@@ -798,13 +592,7 @@ describe("generateAnalyzeReport — offset support", () => {
     };
     mockLoadMonthSnapshots.mockReturnValue(prevSnapshot);
 
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-      -1,
-    );
+    const report = reportFor("Ryu", -1);
 
     expect(report).toContain("Analyze: Ryu");
     expect(report).toContain("*Gain*");
@@ -812,7 +600,6 @@ describe("generateAnalyzeReport — offset support", () => {
   });
 
   it("member not found in previous month → error message", () => {
-    // Previous month has a different member (not Ryu)
     const prevMember = {
       id: 99,
       circle_id: 99999,
@@ -821,7 +608,7 @@ describe("generateAnalyzeReport — offset support", () => {
       shame_score: null,
       year: 2026,
       month: 5,
-      daily_fans: makeCumulativeFans(0, 100_000, 10),
+      daily_fans: makeCumulativeFansSeries(0, 100_000, 10),
       last_updated: "2026-05-10",
     };
     const prevSnapshot: Snapshot = {
@@ -830,13 +617,7 @@ describe("generateAnalyzeReport — offset support", () => {
     };
     mockLoadMonthSnapshots.mockReturnValue(prevSnapshot);
 
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-      -1,
-    );
+    const report = reportFor("Ryu", -1);
 
     expect(report).toContain("❌");
     expect(report).toContain("Ryu");
@@ -846,15 +627,8 @@ describe("generateAnalyzeReport — offset support", () => {
   it("previous month snapshot unavailable → fallback to current data", () => {
     mockLoadMonthSnapshots.mockReturnValue(null);
 
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-      -1,
-    );
+    const report = reportFor("Ryu", -1);
 
-    // Should still produce a valid report (uses current snapshot as fallback)
     expect(report).toContain("Analyze: Ryu");
     expect(report).toContain("*Gain*");
   });
@@ -866,13 +640,7 @@ describe("generateAnalyzeReport — offset support", () => {
     };
     mockLoadMonthSnapshots.mockReturnValue(emptySnapshot);
 
-    const report = generateAnalyzeReport(
-      snapshot,
-      config,
-      computeMembers(snapshot, config),
-      "Ryu",
-      -1,
-    );
+    const report = reportFor("Ryu", -1);
 
     expect(report).toContain("ℹ️");
     expect(report).toContain("Data belum tersedia");

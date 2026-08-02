@@ -15,6 +15,8 @@ import { computeMembers } from "../../src/reports/compute";
 import { buildFooter, buildDateStr } from "../../src/reports/format";
 import { loadRealSnapshot, makeConfig } from "../_helpers";
 
+const SYNC_FOOTER_REGEX = /Terakhir sync:/g;
+
 let snapshot: Snapshot;
 let config: BotConfig;
 let computedMembers: ComputedMember[];
@@ -31,7 +33,6 @@ function stripFooter(report: string): string {
   return idx === -1 ? report : report.slice(0, idx).trimEnd();
 }
 
-/** The shared footer that combined reports should end with. */
 function sharedFooter(): string {
   return buildFooter(config, buildDateStr(snapshot));
 }
@@ -137,7 +138,6 @@ describe("generateCombinedReport", () => {
     const weekly = stripFooter(
       generateWeeklyReport(snapshot, config, computedMembers, undefined),
     );
-    // Unknown type is silently skipped — only daily + weekly + shared footer
     expect(result).toBe(`${daily}\n\n${weekly}\n\n${sharedFooter()}`);
   });
 
@@ -185,7 +185,7 @@ describe("generateCombinedReport", () => {
       config,
       computedMembers,
     );
-    const footerCount = (result.match(/Terakhir sync:/g) || []).length;
+    const footerCount = (result.match(SYNC_FOOTER_REGEX) || []).length;
     expect(footerCount).toBe(1);
   });
 
@@ -196,7 +196,7 @@ describe("generateCombinedReport", () => {
       config,
       computedMembers,
     );
-    const footerCount = (result.match(/Terakhir sync:/g) || []).length;
+    const footerCount = (result.match(SYNC_FOOTER_REGEX) || []).length;
     expect(footerCount).toBe(1);
   });
 });

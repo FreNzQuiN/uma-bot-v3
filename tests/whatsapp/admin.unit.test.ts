@@ -19,7 +19,7 @@ describe("handleSetReq", () => {
     const result = handleSetReq([], config);
     expect(result.message).toContain("Monthly");
     expect(result.message).toContain("Weekly");
-    expect(result.config).toBe(config); // no change
+    expect(result.config).toBe(config);
   });
 
   it("sets monthly requirement", () => {
@@ -42,6 +42,11 @@ describe("handleSetReq", () => {
 
   it("rejects non-numeric value", () => {
     const result = handleSetReq(["monthly", "abc"], config);
+    expect(result.message).toContain("angka");
+  });
+
+  it("rejects value with trailing garbage", () => {
+    const result = handleSetReq(["monthly", "100abc"], config);
     expect(result.message).toContain("angka");
   });
 
@@ -97,11 +102,6 @@ describe("handleStatus", () => {
     expect(result).toContain("never");
   });
 
-  it("shows snapshot day when provided", () => {
-    const result = handleStatus(config, { snapshotDay: 11 });
-    expect(result).toContain("11");
-  });
-
   it("shows group counts", () => {
     const result = handleStatus(config);
     expect(result).toContain("Admins");
@@ -114,7 +114,7 @@ describe("handleCatchUp", () => {
   it("shows current status when no args", () => {
     const result = handleCatchUp([], config);
     expect(result.message).toContain("Catch-up");
-    expect(result.config).toBe(config); // no change
+    expect(result.config).toBe(config);
   });
 
   it('enables catch-up with "on"', () => {
@@ -132,7 +132,7 @@ describe("handleCatchUp", () => {
   it("rejects invalid argument", () => {
     const result = handleCatchUp(["maybe"], config);
     expect(result.message).toContain("Usage");
-    expect(result.config).toBe(config); // no change
+    expect(result.config).toBe(config);
   });
 
   it("does not mutate original config", () => {
@@ -146,7 +146,7 @@ describe("handleAlerts", () => {
   it("shows current status when no args", () => {
     const result = handleAlerts([], config);
     expect(result.message).toContain("Alerts");
-    expect(result.config).toBe(config); // no change
+    expect(result.config).toBe(config);
   });
 
   it('enables alerts with "on"', () => {
@@ -164,7 +164,7 @@ describe("handleAlerts", () => {
   it("rejects invalid argument", () => {
     const result = handleAlerts(["maybe"], config);
     expect(result.message).toContain("Usage");
-    expect(result.config).toBe(config); // no change
+    expect(result.config).toBe(config);
   });
 
   it("does not mutate original config", () => {

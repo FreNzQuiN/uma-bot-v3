@@ -54,12 +54,11 @@ function formatDateInTimezone(date: Date, tz: string): string {
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
-/** Get the JST date string for a given Date (or now). */
+/** JST date as YYYY-MM-DD (defaults to now). */
 export function getDataDate(date?: Date): string {
   return formatDateInTimezone(date ?? new Date(), DATA_TIMEZONE);
 }
 
-/** Get JST date components for a given Date (or now). */
 export function getDataDateComponents(date?: Date): {
   year: number;
   month: number;
@@ -72,17 +71,14 @@ export function getDataDateComponents(date?: Date): {
   return { year, month, day };
 }
 
-/** Get JST day of month (1-31). */
 export function getDataDay(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).day;
 }
 
-/** Get day of month in a specific display timezone. */
 export function getDisplayDay(displayTimezone: string, date?: Date): number {
   return extractInTimezone(date ?? new Date(), displayTimezone).day;
 }
 
-/** Get JST month (1-12). */
 export function getDataMonth(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).month;
 }
@@ -92,16 +88,11 @@ export function getDataYear(date?: Date): number {
 }
 
 /**
- * Calculate a target month by applying an offset to a base year/month.
- * Always goes backwards in time (absolute value of offset is used).
+ * Target month by offset from a base year/month.
+ * Always goes backwards — absolute value of offset is used.
  *
- * @param curYear  - Base year (e.g. current JST year)
- * @param curMonth - Base month 1-12 (e.g. current JST month)
- * @param offsetMonths - Number of months to go back (absolute value used)
- * @returns { year, month } of the target month
- *
- * @example getTargetMonth(2026, 1, 2)  → { year: 2025, month: 11 }
- * @example getTargetMonth(2026, 6, 1)  → { year: 2026, month: 5 }
+ * @example getTargetMonth(2026, 1, 2) → { year: 2025, month: 11 }
+ * @example getTargetMonth(2026, 6, 1) → { year: 2026, month: 5 }
  */
 export function getTargetMonth(
   curYear: number,
@@ -134,9 +125,7 @@ export const INDONESIAN_MONTHS = [
 ];
 
 /**
- * Convert an ISO date string (YYYY-MM-DD) to Indonesian format.
- *
- * @example formatDateWIB('2026-06-11') → '11 Juni 2026'
+ * Format an ISO date (YYYY-MM-DD) as Indonesian, e.g. '11 Juni 2026'.
  */
 export function formatDateWIB(dateStr: string): string {
   const [yearStr, monthStr, dayStr] = dateStr.split("-");

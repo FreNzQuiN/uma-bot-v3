@@ -2,7 +2,7 @@ import { CatchUpManager } from "../../src/scheduler/catchup";
 import { SqliteDatabase } from "../../src/db/database";
 import { makeConfig, mockCurrentDate, restoreDateMocks } from "../_helpers";
 
-describe("Bug 1: Catch-up detects missed reports across days", () => {
+describe("Catch-up detects missed reports across days", () => {
   let db: SqliteDatabase;
 
   beforeEach(async () => {
@@ -17,10 +17,7 @@ describe("Bug 1: Catch-up detects missed reports across days", () => {
   });
 
   it("detects missed weekly from day 7 when bot restarts on day 8", async () => {
-    // Weekly scheduled on days [7, 14, 21, 28]
-    // Mocked date: June 15, 2026 (day 15)
-    // Last successful weekly was on day 7 of previous month
-    // Weekly from day 7 or day 14 should be caught
+    // Last weekly was May 7 → the June 7 and June 14 runs are both missed
     const config = makeConfig({
       catchUp: { enabled: true, maxReportsPerStartup: 10 },
       schedule: {
@@ -46,7 +43,6 @@ describe("Bug 1: Catch-up detects missed reports across days", () => {
     const catchUp = new CatchUpManager(db, () => config);
     const missed = await catchUp.detectMissedReports();
 
-    // Weekly should be detected as missed since we haven't run it this month
     expect(missed).toContain("weekly");
   });
 
@@ -60,9 +56,7 @@ describe("Bug 1: Catch-up detects missed reports across days", () => {
       },
     });
 
-    // Mocked date: June 15, 2026
-    // Weekly scheduled on [7, 14, 21, 28]
-    // Most recent scheduled day <= 15 is day 14
+    // Most recent scheduled day ≤ 15 is day 14
     const scheduledDate = "2026-06-14";
 
     await db.recordRun({
@@ -90,8 +84,7 @@ describe("Bug 1: Catch-up detects missed reports across days", () => {
       },
     });
 
-    // Mocked date: June 15, 2026 — well past monthly day (day 1)
-    // Record last monthly from previous month (May 2026)
+    // Past monthly day 1 → the May 1 run is the last one recorded
     const lastMonthStr = "2026-05-01";
 
     await db.recordRun({
@@ -104,7 +97,6 @@ describe("Bug 1: Catch-up detects missed reports across days", () => {
       target_jid: "test@g.us",
     });
 
-    // Monthly should always be detected since we're past day 1
     const catchUp = new CatchUpManager(db, () => config);
     const missed = await catchUp.detectMissedReports();
     expect(missed).toContain("monthly");

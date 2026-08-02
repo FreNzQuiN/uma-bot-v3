@@ -31,6 +31,8 @@ let snapshot: Snapshot;
 
 let config: BotConfig;
 
+const GAIN_LINE_REGEX = /^\d+\.\s\*.+\*\s*(🔄)? — \+[\d.]+[KMB]?$/;
+
 beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
@@ -134,7 +136,6 @@ describe("E2E: Cross-report consistency", () => {
       computeMembers(snapshot, config),
       0,
     );
-    // Both should reference the same top member
     const ranksTop = ranks.match(/🥇 \*(.+?)\* —/);
     const monthlyTop = monthly.match(/1\. \*(.+?)\* —/);
     expect(ranksTop?.[1]).toBe(monthlyTop?.[1]);
@@ -169,7 +170,6 @@ describe("E2E: Cross-report consistency", () => {
       config,
       computeMembers(snapshot, config),
     );
-    // Monthly shows "❌ N kurang", bottom shows those members
     const failMatch = monthly.match(/❌ (\d+) kurang/);
     expect(failMatch).toBeTruthy();
     expect(parseInt(failMatch![1])).toBeGreaterThan(0);
@@ -226,11 +226,12 @@ describe("E2E: Formatted output contracts", () => {
 
     for (const line of gainLines) {
       // Format: N. *Name* — +X.X[KMB]  or  N. *Name* 🔄 — +X.X[KMB]
-      expect(line).toMatch(/^\d+\.\s\*.+\*\s*(🔄)? — \+[\d.]+[KMB]?$/);
+      expect(line).toMatch(GAIN_LINE_REGEX);
     }
   });
 
   it("daily report shows transfer badges for known transfer members", () => {
+    // Falkrum omitted intentionally: 0 gain on day 11, so no daily gain line
     const transferNames = [
       "Zero",
       "TheTengOne",
@@ -256,7 +257,7 @@ describe("E2E: Formatted output contracts", () => {
     expect(gainLines.length).toBeGreaterThan(0);
 
     for (const line of gainLines) {
-      expect(line).toMatch(/^\d+\.\s\*.+\*\s*(🔄)? — \+[\d.]+[KMB]?$/);
+      expect(line).toMatch(GAIN_LINE_REGEX);
     }
   });
 
@@ -284,7 +285,7 @@ describe("E2E: Formatted output contracts", () => {
     expect(gainLines.length).toBeGreaterThan(0);
 
     for (const line of gainLines) {
-      expect(line).toMatch(/^\d+\.\s\*.+\*\s*(🔄)? — \+[\d.]+[KMB]?$/);
+      expect(line).toMatch(GAIN_LINE_REGEX);
     }
   });
 

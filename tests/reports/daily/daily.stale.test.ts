@@ -348,10 +348,8 @@ describe("Stale data warning: bug fix behavioral contract", () => {
   });
 
   it("BUG FIX: /daily 1 no longer falsely warns when snapshot is fresh", () => {
-    // Today = June 13, snapshot data day = 12 → FRESH
-    // /daily 1 views day 11 (offset), but snapshot is still fresh
-    // OLD BUG: dataDay=11 < currentDay-1=12 → FALSE stale warning
-    // NEW FIX: latestDataDay=12 >= 12 → no warning
+    // OLD BUG: dataDay < currentDay-1 → false stale warning
+    // NEW FIX: latestDataDay >= currentDay-1 → no warning
     mockCurrentDate(2026, 6, 13);
     const freshSnapshot = makeSnapshotWithLatestDay(12);
 

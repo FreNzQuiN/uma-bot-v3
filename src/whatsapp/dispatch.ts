@@ -71,6 +71,8 @@ const LOADING_MESSAGES = [
   "⏳ Crunching numbers...",
 ];
 
+const LOG_PREVIEW_LENGTH = 80;
+
 function pickLoadingMessage(): string {
   return LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)];
 }
@@ -126,8 +128,8 @@ async function dispatchMessage(
   ctx: DispatchContext,
   msg: IncomingMessage,
 ): Promise<void> {
-  // Use || not ?? — protobuf-decoded messages have conversation:"" (empty string),
-  // which ?? treats as non-nullish, short-circuiting before reaching extendedTextMessage.text
+  // Use || not ?? — protobuf decodes a missing text field as "" (not null),
+  // which ?? treats as non-nullish and short-circuits the fallback chain.
   const extMsg = msg.message?.extendedTextMessage as
     Record<string, unknown> | undefined;
   const text =
@@ -144,7 +146,7 @@ async function dispatchMessage(
   if (!parsed) {
     log.debug(
       "Dispatch",
-      `No command prefix match for: "${text.slice(0, 80)}"`,
+      `No command prefix match for: "${text.slice(0, LOG_PREVIEW_LENGTH)}"`,
     );
     return;
   }
@@ -155,12 +157,12 @@ async function dispatchMessage(
     `Parsed command: /${parsed.command} args=[${parsed.args.join(", ").replace(/[\r\n]/g, " ")}] offset=${parsed.offset}`,
   );
 
-  // Use || not ?? — protobuf-decoded messages set participant to "" (empty string)
-  // for DMs, which ?? treats as non-nullish, leaving senderJid empty.
+  // Use || not ?? — protobuf decodes a missing participant as "" (not null),
+  // which ?? treats as non-nullish and skips the remoteJid fallback.
   const senderJid = msg.key.participant || msg.key.remoteJid;
   const chatJid = msg.key.remoteJid;
 
-  // Access control — silently ignore unauthorized sources
+  // Fail silently — no reply, so unauthorized users can't probe the command surface.
   if (!canUseCommand(parsed.command, senderJid, chatJid, ctx.config)) {
     log.debug(
       "Dispatch",
@@ -260,7 +262,7 @@ async function handleReportCommand(
     }
   }
 
-  // Validate offset early (before sending loading message)
+  // Reject invalid offsets before the loading message — no "processing…" then an error.
   if (effectiveOffset !== null) {
     const MAX_OFFSETS: Record<string, number> = {
       daily: ctx.config.commands.maxDailyOffset,
@@ -279,7 +281,7 @@ async function handleReportCommand(
     }
   }
 
-  // Check snapshot availability before sending loading message
+  // Don't send a loading message we'd immediately replace with an error.
   const snapshot = ctx.getSnapshot();
   if (!snapshot) {
     await ctx.client.sendOrEdit(
@@ -450,10 +452,6 @@ async function generateReport(
   }
 }
 
-/**
- * Returns either a plain message string or { config, message }
- * when the command modifies config.
- */
 async function processAdminCommand(
   command: string,
   args: string[],
@@ -476,7 +474,6 @@ async function processAdminCommand(
       return handleStatus(config, {
         lastFetch,
         lastReport,
-        snapshotDay: undefined,
         uptime: uptimeStr,
         reconnects: rt.reconnectCount,
         configReloads: rt.configReloadCount,

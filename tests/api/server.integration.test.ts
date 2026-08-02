@@ -2,31 +2,19 @@ import http from "http";
 import { ApiServer, createResponse } from "../../src/api/server";
 import { getDefaultConfig } from "../../src/config";
 import type { Snapshot, BotConfig } from "../../src/types";
+import type { IDatabase } from "../../src/db/types";
 import { loadRealSnapshot } from "../_helpers";
+import { fetchJson } from "../_helpers/http";
 
 const SNAPSHOT: Snapshot = loadRealSnapshot();
 
 const config: BotConfig = getDefaultConfig();
 const PORT = 18765;
 
-function fetch(
-  path: string,
-): Promise<{ status: number; body: Record<string, unknown> }> {
-  return new Promise((resolve, reject) => {
-    http
-      .get(`http://127.0.0.1:${PORT}${path}`, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          resolve({
-            status: res.statusCode ?? 0,
-            body: JSON.parse(data),
-          });
-        });
-      })
-      .on("error", reject);
-  });
-}
+const MEMBER_COUNT = 34;
+const DATA_DAY = 11;
+const TRANSFER_COUNT = 6;
+const WEEKLY_GAINS_LENGTH = 5;
 
 let server: ApiServer;
 
@@ -42,14 +30,14 @@ afterAll(async () => {
 describe("REST API", () => {
   describe("GET /health", () => {
     it("returns 200 with status ok", async () => {
-      const res = await fetch("/health");
+      const res = await fetchJson("/health", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect((res.body.data as Record<string, unknown>).status).toBe("ok");
     });
 
     it("includes timestamp", async () => {
-      const res = await fetch("/health");
+      const res = await fetchJson("/health", PORT);
       const data = res.body.data as Record<string, unknown>;
       expect(data.timestamp).toBeDefined();
     });
@@ -57,28 +45,28 @@ describe("REST API", () => {
 
   describe("GET /reports/daily", () => {
     it("returns 200 with report data", async () => {
-      const res = await fetch("/reports/daily");
+      const res = await fetchJson("/reports/daily", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.meta).toBeDefined();
     });
 
     it("includes circle info", async () => {
-      const res = await fetch("/reports/daily");
+      const res = await fetchJson("/reports/daily", PORT);
       const data = res.body.data as Record<string, unknown>;
       expect(data.circle).toBeDefined();
       expect((data.circle as Record<string, unknown>).name).toBe("Hol＿Horse");
     });
 
     it("includes members array with correct count", async () => {
-      const res = await fetch("/reports/daily");
+      const res = await fetchJson("/reports/daily", PORT);
       const data = res.body.data as Record<string, unknown>;
       expect(Array.isArray(data.members)).toBe(true);
-      expect((data.members as unknown[]).length).toBe(34);
+      expect((data.members as unknown[]).length).toBe(MEMBER_COUNT);
     });
 
     it("each member has required fields", async () => {
-      const res = await fetch("/reports/daily");
+      const res = await fetchJson("/reports/daily", PORT);
       const data = res.body.data as Record<string, unknown>;
       const members = data.members as Record<string, unknown>[];
       for (const member of members) {
@@ -91,16 +79,16 @@ describe("REST API", () => {
     });
 
     it("meta contains dataDay and timezone", async () => {
-      const res = await fetch("/reports/daily");
+      const res = await fetchJson("/reports/daily", PORT);
       const meta = res.body.meta as Record<string, unknown>;
-      expect(meta.dataDay).toBe(11);
+      expect(meta.dataDay).toBe(DATA_DAY);
       expect(meta.timezone).toBe("Asia/Jakarta");
     });
   });
 
   describe("GET /reports/weekly", () => {
     it("returns 200", async () => {
-      const res = await fetch("/reports/weekly");
+      const res = await fetchJson("/reports/weekly", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
@@ -108,7 +96,7 @@ describe("REST API", () => {
 
   describe("GET /reports/monthly", () => {
     it("returns 200", async () => {
-      const res = await fetch("/reports/monthly");
+      const res = await fetchJson("/reports/monthly", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
@@ -116,7 +104,7 @@ describe("REST API", () => {
 
   describe("GET /reports/stats", () => {
     it("returns 200", async () => {
-      const res = await fetch("/reports/stats");
+      const res = await fetchJson("/reports/stats", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
@@ -124,7 +112,7 @@ describe("REST API", () => {
 
   describe("GET /reports/bottom", () => {
     it("returns 200", async () => {
-      const res = await fetch("/reports/bottom");
+      const res = await fetchJson("/reports/bottom", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
@@ -132,7 +120,7 @@ describe("REST API", () => {
 
   describe("GET /reports/ranks", () => {
     it("returns 200", async () => {
-      const res = await fetch("/reports/ranks");
+      const res = await fetchJson("/reports/ranks", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
@@ -140,17 +128,17 @@ describe("REST API", () => {
 
   describe("GET /members", () => {
     it("returns member list with count", async () => {
-      const res = await fetch("/members");
+      const res = await fetchJson("/members", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(Array.isArray(res.body.data)).toBe(true);
       const meta = res.body.meta as Record<string, unknown>;
-      expect(meta.total).toBe(34);
+      expect(meta.total).toBe(MEMBER_COUNT);
       expect(meta.active).toBeGreaterThanOrEqual(20);
     });
 
     it("each member has viewerId and name", async () => {
-      const res = await fetch("/members");
+      const res = await fetchJson("/members", PORT);
       const members = res.body.data as Record<string, unknown>[];
       for (const member of members) {
         expect(typeof member.viewerId).toBe("number");
@@ -160,10 +148,10 @@ describe("REST API", () => {
     });
 
     it("transfer members have isTransfer=true", async () => {
-      const res = await fetch("/members");
+      const res = await fetchJson("/members", PORT);
       const members = res.body.data as Record<string, unknown>[];
       const transfers = members.filter((m) => m.isTransfer === true);
-      expect(transfers.length).toBe(6);
+      expect(transfers.length).toBe(TRANSFER_COUNT);
       // Zero (viewer_id 318068745765) is a transfer
       const zero = members.find((m) => m.viewerId === 318068745765);
       expect(zero?.isTransfer).toBe(true);
@@ -172,7 +160,7 @@ describe("REST API", () => {
 
   describe("GET /members/:viewerId", () => {
     it("returns specific member with all fields", async () => {
-      const res = await fetch("/members/116183149143"); // Ryu
+      const res = await fetchJson("/members/116183149143", PORT); // Ryu
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       const data = res.body.data as Record<string, unknown>;
@@ -181,11 +169,11 @@ describe("REST API", () => {
       expect(typeof data.monthlyGain).toBe("number");
       expect(typeof data.latestKnownGain).toBe("number");
       expect(Array.isArray(data.weeklyGains)).toBe(true);
-      expect(data.weeklyGains).toHaveLength(5);
+      expect(data.weeklyGains).toHaveLength(WEEKLY_GAINS_LENGTH);
     });
 
     it("returns transfer member with previousCircleName", async () => {
-      const res = await fetch("/members/318068745765"); // Zero
+      const res = await fetchJson("/members/318068745765", PORT); // Zero
       expect(res.status).toBe(200);
       const data = res.body.data as Record<string, unknown>;
       expect(data.name).toBe("Zero");
@@ -194,7 +182,7 @@ describe("REST API", () => {
     });
 
     it("returns 404 for unknown member", async () => {
-      const res = await fetch("/members/99999999");
+      const res = await fetchJson("/members/99999999", PORT);
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
     });
@@ -202,7 +190,7 @@ describe("REST API", () => {
 
   describe("GET /tier", () => {
     it("returns tier intelligence data with correct values", async () => {
-      const res = await fetch("/tier");
+      const res = await fetchJson("/tier", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       const data = res.body.data as Record<string, unknown>;
@@ -222,7 +210,7 @@ describe("REST API", () => {
 
   describe("GET /snapshots", () => {
     it("returns snapshot list", async () => {
-      const res = await fetch("/snapshots");
+      const res = await fetchJson("/snapshots", PORT);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(Array.isArray(res.body.data)).toBe(true);
@@ -231,7 +219,7 @@ describe("REST API", () => {
 
   describe("Unknown routes", () => {
     it("returns 404", async () => {
-      const res = await fetch("/unknown");
+      const res = await fetchJson("/unknown", PORT);
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
     });
@@ -239,12 +227,12 @@ describe("REST API", () => {
 
   describe("Response envelope", () => {
     it("always has success field", async () => {
-      const res = await fetch("/health");
+      const res = await fetchJson("/health", PORT);
       expect(typeof res.body.success).toBe("boolean");
     });
 
     it("includes meta with snapshotDate on report endpoints", async () => {
-      const res = await fetch("/reports/daily");
+      const res = await fetchJson("/reports/daily", PORT);
       const meta = res.body.meta as Record<string, unknown>;
       expect(meta.snapshotDate).toBeDefined();
       expect(meta.timezone).toBe("Asia/Jakarta");
@@ -264,13 +252,13 @@ describe("Health endpoint with DB failure", () => {
       getLastRun: jest
         .fn()
         .mockRejectedValue(new Error("DB connection failed")),
-    };
+    } as unknown as IDatabase;
     failingDbServer = new ApiServer(
       FAIL_DB_PORT,
       () => SNAPSHOT,
       config,
       undefined,
-      mockDb as any,
+      mockDb,
     );
     await failingDbServer.start();
   });
@@ -280,23 +268,7 @@ describe("Health endpoint with DB failure", () => {
   });
 
   it("returns 503 with dbConnected false when DB fails", async () => {
-    const res = await new Promise<{
-      status: number;
-      body: Record<string, unknown>;
-    }>((resolve, reject) => {
-      http
-        .get(`http://127.0.0.1:${FAIL_DB_PORT}/health`, (res) => {
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
-            resolve({
-              status: res.statusCode ?? 0,
-              body: JSON.parse(data),
-            });
-          });
-        })
-        .on("error", reject);
-    });
+    const res = await fetchJson("/health", FAIL_DB_PORT);
 
     expect(res.status).toBe(503);
     expect(res.body.success).toBe(false);
@@ -344,23 +316,7 @@ describe("No snapshot server", () => {
   });
 
   it("returns 503 when no snapshot available", async () => {
-    const res = await new Promise<{
-      status: number;
-      body: Record<string, unknown>;
-    }>((resolve, reject) => {
-      http
-        .get(`http://127.0.0.1:${NO_SNAP_PORT}/reports/daily`, (res) => {
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
-            resolve({
-              status: res.statusCode ?? 0,
-              body: JSON.parse(data),
-            });
-          });
-        })
-        .on("error", reject);
-    });
+    const res = await fetchJson("/reports/daily", NO_SNAP_PORT);
 
     expect(res.status).toBe(503);
     expect(res.body.success).toBe(false);

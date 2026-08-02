@@ -119,24 +119,20 @@ export function resolveMemberName(
 
   const query = partial.trim();
 
-  // 1. Exact case-sensitive match
   const exactMatch = members.find((m) => m.trainerName === query);
   if (exactMatch) return exactMatch;
 
-  // 2. Exact case-insensitive match
   const lowerQuery = query.toLowerCase();
   const caseInsensitiveMatch = members.find(
     (m) => m.trainerName.toLowerCase() === lowerQuery,
   );
   if (caseInsensitiveMatch) return caseInsensitiveMatch;
 
-  // 3. Unique partial (prefix) match — case-insensitive
   const partialMatches = members.filter((m) =>
     m.trainerName.toLowerCase().startsWith(lowerQuery),
   );
   if (partialMatches.length === 1) return partialMatches[0];
 
-  // 4. Fuzzy match (Levenshtein distance <= 2)
   const FUZZY_THRESHOLD = 2;
   const fuzzyMatches: Array<{ member: ComputedMember; distance: number }> = [];
 
@@ -172,6 +168,5 @@ export function resolveMemberName(
     return null;
   }
 
-  // 5. No match at all
   return null;
 }

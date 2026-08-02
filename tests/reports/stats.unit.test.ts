@@ -1,9 +1,6 @@
 /**
- * /stats Command — full Tests
- *
- * Tests the stats report through unit-level verification and edge cases.
- * Uses real snapshot (examples/snapshot-june-12.json, 34 members).
- * All tests print full output for visual inspection.
+ * Stats report tests using the real snapshot fixture
+ * (examples/snapshot-june-12.json, 34 members).
  */
 
 import { generateStatsReport } from "../../src/reports/stats";
@@ -208,7 +205,7 @@ describe("Average daily gain", () => {
 });
 
 describe("Average active days", () => {
-  it("average = 8 hari (sum=254, round(254/30)=8)", () => {
+  it("average = 9 hari (sum=278, round(278/30)=9)", () => {
     const members = computeMembers(snapshot, config);
     const contributing = members.filter((m) => m.status === "active");
     const counts = contributing.map((m) => countActiveDays(m.dailyFans));
@@ -412,7 +409,7 @@ describe("Requirement pass rate", () => {
 });
 
 describe("Status line adds up to total", () => {
-  it("Keluar + Transfer = Total anggota (Aktif includes transfers)", () => {
+  it("Aktif + Keluar = Total anggota (Aktif includes transfers)", () => {
     const report = generateStatsReport(
       snapshot,
       config,
@@ -745,7 +742,6 @@ describe("Transfer members included in averages", () => {
       .map((m) => m.monthlyGain);
     expect(transferGains.length).toBe(6);
 
-    // Sairen has high monthlyGain (17.9M) among transfers
     const sairen = contributing.find((m) => m.trainerName === "Sairen");
     expect(sairen).toBeDefined();
     expect(sairen!.monthlyGain).toBe(17882090);
@@ -786,7 +782,6 @@ describe("Monthly gain tracing", () => {
     const gf = snapshot.members.find((m) => m.trainer_name === "GoldFamily")!;
     const firstPos = getLatestDataDay(
       gf.daily_fans.filter((v, i) => {
-        // find first positive
         return v > 0;
       }),
     );
@@ -863,7 +858,7 @@ describe("Days elapsed = 0 edge case", () => {
 
 describe("Top/Lowest active section", () => {
   it("does not show top/lowest when no active members (all left)", () => {
-    // All members with all-zero data → status='stale' → ghost detection → 'left'
+    // Same stale→ghost→left pipeline as the "All-zero gains edge case" above; no active members remain
     const allLeft: Snapshot = {
       ...snapshot,
       members: snapshot.members.map((m) => ({
@@ -876,7 +871,6 @@ describe("Top/Lowest active section", () => {
       config,
       computeMembers(allLeft, config),
     );
-    // No 🏆 or 📉 lines if no active members
     expect(report).not.toContain("🏆 Top:");
     expect(report).not.toContain("📉 Lowest aktif:");
   });

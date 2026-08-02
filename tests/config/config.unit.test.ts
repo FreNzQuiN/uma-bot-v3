@@ -217,23 +217,25 @@ describe("updateConfig", () => {
       },
     });
     expect(updated.alerts.performanceDrop.thresholdPercent).toBe(75);
-    // Other alert fields preserved
     expect(updated.alerts.demotionRisk.bufferDays).toBe(
       original.alerts.demotionRisk.bufferDays,
     );
   });
 
-  it("updates admins array (replaces, not merges)", () => {
-    const original = getDefaultConfig();
-    const updated = updateConfig(original, {
-      admins: ["new-admin@s.whatsapp.net"],
-    });
-    expect(updated.admins).toEqual(["new-admin@s.whatsapp.net"]);
-  });
+  it.each([
+    [["new-admin@s.whatsapp.net"], ["new-admin@s.whatsapp.net"]],
+    [["only-one@s.whatsapp.net"], ["only-one@s.whatsapp.net"]],
+  ] as [string[], string[]][])(
+    "replaces admins array, does not merge it",
+    (input, expected) => {
+      const original = getDefaultConfig();
+      const updated = updateConfig(original, { admins: input });
+      expect(updated.admins).toEqual(expected);
+    },
+  );
 
-  it("deep merges partial nested update preserving siblings (BUG-6)", () => {
+  it("deep merges partial nested update preserving siblings", () => {
     const original = getDefaultConfig();
-    // Only update schedule.daily.enabled — weekly and monthly must be preserved
     const updated = updateConfig(original, {
       schedule: {
         daily: { enabled: false },
@@ -249,18 +251,9 @@ describe("updateConfig", () => {
     );
     expect(updated.schedule.monthly.day).toBe(original.schedule.monthly.day);
   });
-
-  it("replaces arrays, does not merge them", () => {
-    const original = getDefaultConfig();
-    const updated = updateConfig(original, {
-      admins: ["only-one@s.whatsapp.net"],
-    });
-    expect(updated.admins).toEqual(["only-one@s.whatsapp.net"]);
-    expect(updated.admins.length).toBe(1);
-  });
 });
 
-describe("validateConfig - time format (BUG-2)", () => {
+describe("validateConfig - time format", () => {
   it('rejects invalid time format "abc"', () => {
     expect(() =>
       validateConfig({
@@ -319,7 +312,7 @@ describe("validateConfig - time format (BUG-2)", () => {
   });
 });
 
-describe("saveConfig round-trip (TEST-GAP-5)", () => {
+describe("saveConfig round-trip", () => {
   it("preserves all values across save/load cycle", () => {
     const original = validateConfig({
       circleId: 99999,
@@ -377,11 +370,9 @@ describe("saveConfig temp file collision recovery", () => {
     // Should not throw — flag:'w' overwrites the orphaned .tmp
     saveConfig(config, filePath);
 
-    // Verify config was saved correctly
     const loaded = loadConfig(filePath);
     expect(loaded.circleId).toBe(99999);
 
-    // .tmp should no longer exist after renameSync
     expect(existsSync(tmpPath)).toBe(false);
   });
 });

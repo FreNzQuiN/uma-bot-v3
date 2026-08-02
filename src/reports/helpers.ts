@@ -8,6 +8,12 @@ import { loadMonthSnapshot } from "../data/snapshot";
 import { getTargetMonth } from "../utils/timezone";
 import { computeMembers } from "./compute";
 
+// Top-N list size for leaderboard-style reports
+export const TOP_N = 10;
+
+// Allow 1 day of data lag (uma.moe publishes once daily)
+export const STALE_DAY_TOLERANCE = 1;
+
 interface HistoricalSnapshotResult {
   activeSnapshot: Snapshot;
   effectiveMembers: ComputedMember[];

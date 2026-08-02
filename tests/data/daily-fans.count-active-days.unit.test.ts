@@ -1,9 +1,3 @@
-/**
- * Tests for countActiveDays.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import { countActiveDays } from "../../src/data/daily-fans";
 import {
   RYU_DAILY_FANS,
@@ -14,7 +8,6 @@ import {
 } from "./daily-fans.fixtures";
 
 describe("countActiveDays", () => {
-  // --- Real data tests ---
   it("counts active days for Ryu (11 days with data, days 1-11)", () => {
     // Day 1 has data → counted
     // Gains: day 2=2334766, day 3=1800906, day 4=2522684, day 5=3739125,
@@ -60,7 +53,6 @@ describe("countActiveDays", () => {
   });
 
   it("counts correctly when gains alternate positive and zero", () => {
-    // [100, 200, 200, 400, 400, 500, ...] → day 1 counted, gains: +100, 0, +200, 0, +100 → 4 active
     const arr = [100, 200, 200, 400, 400, 500, ...new Array(26).fill(0)];
     expect(countActiveDays(arr)).toBe(4);
   });

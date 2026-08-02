@@ -14,6 +14,8 @@ const snapshot: Snapshot = loadRealSnapshot();
 
 const config: BotConfig = getDefaultConfig();
 
+const RYU_VIEWER_ID = 116183149143;
+
 function findMember(members: ComputedMember[], name: string): ComputedMember {
   const m = members.find((m) => m.trainerName === name);
   if (!m) throw new Error(`Member "${name}" not found in computed results`);
@@ -34,14 +36,14 @@ describe("computeMembers", () => {
 
     it("preserves viewerId and trainerName from snapshot", () => {
       const ryu = findMember(members, "Ryu");
-      expect(ryu.viewerId).toBe(116183149143);
+      expect(ryu.viewerId).toBe(RYU_VIEWER_ID);
       expect(ryu.trainerName).toBe("Ryu");
     });
 
     it("preserves dailyFans array reference from snapshot", () => {
       const ryu = findMember(members, "Ryu");
       expect(ryu.dailyFans).toBe(
-        snapshot.members.find((m) => m.viewer_id === 116183149143)?.daily_fans,
+        snapshot.members.find((m) => m.viewer_id === RYU_VIEWER_ID)?.daily_fans,
       );
     });
 
@@ -222,7 +224,7 @@ describe("computeMembers", () => {
   describe("active status count", () => {
     it("has correct active count (total - left)", () => {
       const active = members.filter((m) => m.status === "active");
-      const total = snapshot.members.length; // 34 in the real snapshot
+      const total = snapshot.members.length;
       const left = members.filter((m) => m.status === "left").length;
       expect(active).toHaveLength(total - left);
     });
@@ -230,7 +232,6 @@ describe("computeMembers", () => {
 
   describe("edge cases", () => {
     it("handles member with all-zero daily_fans", () => {
-      // Create a minimal snapshot with one all-zero member
       const minimalSnapshot: Snapshot = {
         ...snapshot,
         members: [
@@ -322,10 +323,6 @@ describe("computeMembers", () => {
       };
 
       const result = computeMembers(snapshot, customConfig);
-      // With staleAfterDays=1: stale if latestPositiveDay <= latestDataDay - 1 = 10
-      // Most members have latestPositiveDay=11, so they stay active
-      // But Rowking (day 3), Kuro (day 2), DOA IBU (day 1), Lebowski (day 1) are stale
-      // They are reclassified as 'left' via member_count ghost detection
       const stale = result.filter((m) => m.status === "stale");
       const left = result.filter((m) => m.status === "left");
       expect(stale.length + left.length).toBe(4);
@@ -334,7 +331,6 @@ describe("computeMembers", () => {
 
   describe("transfer member with no data", () => {
     it('transfer member with no positive data has status "stale" (latestPositiveDay=0)', () => {
-      // Create a transfer member whose latest data is from day 1 (very stale)
       const staleTransferSnapshot: Snapshot = {
         ...snapshot,
         members: [
@@ -389,7 +385,7 @@ describe("computeMembers", () => {
       );
     });
 
-    it("prints full computed output for 5 members with different patterns", () => {
+    it("smoke: computes all 5 member pattern types without crashing", () => {
       const members = computeMembers(snapshot, config);
       const names = [
         "Ryu", // active, regular contributor

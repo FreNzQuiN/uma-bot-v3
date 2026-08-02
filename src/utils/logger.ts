@@ -49,8 +49,7 @@ const DEFAULT_CONFIG: LoggerConfig = {
   maxFiles: 3,
   console: true,
   timezone: "Asia/Jakarta",
-  // Jest sets JEST_WORKER_ID for each test worker. Disable file output
-  // automatically so tests don't pollute the real bot.log.
+  // JEST_WORKER_ID is set by Jest — keep test output out of bot.log.
   fileOutput: !process.env.JEST_WORKER_ID,
 };
 
@@ -64,7 +63,7 @@ class Logger {
   }
 
   /**
-   * Update logger configuration at runtime (called on config reload).
+   * Called on config reload.
    */
   configure(config: Partial<LoggerConfig>): void {
     if (config.logFile && config.logFile !== this.config.logFile) {
@@ -77,9 +76,6 @@ class Logger {
     this.ensureLogDir();
   }
 
-  /**
-   * Get current config for external callers.
-   */
   getConfig(): LoggerConfig {
     return { ...this.config };
   }
@@ -112,6 +108,7 @@ class Logger {
   private formatLine(level: LogLevel, tag: string, message: string): string {
     const now = new Date();
     if (!this.cachedFormatter) {
+      // sv-SE locale yields "YYYY-MM-DD HH:MM:SS" ordering — host-locale independent, pinned by logger tests
       this.cachedFormatter = new Intl.DateTimeFormat("sv-SE", {
         timeZone: this.config.timezone,
         year: "numeric",
@@ -145,9 +142,8 @@ class Logger {
 
   /**
    * Write a log line to console and/or file.
-   *
-   * For error-level logs, the stack trace is written to the file only —
-   * console output shows just the message to keep production logs clean.
+   * warn/error stack traces are stripped for console output only — the file
+   * keeps the full line, stack included.
    */
   private write(level: LogLevel, tag: string, message: string): void {
     if (!this.shouldLog(level)) return;
@@ -165,7 +161,7 @@ class Logger {
     }
 
     const fileLine = this.formatLine(level, tag, message);
-    this.writeToFile(fileLine, level);
+    this.writeToFile(fileLine);
   }
 
   /**
@@ -177,29 +173,25 @@ class Logger {
     return newlineIdx >= 0 ? message.slice(0, newlineIdx) : message;
   }
 
-  private writeToFile(line: string, level: LogLevel): void {
+  private writeToFile(line: string): void {
     if (!this.config.fileOutput) return;
 
     this.ensureLogDir();
 
     try {
       const filePath = this.config.logFile;
-      const fileMsg =
-        level === "error" || level === "warn"
-          ? this.stripStackTrace(line)
-          : line;
 
       if (existsSync(filePath) && this.config.maxFiles > 0) {
         const stat = statSync(filePath);
         const sizeMB = stat.size / (1024 * 1024);
         if (sizeMB >= this.config.maxSizeMB) {
-          appendFileSync(filePath, fileMsg + "\n", "utf-8");
+          appendFileSync(filePath, line + "\n", "utf-8");
           setImmediate(() => this.rotate(filePath));
           return;
         }
       }
 
-      appendFileSync(filePath, fileMsg + "\n", "utf-8");
+      appendFileSync(filePath, line + "\n", "utf-8");
     } catch (err) {
       this.initialized = false;
       const msg = err instanceof Error ? err.message : String(err);

@@ -1,9 +1,6 @@
 /**
  * Unit tests for WhatsAppClient class.
  *
- * Covers: isConnected, getConnectionState, cacheSentMessage, sendMessage,
- * sendOrEdit, sendMessageWithRetry, and disconnect.
- *
  * createBaileysLogger is NOT exported — tested indirectly through connect().
  */
 
@@ -81,7 +78,6 @@ function makeClient(overrides: Record<string, unknown> = {}): {
   const sock = makeMockSock();
   (client as any).sock = sock;
   (client as any).connectionState = "open";
-  // Apply any overrides to the injected sock or client fields
   for (const [key, value] of Object.entries(overrides)) {
     (client as any)[key] = value;
   }
@@ -92,7 +88,6 @@ describe("WhatsAppClient", () => {
   describe("isConnected", () => {
     it("returns false when sock is null", () => {
       const client = new WhatsAppClient(getConfig);
-      // sock is null by default from constructor
       expect(client.isConnected()).toBe(false);
     });
 
@@ -181,30 +176,23 @@ describe("WhatsAppClient", () => {
       const { client } = makeClient();
       const cache: Map<string, unknown> = (client as any).messageCache;
 
-      // MESSAGE_CACHE_MAX = 2000 (source: src/whatsapp/client.ts)
-      const CACHE_MAX = 2000;
-      // MESSAGE_CACHE_EVICT = 500 (source: src/whatsapp/client.ts)
-      const CACHE_EVICT = 500;
+      const CACHE_MAX = WhatsAppClient.MESSAGE_CACHE_MAX;
+      const CACHE_EVICT = WhatsAppClient.MESSAGE_CACHE_EVICT;
 
-      // Fill cache to exactly MESSAGE_CACHE_MAX
       for (let i = 0; i < CACHE_MAX; i++) {
         cache.set(`msg-${i}`, { text: `part-${i}` });
       }
       expect(cache.size).toBe(CACHE_MAX);
 
-      // Adding one more triggers eviction of MESSAGE_CACHE_EVICT entries
       (client as any).cacheSentMessage({
         key: { id: "msg-overflow" },
         message: { text: "overflow" },
       });
 
-      // Size should be CACHE_MAX + 1 - CACHE_EVICT
       expect(cache.size).toBe(CACHE_MAX + 1 - CACHE_EVICT);
       expect(cache.has("msg-overflow")).toBe(true);
-      // Oldest entries should be gone
       expect(cache.has("msg-0")).toBe(false);
       expect(cache.has(`msg-${CACHE_EVICT - 1}`)).toBe(false);
-      // Later entries should remain
       expect(cache.has(`msg-${CACHE_EVICT}`)).toBe(true);
     });
   });
@@ -212,7 +200,6 @@ describe("WhatsAppClient", () => {
   describe("sendMessage", () => {
     it("throws when sock is null", async () => {
       const client = new WhatsAppClient(getConfig);
-      // sock is null by default
       await expect(client.sendMessage("12345@g.us", "hello")).rejects.toThrow(
         "WhatsApp client not connected",
       );
@@ -313,7 +300,6 @@ describe("WhatsAppClient", () => {
       const { client, sock } = makeClient();
       mockSplitMessage.mockReturnValue(["fallback"]);
 
-      // First call (edit) fails, second call (send) succeeds
       sock.sendMessage
         .mockRejectedValueOnce(new Error("edit failed"))
         .mockResolvedValueOnce({ key: { id: "fallback-msg" } });
@@ -350,7 +336,6 @@ describe("WhatsAppClient", () => {
         "multi",
       );
 
-      // First call: delete, then 2 sends
       expect(sock.sendMessage).toHaveBeenCalledTimes(3);
       expect(sock.sendMessage.mock.calls[0][1]).toEqual({
         delete: { id: "loading-id", remoteJid: "12345@g.us", fromMe: true },
@@ -395,7 +380,6 @@ describe("WhatsAppClient", () => {
         "content",
       );
 
-      // Despite delete failure, send still succeeds
       expect(result).toBe("recovered");
     });
   });
@@ -532,6 +516,7 @@ describe("WhatsAppClient", () => {
 
   describe("getBadSessionDecision", () => {
     const HOUR = 60 * 60 * 1000;
+    const TEN_MINUTES = 10 * 60 * 1000;
 
     it("returns reconnect with count 1 on first badSession", () => {
       expect(getBadSessionDecision(0, null, Date.now())).toEqual({
@@ -542,7 +527,7 @@ describe("WhatsAppClient", () => {
 
     it("returns reset-signal on second badSession within the window", () => {
       const now = Date.now();
-      expect(getBadSessionDecision(1, now - 10_000, now)).toEqual({
+      expect(getBadSessionDecision(1, now - TEN_MINUTES, now)).toEqual({
         action: "reset-signal",
         count: 2,
       });
@@ -550,7 +535,7 @@ describe("WhatsAppClient", () => {
 
     it("returns wipe on third badSession within the window", () => {
       const now = Date.now();
-      expect(getBadSessionDecision(2, now - 10_000, now)).toEqual({
+      expect(getBadSessionDecision(2, now - TEN_MINUTES, now)).toEqual({
         action: "wipe",
         count: 3,
       });
@@ -566,7 +551,7 @@ describe("WhatsAppClient", () => {
 
     it("stays at wipe for counts beyond 3 within the window", () => {
       const now = Date.now();
-      expect(getBadSessionDecision(5, now - 10_000, now)).toEqual({
+      expect(getBadSessionDecision(5, now - TEN_MINUTES, now)).toEqual({
         action: "wipe",
         count: 6,
       });

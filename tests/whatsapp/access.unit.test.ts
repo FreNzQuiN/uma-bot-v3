@@ -244,7 +244,7 @@ describe("canUseCommand", () => {
       );
     });
 
-    it("handles empty groups", () => {
+    it("allows admin report commands in private chat when no command groups configured", () => {
       const cfg = makeConfig({
         admins: [ADMIN_JID],
         groups: { command: [], announcement: [], alertAdmin: [] },
@@ -253,7 +253,7 @@ describe("canUseCommand", () => {
       expect(canUseCommand("daily", ADMIN_JID, PRIVATE_CHAT, cfg)).toBe(true);
       // Admin cannot use report commands in unconfigured group
       expect(canUseCommand("daily", ADMIN_JID, OTHER_GROUP, cfg)).toBe(false);
-      // Non-admin cannot use in non-command group
+      // Non-admin blocked from report commands in private chat
       expect(canUseCommand("daily", NON_ADMIN_JID, PRIVATE_CHAT, cfg)).toBe(
         false,
       );
@@ -268,7 +268,6 @@ describe("canUseCommand", () => {
           alertAdmin: [],
         },
       });
-      // Report commands: admin can only use in command groups or private chats
       expect(canUseCommand("daily", ADMIN_JID, "any-group@g.us", cfg)).toBe(
         false,
       );
@@ -276,7 +275,6 @@ describe("canUseCommand", () => {
         true,
       );
       expect(canUseCommand("daily", ADMIN_JID, PRIVATE_CHAT, cfg)).toBe(true);
-      // Admin commands: restricted to command groups and private chats
       expect(canUseCommand("setreq", ADMIN_JID, "any-group@g.us", cfg)).toBe(
         false,
       );

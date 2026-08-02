@@ -40,12 +40,15 @@ const SENDER_KEY_PREFIX = "sender-key-";
 const PRE_KEY_PREFIX = "pre-key-";
 const SESSION_PREFIX = "session-";
 const IDENTITY_KEY_PREFIX = "identity-key-";
+const APP_STATE_SYNC_PREFIX = "app-state-sync-";
+const DEVICE_LIST_PREFIX = "device-list-";
 const CREDS_FILE = "creds.json";
 const CREDS_BACKUP_FILE = "creds.json.bak";
 const LAST_CONNECT_MARKER = ".last-connect";
 
 /** Default: prune lid-mapping files older than 7 days. */
 const DEFAULT_LID_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 86_400_000;
 
 export interface AuthStats {
   total: number;
@@ -57,10 +60,6 @@ export interface CleanupResult {
   errors: number;
 }
 
-/**
- * Count auth files grouped by type prefix.
- * Returns total file count and per-type counts.
- */
 export function getAuthStats(authDir: string): AuthStats {
   const byType: Record<string, number> = {};
 
@@ -77,9 +76,6 @@ export function getAuthStats(authDir: string): AuthStats {
   return { total: files.length, byType };
 }
 
-/**
- * Classify an auth file into a human-readable type bucket.
- */
 function classifyAuthFile(filename: string): string {
   if (filename === CREDS_FILE) return "creds";
   if (filename.startsWith(LID_MAPPING_PREFIX)) return "lid-mapping";
@@ -87,8 +83,8 @@ function classifyAuthFile(filename: string): string {
   if (filename.startsWith(PRE_KEY_PREFIX)) return "pre-key";
   if (filename.startsWith(SESSION_PREFIX)) return "session";
   if (filename.startsWith(IDENTITY_KEY_PREFIX)) return "identity-key";
-  if (filename.startsWith("app-state-sync-")) return "app-state-sync";
-  if (filename.startsWith("device-list-")) return "device-list";
+  if (filename.startsWith(APP_STATE_SYNC_PREFIX)) return "app-state-sync";
+  if (filename.startsWith(DEVICE_LIST_PREFIX)) return "device-list";
   return "other";
 }
 
@@ -180,8 +176,15 @@ export function deleteCorruptedSenderKey(
       unlinkSync(join(authDir, file));
       log.info("WhatsApp", `Auto-deleted corrupted sender-key: ${file}`);
       return true;
-    } catch {
-      // File may have been deleted by another process — not an error
+    } catch (err) {
+      // ENOENT: deleted by another process — not an error
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        log.warn(
+          "WhatsApp",
+          `Failed to delete corrupted sender-key: ${file}`,
+          err,
+        );
+      }
     }
   }
 
@@ -206,10 +209,6 @@ export function backupCreds(authDir: string): boolean {
   }
 }
 
-/**
- * Copy creds.json.bak back over creds.json.
- * Returns false when no backup exists or the copy fails.
- */
 export function restoreCredsBackup(authDir: string): boolean {
   try {
     const src = join(authDir, CREDS_BACKUP_FILE);
@@ -256,9 +255,7 @@ export function getLastConnect(authDir: string): number | null {
   }
 }
 
-/**
- * Record a successful connection. Called on every "open".
- */
+/** Call on every successful "open". */
 export function writeLastConnect(authDir: string): void {
   try {
     const markerPath = join(authDir, LAST_CONNECT_MARKER);
@@ -282,7 +279,7 @@ export function shouldPurgeSignalState(
   if (!isCredsUsable(authDir)) return false;
   const lastConnect = getLastConnect(authDir);
   if (lastConnect === null) return true;
-  return Date.now() - lastConnect > purgeAfterDays * 86_400_000;
+  return Date.now() - lastConnect > purgeAfterDays * DAY_MS;
 }
 
 /**

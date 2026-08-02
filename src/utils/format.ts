@@ -28,8 +28,8 @@ export function formatNumber(n: number): string {
 }
 
 /**
- * Sanitize a trainer name for safe embedding in WhatsApp formatted messages.
- * Escapes WhatsApp formatting characters (*, _, ~) to prevent injection.
+ * Neutralize WhatsApp formatting characters (*, _, ~) in trainer names
+ * so they can't inject formatting into reports.
  */
 export function sanitizeName(name: string): string {
   return name.replace(/\*/g, "").replace(/_/g, " ").replace(/~/g, "-");

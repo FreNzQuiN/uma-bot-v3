@@ -112,9 +112,8 @@ export function generateStatsReport(
   lines.push(`🎯 Zero gain hari ini: ${zeroGainToday} orang`);
   lines.push("");
 
-  const activeMembers = contributing.filter((m) => m.status === "active");
-  if (activeMembers.length > 0) {
-    const sortedByGain = [...activeMembers].sort(
+  if (contributing.length > 0) {
+    const sortedByGain = [...contributing].sort(
       (a, b) => b.monthlyGain - a.monthlyGain,
     );
     const topMember = sortedByGain[0];

@@ -15,6 +15,12 @@ import { computeMembers, computeTierData } from "../reports/compute";
 import { log } from "../utils/logger";
 import { getRuntimeStats, getUptimeMs } from "../runtime";
 import { getDataDateComponents } from "../utils/timezone";
+import { STALE_DAY_TOLERANCE } from "../reports/helpers";
+
+const SERVER_TIMEOUT_MS = 30_000;
+
+export const RATE_LIMIT_WINDOW_MS = 1000;
+export const RATE_LIMIT_MAX_REQUESTS = 50;
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -89,7 +95,7 @@ export class ApiServer {
       this.server = http.createServer((req, res) => {
         this.handleRequest(req, res);
       });
-      this.server.timeout = 30_000;
+      this.server.timeout = SERVER_TIMEOUT_MS;
 
       // Bind to localhost only (security requirement from spec)
       this.server.listen(this.port, "127.0.0.1", () => {
@@ -308,11 +314,9 @@ export class ApiServer {
 
   private isRateLimited(ip: string): boolean {
     const now = Date.now();
-    const windowMs = 1000;
-    const maxRequests = 50;
     const timestamps = this.requestTimestamps.get(ip) ?? [];
-    const recent = timestamps.filter((t) => now - t < windowMs);
-    if (recent.length >= maxRequests) return true;
+    const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+    if (recent.length >= RATE_LIMIT_MAX_REQUESTS) return true;
     recent.push(now);
     this.requestTimestamps.set(ip, recent);
     return false;
@@ -336,7 +340,7 @@ export class ApiServer {
     const stale =
       snapshotYear === currentYear &&
       snapshotMonth === currentMonth &&
-      dataDay < currentDay - 1;
+      dataDay < currentDay - STALE_DAY_TOLERANCE;
 
     const meta = {
       snapshotDate: snapshot.circle.last_updated?.split("T")[0] ?? "unknown",

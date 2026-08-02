@@ -10,9 +10,14 @@
  */
 
 import { setupCommandHandler } from "../../src/whatsapp/dispatch";
-import { WhatsAppClient, IncomingMessage } from "../../src/whatsapp/client";
+import {
+  WhatsAppClient,
+  IncomingMessage,
+  MessageHandler,
+} from "../../src/whatsapp/client";
 import { getDefaultConfig } from "../../src/config";
 import type { BotConfig, Snapshot } from "../../src/types";
+import type { IDatabase } from "../../src/db/types";
 import { makeConfig as makeConfigBase, makeMessage } from "../_helpers";
 
 // Prevent admin command tests from writing to the actual config.yaml
@@ -38,7 +43,22 @@ const COMMAND_GROUP = "group-cmd@g.us";
 const OTHER_GROUP = "group-other@g.us";
 const PRIVATE_CHAT = "6281111111111@s.whatsapp.net";
 
-function makeConfig(overrides: Record<string, any> = {}): BotConfig {
+const MONTHLY_REQUIREMENT = 30_000_000;
+const SNAPSHOT_MONTHLY_POINT = 1_000_000;
+const FANS_TO_NEXT_TIER = 500_000;
+const FANS_TO_LOWER_TIER = 50_000;
+const YESTERDAY_FANS_TO_NEXT_TIER = 600_000;
+const YESTERDAY_FANS_TO_LOWER_TIER = 40_000;
+
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends (infer U)[]
+    ? U[]
+    : T[K] extends object
+      ? DeepPartial<T[K]>
+      : T[K];
+};
+
+function makeConfig(overrides: DeepPartial<BotConfig> = {}): BotConfig {
   return makeConfigBase({
     admins: [ADMIN_JID],
     groups: { command: [COMMAND_GROUP], announcement: [], alertAdmin: [] },
@@ -60,7 +80,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
       created_at: "",
       last_updated: "2026-06-12T14:00:00Z",
       monthly_rank: 100,
-      monthly_point: 1000000,
+      monthly_point: SNAPSHOT_MONTHLY_POINT,
       last_month_rank: null,
       last_month_point: null,
       archived: false,
@@ -102,15 +122,15 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
       },
     ],
     club_rank: 8,
-    fans_to_next_tier: 500000,
-    fans_to_lower_tier: 50000,
-    yesterday_fans_to_next_tier: 600000,
-    yesterday_fans_to_lower_tier: 40000,
+    fans_to_next_tier: FANS_TO_NEXT_TIER,
+    fans_to_lower_tier: FANS_TO_LOWER_TIER,
+    yesterday_fans_to_next_tier: YESTERDAY_FANS_TO_NEXT_TIER,
+    yesterday_fans_to_lower_tier: YESTERDAY_FANS_TO_LOWER_TIER,
     ...overrides,
   };
 }
 
-function makeMockDb(): any {
+function makeMockDb(): IDatabase {
   return {
     recordAlert: jest.fn(),
     getMembers: jest.fn().mockReturnValue([]),
@@ -121,12 +141,12 @@ function makeMockDb(): any {
     getLastRun: jest.fn().mockReturnValue(null),
     recordRun: jest.fn(),
     updateRunStatus: jest.fn(),
-  };
+  } as unknown as IDatabase;
 }
 
 describe("setupCommandHandler", () => {
-  let mockDb: any;
-  let mockClient: WhatsAppClient;
+  let mockDb: IDatabase;
+  let mockClient: jest.Mocked<WhatsAppClient>;
   let config: BotConfig;
   let snapshot: Snapshot;
   let messageHandler: ((msg: IncomingMessage) => void) | null;
@@ -140,7 +160,7 @@ describe("setupCommandHandler", () => {
     snapshot = makeSnapshot();
 
     mockClient = {
-      onMessage: jest.fn((handler: any) => {
+      onMessage: jest.fn((handler: MessageHandler) => {
         messageHandler = handler;
       }),
       sendMessage: jest.fn(async (jid: string, text: string) => {
@@ -154,7 +174,7 @@ describe("setupCommandHandler", () => {
       ),
       connect: jest.fn(),
       disconnect: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<WhatsAppClient>;
   });
 
   it("can be called without errors (wiring smoke test)", () => {
@@ -171,8 +191,6 @@ describe("setupCommandHandler", () => {
     expect(messageHandler).not.toBeNull();
   });
 
-  // --- Report commands (group: 2 calls: loading + result) ---
-
   it("parses and dispatches /daily command", async () => {
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);
@@ -180,7 +198,6 @@ describe("setupCommandHandler", () => {
     const msg = makeMessage({ message: { conversation: "/daily" } });
     await messageHandler!(msg);
 
-    // Group: loading (1) + result (2)
     expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
     expect(sentMessages[0].text).toMatch(/^⏳ /);
     expect(sentMessages[1].text).toContain("Daily");
@@ -264,8 +281,6 @@ describe("setupCommandHandler", () => {
     expect(sentMessages[1].text).toContain("Tier");
   });
 
-  // --- Admin commands (group: 1 call, no loading) ---
-
   it("silently ignores non-admin using admin command /setreq in command group", async () => {
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);
@@ -280,7 +295,6 @@ describe("setupCommandHandler", () => {
     });
     await messageHandler!(msg);
 
-    // Silently ignored — no message sent
     expect(mockClient.sendOrEdit).not.toHaveBeenCalled();
   });
 
@@ -326,8 +340,6 @@ describe("setupCommandHandler", () => {
     expect(sentMessages[0].text).toContain("Status");
   });
 
-  // --- Edge cases ---
-
   it("ignores non-command messages", async () => {
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);
@@ -353,7 +365,6 @@ describe("setupCommandHandler", () => {
     });
     await messageHandler!(msg);
 
-    // Silently ignored — no message sent
     expect(mockClient.sendOrEdit).not.toHaveBeenCalled();
   });
 
@@ -381,14 +392,12 @@ describe("setupCommandHandler", () => {
     await messageHandler!(msg);
 
     expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
-    // First call: loading with null messageId
     expect(mockClient.sendOrEdit).toHaveBeenNthCalledWith(
       1,
       COMMAND_GROUP,
       null,
       expect.stringMatching(/^⏳ /),
     );
-    // Second call: edit with the messageId from first call
     expect(mockClient.sendOrEdit).toHaveBeenNthCalledWith(
       2,
       COMMAND_GROUP,
@@ -591,7 +600,7 @@ describe("setupCommandHandler", () => {
     const msg = makeMessage({ message: { conversation: "/daily 2" } });
     await messageHandler!(msg);
 
-    // Should produce report, not error — 2 calls (loading + result)
+    // Should produce report, not error
     expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
     expect(sentMessages[1].text).toContain("Daily");
   });
@@ -657,7 +666,6 @@ describe("setupCommandHandler", () => {
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);
 
-    // 'alice' should resolve to 'Alice' through resolveMemberName
     const msg = makeMessage({ message: { conversation: "/analyze alice" } });
     await messageHandler!(msg);
 
@@ -693,10 +701,7 @@ describe("setupCommandHandler", () => {
     expect(sentMessages[1].text).toContain("Alice");
   });
 
-  // ── /analyze offset tests ────────────────────────────────
-
   it("/analyze Alice -1 extracts offset from last arg and generates report", async () => {
-    // Build previous month snapshot with Alice
     const prevSnapshot: Snapshot = {
       ...snapshot,
       members: [
@@ -751,8 +756,6 @@ describe("setupCommandHandler", () => {
   });
 
   it("/analyze Alice -1 -2 — only last numeric arg is offset", async () => {
-    // -2 is the offset, -1 is part of the name (though unlikely to match)
-    // Since name "Alice -1" won't resolve, should show "tidak ditemukan"
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);
 
@@ -762,12 +765,10 @@ describe("setupCommandHandler", () => {
     await messageHandler!(msg);
 
     expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(2);
-    // Name "Alice -1" won't resolve → error
     expect(sentMessages[1].text).toContain("tidak ditemukan");
   });
 
   it("/analyze Alice -1 where Alice not in previous month → tidak ditemukan", async () => {
-    // Previous month has Bob but not Alice
     const prevSnapshot: Snapshot = {
       ...snapshot,
       members: [
@@ -790,8 +791,6 @@ describe("setupCommandHandler", () => {
     expect(sentMessages[1].text).toContain("tidak ditemukan");
   });
 
-  // ── End offset tests ────────────────────────────────────
-
   it("resolves case-insensitive names for /compare via dispatch", async () => {
     const getSnapshot = () => snapshot;
     setupCommandHandler(mockClient, config, mockDb, getSnapshot);
@@ -813,17 +812,15 @@ describe("setupCommandHandler", () => {
 
     setupCommandHandler(mockClient, cfg, mockDb, getSnapshot);
 
-    // Set monthly requirement to 30M
     const setReqMsg = makeMessage({
       key: { remoteJid: COMMAND_GROUP, id: "msg-001", participant: ADMIN_JID },
-      message: { conversation: "/setreq monthly 30000000" },
+      message: { conversation: `/setreq monthly ${MONTHLY_REQUIREMENT}` },
     });
     await messageHandler!(setReqMsg);
 
-    // Verify the confirmation message
     expect(sentMessages[0].text).toContain("30.0M");
 
-    // Now run /config to verify the change was applied internally
+    // Verify the change was applied internally
     sentMessages.length = 0;
     const configMsg = makeMessage({
       key: { remoteJid: COMMAND_GROUP, id: "msg-002", participant: ADMIN_JID },
@@ -850,7 +847,6 @@ describe("setupCommandHandler", () => {
 
     expect(sentMessages[0].text).toContain("diaktifkan");
 
-    // Verify via /config
     sentMessages.length = 0;
     const configMsg = makeMessage({
       key: { remoteJid: COMMAND_GROUP, id: "msg-002", participant: ADMIN_JID },
@@ -879,7 +875,6 @@ describe("setupCommandHandler", () => {
 
     expect(sentMessages[0].text).toContain("dinonaktifkan");
 
-    // Verify via /config
     sentMessages.length = 0;
     const configMsg = makeMessage({
       key: { remoteJid: COMMAND_GROUP, id: "msg-002", participant: ADMIN_JID },
@@ -954,7 +949,6 @@ describe("setupCommandHandler", () => {
     });
     await messageHandler!(msg);
 
-    // Non-admin cannot use any command in private chat
     expect(mockClient.sendOrEdit).not.toHaveBeenCalled();
   });
 
@@ -972,7 +966,6 @@ describe("setupCommandHandler", () => {
     });
     await messageHandler!(msg);
 
-    // Snapshot not needed — help text is static
     expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(1);
     expect(sentMessages[0].text).toContain("Command Registry");
   });

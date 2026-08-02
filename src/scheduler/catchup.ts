@@ -19,7 +19,12 @@ import {
   getDataDateComponents,
 } from "../utils/timezone";
 import { log } from "../utils/logger";
-import { groupByCollision, SCHEDULED_REPORT_TYPES } from "./helpers";
+import {
+  groupByCollision,
+  PREV_MONTH_OFFSET,
+  recordIndividualRuns,
+  SCHEDULED_REPORT_TYPES,
+} from "./helpers";
 
 /**
  * Compute the most recent scheduled date for a report type.
@@ -65,9 +70,6 @@ function getMostRecentScheduledDate(
   }
 }
 
-/**
- * Calculate yesterday's date in YYYY-MM-DD (data timezone: JST).
- */
 function getYesterdayDate(): string {
   const { year, month, day } = getDataDateComponents();
   const d = new Date(year, month - 1, day - 1);
@@ -131,7 +133,7 @@ export class CatchUpManager {
     const targetJid = this.config.groups.announcement[0] ?? "";
 
     for (const reportType of missed) {
-      const reportDate = this.getMissedDate(reportType);
+      const reportDate = getMostRecentScheduledDate(reportType, this.config);
       await this.db.recordRun({
         report_type: reportType,
         report_date: reportDate,
@@ -186,7 +188,7 @@ export class CatchUpManager {
         isCatchUp: true,
       };
       if (reportType === "monthly") {
-        options.offset = -1;
+        options.offset = PREV_MONTH_OFFSET;
       }
       const result = await sendReport(reportType, options);
       const alerts = Array.isArray(result) ? result : [];
@@ -274,16 +276,14 @@ export class CatchUpManager {
           if (Array.isArray(result)) alerts.push(...result);
           await this.db.updateRunStatus(runId, "sent");
           // Record individual runs so scheduled reports don't duplicate
-          for (const type of group) {
-            await this.db.recordRun({
-              report_type: type,
-              report_date: today,
-              scheduled_at: scheduledAt,
-              status: "sent",
-              is_catch_up: true,
-              target_jid: targetJid,
-            });
-          }
+          await recordIndividualRuns(
+            this.db,
+            group,
+            today,
+            scheduledAt,
+            targetJid,
+            true,
+          );
           await this.db.save();
           sent++;
           log.info("CatchUp", `Sent combined report: ${combinedKey}`);
@@ -320,14 +320,6 @@ export class CatchUpManager {
     }
 
     return { sent, skipped, failed, alerts };
-  }
-
-  /**
-   * Compute the date that was missed for a given report type.
-   * For daily: yesterday. For weekly/monthly: the most recent scheduled day.
-   */
-  private getMissedDate(reportType: string): string {
-    return getMostRecentScheduledDate(reportType, this.config);
   }
 
   private isReportEnabled(reportType: string): boolean {

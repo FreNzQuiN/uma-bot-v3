@@ -18,6 +18,8 @@ import { log } from "../utils/logger";
 const BASE_URL = "https://uma.moe";
 const SESSION_CACHE_MS = 240_000;
 const CLOSE_TIMEOUT_MS = 5_000;
+const TURNSTILE_SETTLE_MS = 5_000;
+const MAX_FETCH_RETRIES = 2;
 
 export interface UmaMoeClientOptions {
   sessionCacheMs?: number;
@@ -83,7 +85,7 @@ export class UmaMoeClient {
       const page = await context.newPage();
 
       await page.goto(BASE_URL, { waitUntil: "networkidle", timeout: 30_000 });
-      await page.waitForTimeout(5000);
+      await page.waitForTimeout(TURNSTILE_SETTLE_MS);
 
       this.browser = browser;
       this.context = context;
@@ -154,7 +156,7 @@ export class UmaMoeClient {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (
-        attempt < 2 &&
+        attempt < MAX_FETCH_RETRIES &&
         (msg.includes("HTTP 401") || msg.includes("HTTP 403"))
       ) {
         log.warn(

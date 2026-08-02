@@ -93,10 +93,8 @@ describe("Left members section", () => {
   it("shows NO left members section (left only in /members)", () => {
     const report = generateDailyReport(snapshot, config, computedMembers, 0);
 
-    // Left section removed from daily report
     expect(report).not.toContain("🚪 Keluar dari klub:");
 
-    // Left members should NOT be in ranking
     const rankLines = report.split("\n").filter((l) => /^\d+\./.test(l));
     for (const line of rankLines) {
       expect(line).not.toContain("DOA IBU");
@@ -127,7 +125,6 @@ describe("Left members section", () => {
       0,
     );
 
-    // Both should show same output (no left section)
     expect(reportNoDb).not.toContain("🚪 Keluar dari klub:");
     expect(reportWithDb).not.toContain("🚪 Keluar dari klub:");
   });
@@ -150,18 +147,15 @@ describe("Offset clamping at report level", () => {
     const memberLines = lines.filter((l) => /^\d+\./.test(l));
     expect(memberLines.length).toBe(0);
 
-    // Shows "first day" message since no one can have gain on day 1
     expect(report).toContain("Gain hari pertama: belum tersedia");
   });
 
   it("offset equal to dataDay - 1 shows day 1 data", () => {
-    // dataDay=11, offset=10 -> dataDay=1
     const report = generateDailyReport(snapshot, config, computedMembers, 10);
     expect(report).toContain("📊 *Daily Report — 1 Juni 2026*");
   });
 
   it("offset=dataDay shows day 1 (clamped from 0)", () => {
-    // dataDay=11, offset=11 -> max(1, 0) = 1
     const report = generateDailyReport(snapshot, config, computedMembers, 11);
     expect(report).toContain("📊 *Daily Report — 1 Juni 2026*");
   });
@@ -383,7 +377,6 @@ describe("Offset=1 complete line verification", () => {
   });
 
   it("left members section shows same 4 ghost members in offset=1", () => {
-    // Left section removed from daily report
     expect(report).not.toContain("🚪 Keluar dari klub:");
   });
 
@@ -445,7 +438,6 @@ describe("Report section ordering", () => {
     const staleWarningIdx = lines.findIndex((l) => l.includes("⚠️ Data klub"));
     const footerIdx = lines.findIndex((l) => l.startsWith("⸻"));
 
-    // No left section in daily report
     expect(lines.findIndex((l) => l.includes("🚪 Keluar dari klub:"))).toBe(-1);
     expect(staleWarningIdx).toBeGreaterThan(lastRankedIdx);
     expect(footerIdx).toBeGreaterThan(staleWarningIdx);
@@ -534,7 +526,6 @@ describe("Config edge cases for daily report", () => {
       0,
     );
     // Nargi has gain=0 on day 11 (viewed day), firstPositiveDay=1 ≠ dataDay
-    // With staleAfterDaysDaily=1, Nargi shows in stale section
     expect(report).toContain("⚠️ Belum aktif hari ini");
     expect(report).toContain("• Nargi");
   });
@@ -554,7 +545,6 @@ describe("Config edge cases for daily report", () => {
       computeMembers(snapshot, lenientConfig),
       0,
     );
-    // Stale section shows active members with 0 gain on the viewed day, regardless of staleAfterDaysDaily
     expect(report).toContain("⚠️ Belum aktif");
     // Ghost detection still removes 4 members → 27 positive-gain in ranking
     const memberLines = report.split("\n").filter((l) => /^\d+\./.test(l));

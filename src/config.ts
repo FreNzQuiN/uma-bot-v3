@@ -196,18 +196,19 @@ const ConfigSchema = z.object({
     .default({}),
 });
 
-export function getDefaultConfig(): BotConfig {
-  const result = ConfigSchema.parse({});
+function parseConfig(data: unknown): BotConfig {
+  const result = ConfigSchema.parse(data);
   // Compile-time check: Zod schema output must match BotConfig
   const _: BotConfig = result as BotConfig;
   return _;
 }
 
+export function getDefaultConfig(): BotConfig {
+  return parseConfig({});
+}
+
 export function validateConfig(data: unknown): BotConfig {
-  const result = ConfigSchema.parse(data);
-  // Compile-time check: Zod schema output must match BotConfig
-  const _: BotConfig = result as BotConfig;
-  return _;
+  return parseConfig(data);
 }
 
 export function loadConfig(filePath?: string): BotConfig {
@@ -273,10 +274,8 @@ export function updateConfig(
 }
 
 /**
- * Save config to disk as YAML, preserving original file formatting.
- * Uses the yaml Document API to preserve block-style, comments, and ordering.
- * Falls back to plain stringify if the file can't be read/parsed.
- * The file watcher will detect the mtime change and reload.
+ * Uses the yaml Document API to preserve block-style, comments, and ordering
+ * from the existing file; falls back to plain stringify if unreadable.
  */
 export function saveConfig(config: BotConfig, filePath?: string): void {
   const path = filePath ?? "config.yaml";

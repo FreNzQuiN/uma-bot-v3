@@ -16,9 +16,17 @@
 import * as fs from "fs";
 import * as path from "path";
 import { getDefaultConfig } from "../../src/config";
-import type { Snapshot, BotConfig } from "../../src/types";
+import type { Snapshot, BotConfig, MemberData } from "../../src/types";
 import type { IncomingMessage } from "../../src/whatsapp/client";
 import type { IDatabase } from "../../src/db/types";
+
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends (infer U)[]
+    ? U[]
+    : T[K] extends object
+      ? DeepPartial<T[K]>
+      : T[K];
+};
 
 /** Path to the real snapshot fixture */
 export const SNAPSHOT_PATH = path.join(
@@ -44,7 +52,6 @@ export const STALE_NAMES = ["DOA IBU", "Kuro", "Rowking", "Lebowski"] as const;
 /** WhatsApp message character limit */
 export const WHATSAPP_MAX_LENGTH = 4096;
 
-/** Load the real snapshot from the fixture file (parsed from JSON) */
 export function loadRealSnapshot(): Snapshot {
   return JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf-8"));
 }
@@ -59,75 +66,176 @@ export function loadRealSnapshot(): Snapshot {
  *   makeConfig({ schedule: { daily: { enabled: false } } })
  *   // weekly and monthly schedule preserved from defaults
  */
-export function makeConfig(overrides: Record<string, any> = {}): BotConfig {
+export function makeConfig(overrides: DeepPartial<BotConfig> = {}): BotConfig {
   const base = getDefaultConfig();
   return {
-    ...base,
-    ...overrides,
+    circleId: overrides.circleId ?? base.circleId,
+    timezone: overrides.timezone ?? base.timezone,
+
+    commands: {
+      prefixes: overrides.commands?.prefixes ?? base.commands.prefixes,
+      maxDailyOffset:
+        overrides.commands?.maxDailyOffset ?? base.commands.maxDailyOffset,
+      maxWeeklyOffset:
+        overrides.commands?.maxWeeklyOffset ?? base.commands.maxWeeklyOffset,
+      maxMonthlyOffset:
+        overrides.commands?.maxMonthlyOffset ?? base.commands.maxMonthlyOffset,
+      maxAnalyzeOffset:
+        overrides.commands?.maxAnalyzeOffset ?? base.commands.maxAnalyzeOffset,
+    },
+
+    admins: overrides.admins ?? base.admins,
+
+    groups: {
+      command: overrides.groups?.command ?? base.groups.command,
+      announcement: overrides.groups?.announcement ?? base.groups.announcement,
+      alertAdmin: overrides.groups?.alertAdmin ?? base.groups.alertAdmin,
+    },
+
+    requirements: {
+      monthlyFans:
+        overrides.requirements?.monthlyFans ?? base.requirements.monthlyFans,
+      weeklyFans:
+        overrides.requirements?.weeklyFans ?? base.requirements.weeklyFans,
+      weeksInMonthEquivalent:
+        overrides.requirements?.weeksInMonthEquivalent ??
+        base.requirements.weeksInMonthEquivalent,
+      includeTransferDataInCalculation:
+        overrides.requirements?.includeTransferDataInCalculation ??
+        base.requirements.includeTransferDataInCalculation,
+    },
+
     schedule: {
-      ...base.schedule,
-      ...(overrides.schedule ?? {}),
       daily: {
-        ...base.schedule.daily,
-        ...(overrides.schedule?.daily ?? {}),
+        enabled:
+          overrides.schedule?.daily?.enabled ?? base.schedule.daily.enabled,
+        time: overrides.schedule?.daily?.time ?? base.schedule.daily.time,
       },
       weekly: {
-        ...base.schedule.weekly,
-        ...(overrides.schedule?.weekly ?? {}),
+        enabled:
+          overrides.schedule?.weekly?.enabled ?? base.schedule.weekly.enabled,
         days: overrides.schedule?.weekly?.days ?? base.schedule.weekly.days,
+        time: overrides.schedule?.weekly?.time ?? base.schedule.weekly.time,
       },
       monthly: {
-        ...base.schedule.monthly,
-        ...(overrides.schedule?.monthly ?? {}),
+        enabled:
+          overrides.schedule?.monthly?.enabled ?? base.schedule.monthly.enabled,
+        day: overrides.schedule?.monthly?.day ?? base.schedule.monthly.day,
+        time: overrides.schedule?.monthly?.time ?? base.schedule.monthly.time,
       },
     },
-    groups: {
-      ...base.groups,
-      ...(overrides.groups ?? {}),
-    },
-    requirements: {
-      ...base.requirements,
-      ...(overrides.requirements ?? {}),
-    },
+
     catchUp: {
-      ...base.catchUp,
-      ...(overrides.catchUp ?? {}),
+      enabled: overrides.catchUp?.enabled ?? base.catchUp.enabled,
+      maxReportsPerStartup:
+        overrides.catchUp?.maxReportsPerStartup ??
+        base.catchUp.maxReportsPerStartup,
     },
+
     alerts: {
-      ...base.alerts,
-      ...(overrides.alerts ?? {}),
+      enabled: overrides.alerts?.enabled ?? base.alerts.enabled,
+      defaultRecipients:
+        overrides.alerts?.defaultRecipients ?? base.alerts.defaultRecipients,
       performanceDrop: {
-        ...base.alerts.performanceDrop,
-        ...(overrides.alerts?.performanceDrop ?? {}),
+        enabled:
+          overrides.alerts?.performanceDrop?.enabled ??
+          base.alerts.performanceDrop.enabled,
+        thresholdPercent:
+          overrides.alerts?.performanceDrop?.thresholdPercent ??
+          base.alerts.performanceDrop.thresholdPercent,
+        minHistoryDays:
+          overrides.alerts?.performanceDrop?.minHistoryDays ??
+          base.alerts.performanceDrop.minHistoryDays,
       },
       demotionRisk: {
-        ...base.alerts.demotionRisk,
-        ...(overrides.alerts?.demotionRisk ?? {}),
+        enabled:
+          overrides.alerts?.demotionRisk?.enabled ??
+          base.alerts.demotionRisk.enabled,
+        bufferDays:
+          overrides.alerts?.demotionRisk?.bufferDays ??
+          base.alerts.demotionRisk.bufferDays,
       },
       streakBreak: {
-        ...base.alerts.streakBreak,
-        ...(overrides.alerts?.streakBreak ?? {}),
+        enabled:
+          overrides.alerts?.streakBreak?.enabled ??
+          base.alerts.streakBreak.enabled,
       },
       newTransfer: {
-        ...base.alerts.newTransfer,
-        ...(overrides.alerts?.newTransfer ?? {}),
+        enabled:
+          overrides.alerts?.newTransfer?.enabled ??
+          base.alerts.newTransfer.enabled,
       },
       rankDrop: {
-        ...base.alerts.rankDrop,
-        ...(overrides.alerts?.rankDrop ?? {}),
+        enabled:
+          overrides.alerts?.rankDrop?.enabled ?? base.alerts.rankDrop.enabled,
+        positions:
+          overrides.alerts?.rankDrop?.positions ??
+          base.alerts.rankDrop.positions,
       },
       quietHours: {
-        ...base.alerts.quietHours,
-        ...(overrides.alerts?.quietHours ?? {}),
+        enabled:
+          overrides.alerts?.quietHours?.enabled ??
+          base.alerts.quietHours.enabled,
+        start:
+          overrides.alerts?.quietHours?.start ?? base.alerts.quietHours.start,
+        end: overrides.alerts?.quietHours?.end ?? base.alerts.quietHours.end,
       },
     },
+
     memberStatus: {
-      ...base.memberStatus,
-      ...(overrides.memberStatus ?? {}),
+      staleAfterDaysDaily:
+        overrides.memberStatus?.staleAfterDaysDaily ??
+        base.memberStatus.staleAfterDaysDaily,
+      staleAfterDaysWeekly:
+        overrides.memberStatus?.staleAfterDaysWeekly ??
+        base.memberStatus.staleAfterDaysWeekly,
+      staleAfterDaysMonthly:
+        overrides.memberStatus?.staleAfterDaysMonthly ??
+        base.memberStatus.staleAfterDaysMonthly,
     },
-    commands: {
-      ...base.commands,
-      ...(overrides.commands ?? {}),
+
+    message: {
+      maxLength: overrides.message?.maxLength ?? base.message.maxLength,
+      splitAtNewline:
+        overrides.message?.splitAtNewline ?? base.message.splitAtNewline,
+      language: overrides.message?.language ?? base.message.language,
+    },
+
+    logging: {
+      level: overrides.logging?.level ?? base.logging.level,
+      logFile: overrides.logging?.logFile ?? base.logging.logFile,
+      maxSizeMB: overrides.logging?.maxSizeMB ?? base.logging.maxSizeMB,
+      maxFiles: overrides.logging?.maxFiles ?? base.logging.maxFiles,
+      console: overrides.logging?.console ?? base.logging.console,
+    },
+
+    database: {
+      backend: overrides.database?.backend ?? base.database.backend,
+      sqlite: {
+        path: overrides.database?.sqlite?.path ?? base.database.sqlite.path,
+        autoSaveMs:
+          overrides.database?.sqlite?.autoSaveMs ??
+          base.database.sqlite.autoSaveMs,
+      },
+      mysql: {
+        host: overrides.database?.mysql?.host ?? base.database.mysql.host,
+        port: overrides.database?.mysql?.port ?? base.database.mysql.port,
+        database:
+          overrides.database?.mysql?.database ?? base.database.mysql.database,
+        user: overrides.database?.mysql?.user ?? base.database.mysql.user,
+        password:
+          overrides.database?.mysql?.password ?? base.database.mysql.password,
+        connectionLimit:
+          overrides.database?.mysql?.connectionLimit ??
+          base.database.mysql.connectionLimit,
+        ssl: overrides.database?.mysql?.ssl ?? base.database.mysql.ssl,
+      },
+    },
+
+    auth: {
+      retentionDays: overrides.auth?.retentionDays ?? base.auth.retentionDays,
+      purgeAfterDays:
+        overrides.auth?.purgeAfterDays ?? base.auth.purgeAfterDays,
     },
   };
 }
@@ -146,7 +254,6 @@ export function mockCurrentDate(
   jest.setSystemTime(new Date(utcMs));
 }
 
-/** Restore real timers after mocking */
 export function restoreDateMocks(): void {
   jest.useRealTimers();
 }
@@ -186,8 +293,8 @@ export function parseFormattedGain(formatted: string): number {
  * Returns a plain object (not a Database instance) suitable for
  * dispatch integration tests and command handler tests.
  */
-export function makeMockDb() {
-  return {
+export function makeMockDb(): IDatabase {
+  const db: IDatabase = {
     initialize: jest.fn().mockResolvedValue(undefined),
     close: jest.fn().mockResolvedValue(undefined),
     save: jest.fn().mockResolvedValue(undefined),
@@ -208,27 +315,110 @@ export function makeMockDb() {
     markAlertsSent: jest.fn().mockResolvedValue(undefined),
     markAlertsByEventKeys: jest.fn().mockResolvedValue(undefined),
     transaction: jest.fn().mockImplementation((fn: () => Promise<any>) => fn()),
-  } as unknown as IDatabase;
+  };
+  return db;
 }
 
-/**
- * Build a mock IncomingMessage with sensible defaults.
- * Override any field via the overrides parameter.
- */
 export function makeMessage(
-  overrides: Record<string, any> = {},
+  overrides: DeepPartial<IncomingMessage> = {},
 ): IncomingMessage {
   return {
     key: {
-      remoteJid: "group-cmd@g.us",
-      id: "msg-001",
-      ...overrides.key,
+      remoteJid: overrides.key?.remoteJid ?? "group-cmd@g.us",
+      id: overrides.key?.id ?? "msg-001",
+      participant: overrides.key?.participant,
     },
-    message: {
-      conversation: "/daily",
-      ...overrides.message,
+    message: overrides.message ?? { conversation: "/daily" },
+    pushName: overrides.pushName ?? "TestUser",
+  };
+}
+
+/**
+ * Build a 32-element cumulative daily_fans array from an array of daily values.
+ * dailyValues[0] = day1 total, dailyValues[1] = day2 total, etc.
+ * Remaining entries are 0.
+ */
+export function makeCumulativeFans(dailyValues: number[]): number[] {
+  const arr = new Array(32).fill(0);
+  for (let i = 0; i < dailyValues.length && i < 32; i++) {
+    arr[i] = dailyValues[i];
+  }
+  return arr;
+}
+
+/**
+ * 32-entry cumulative daily_fans series: entry i = startValue + i * dailyGain
+ * while i < activeDays, then zero-filled.
+ */
+export function makeCumulativeFansSeries(
+  startValue: number,
+  dailyGain: number,
+  activeDays: number,
+): number[] {
+  const fans: number[] = [];
+  let current = startValue;
+  for (let i = 0; i < 32; i++) {
+    if (i < activeDays) {
+      fans.push(current);
+      current += dailyGain;
+    } else {
+      fans.push(0);
+    }
+  }
+  return fans;
+}
+
+export function makeMember(overrides: Partial<MemberData> = {}): MemberData {
+  return {
+    id: 1,
+    circle_id: 100,
+    viewer_id: 1001,
+    trainer_name: "Alice",
+    shame_score: null,
+    year: 2026,
+    month: 6,
+    daily_fans: makeCumulativeFans([
+      100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100,
+    ]),
+    last_updated: "2026-06-12",
+    ...overrides,
+  };
+}
+
+export function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
+  return {
+    circle: {
+      circle_id: 100,
+      name: "TestClub",
+      comment: "",
+      leader_viewer_id: 1,
+      leader_name: "Leader",
+      member_count: 2,
+      join_style: 0,
+      policy: 0,
+      created_at: "",
+      last_updated: "2026-06-12T14:00:00Z",
+      monthly_rank: 100,
+      monthly_point: 1000000,
+      last_month_rank: null,
+      last_month_point: null,
+      archived: false,
+      yesterday_updated: null,
+      yesterday_points: null,
+      yesterday_rank: null,
+      live_points: null,
+      live_rank: null,
+      last_live_update: null,
     },
-    pushName: "TestUser",
+    members: [
+      makeMember({ viewer_id: 1001, trainer_name: "Alice" }),
+      makeMember({ viewer_id: 1002, trainer_name: "Bob", id: 2 }),
+    ],
+    club_rank: 8,
+    fans_to_next_tier: 500000,
+    fans_to_lower_tier: 50000,
+    yesterday_fans_to_next_tier: 600000,
+    yesterday_fans_to_lower_tier: 40000,
     ...overrides,
   };
 }

@@ -86,7 +86,7 @@ describe("Monthly gain calculation — manual verification from raw data", () =>
     expect(ryu.daily_fans[0]).toBe(316856492); // day 1
     expect(ryu.daily_fans[10]).toBe(332207534); // day 11
     const gain = getMonthlyGain(ryu.daily_fans);
-    expect(gain).toBe(332207534 - 316856492); // 15,351,042
+    expect(gain).toBe(332207534 - 316856492);
     expect(formatNumber(gain)).toBe("15.4M");
   });
 
@@ -95,7 +95,7 @@ describe("Monthly gain calculation — manual verification from raw data", () =>
     expect(m.daily_fans[0]).toBe(290016517);
     expect(m.daily_fans[10]).toBe(317726222);
     const gain = getMonthlyGain(m.daily_fans);
-    expect(gain).toBe(317726222 - 290016517); // 27,709,705
+    expect(gain).toBe(317726222 - 290016517);
     expect(formatNumber(gain)).toBe("27.7M");
   });
 
@@ -105,7 +105,7 @@ describe("Monthly gain calculation — manual verification from raw data", () =>
     expect(s.daily_fans[5]).toBe(424931301); // day 6
     expect(s.daily_fans[10]).toBe(442813391); // day 11
     const gain = getMonthlyGain(s.daily_fans);
-    expect(gain).toBe(442813391 - 424931301); // 17,882,090
+    expect(gain).toBe(442813391 - 424931301);
     expect(formatNumber(gain)).toBe("17.9M");
   });
 
@@ -114,7 +114,7 @@ describe("Monthly gain calculation — manual verification from raw data", () =>
     expect(d.daily_fans[0]).toBe(351811026);
     expect(d.daily_fans[10]).toBe(369974968);
     const gain = getMonthlyGain(d.daily_fans);
-    expect(gain).toBe(369974968 - 351811026); // 18,163,942
+    expect(gain).toBe(369974968 - 351811026);
     expect(formatNumber(gain)).toBe("18.2M");
   });
 
@@ -123,7 +123,7 @@ describe("Monthly gain calculation — manual verification from raw data", () =>
     expect(n.daily_fans[0]).toBe(363625667);
     expect(n.daily_fans[10]).toBe(373937532);
     const gain = getMonthlyGain(n.daily_fans);
-    expect(gain).toBe(373937532 - 363625667); // 10,311,865
+    expect(gain).toBe(373937532 - 363625667);
     expect(formatNumber(gain)).toBe("10.3M");
   });
 
@@ -133,14 +133,14 @@ describe("Monthly gain calculation — manual verification from raw data", () =>
     expect(z.daily_fans[3]).toBe(301413137); // day 4
     expect(z.daily_fans[10]).toBe(315534000); // day 11
     const gain = getMonthlyGain(z.daily_fans);
-    expect(gain).toBe(315534000 - 301413137); // 14,120,863
+    expect(gain).toBe(315534000 - 301413137);
     expect(formatNumber(gain)).toBe("14.1M");
   });
 
   it("DOA IBU: only day1 has data → gain = 0 (single data point)", () => {
     const m = snapshot.members.find((mm) => mm.trainer_name === "DOA IBU")!;
     expect(m.daily_fans[0]).toBe(293009510);
-    expect(m.daily_fans[1]).toBe(0); // day 2 is 0
+    expect(m.daily_fans[1]).toBe(0); // day 2
     const gain = getMonthlyGain(m.daily_fans);
     expect(gain).toBe(0);
   });
@@ -174,7 +174,7 @@ describe("Monthly gain calculation — manual verification from raw data", () =>
     expect(f.daily_fans[3]).toBe(184624471); // day 4
     expect(f.daily_fans[10]).toBe(192984005); // day 11
     const gain = getMonthlyGain(f.daily_fans);
-    expect(gain).toBe(192984005 - 184624471); // 8,359,534
+    expect(gain).toBe(192984005 - 184624471);
     expect(formatNumber(gain)).toBe("8.4M");
   });
 });

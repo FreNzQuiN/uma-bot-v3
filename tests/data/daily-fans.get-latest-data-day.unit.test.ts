@@ -1,9 +1,3 @@
-/**
- * Tests for getLatestDataDay.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import { getLatestDataDay } from "../../src/data/daily-fans";
 import {
   RYU_DAILY_FANS,
@@ -12,10 +6,10 @@ import {
   DOA_IBU_DAILY_FANS,
   KURO_DAILY_FANS,
   SAIREN_DAILY_FANS,
+  ALL_NEGATIVE_DAILY_FANS,
 } from "./daily-fans.fixtures";
 
 describe("getLatestDataDay", () => {
-  // --- Real data tests ---
   it("returns 11 for Ryu (real data through day 11)", () => {
     expect(getLatestDataDay(RYU_DAILY_FANS)).toBe(11);
   });
@@ -40,14 +34,13 @@ describe("getLatestDataDay", () => {
     expect(getLatestDataDay(SAIREN_DAILY_FANS)).toBe(11);
   });
 
-  // --- Edge cases ---
   it("returns 0 for all-zero array", () => {
     const allZero = new Array(32).fill(0);
     expect(getLatestDataDay(allZero)).toBe(0);
   });
 
   it("returns 0 for all-negative array (transfer markers only)", () => {
-    const allNeg = [-100, -200, -300, ...new Array(29).fill(0)];
+    const allNeg = ALL_NEGATIVE_DAILY_FANS;
     expect(getLatestDataDay(allNeg)).toBe(0);
   });
 
@@ -62,7 +55,7 @@ describe("getLatestDataDay", () => {
 
   it("returns 0 for positive only at index 31 (padding, ignored)", () => {
     const arr = new Array(31).fill(0);
-    arr.push(100); // index 31 = padding
+    arr.push(100);
     expect(getLatestDataDay(arr)).toBe(0);
   });
 
@@ -72,7 +65,7 @@ describe("getLatestDataDay", () => {
 
   it("ignores zeros between positives and returns last positive", () => {
     // day 1=100, day 2=0, day 3=300, day 4=0, day 5=500
-    const arr = [100, 0, 300, 0, 500, ...new Array(27).fill(0)];
+    const arr = [100, 0, 300, 0, 500, ...new Array(32 - 5).fill(0)];
     expect(getLatestDataDay(arr)).toBe(5);
   });
 });

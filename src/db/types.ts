@@ -11,6 +11,14 @@ import type {
   RankHistoryRow,
 } from "../types";
 
+export const STATUS_SENT = "sent";
+export const STATUS_SKIPPED = "skipped";
+export const STATUS_SUPPRESSED = "suppressed";
+export const STATUS_PENDING = "pending";
+export const STATUS_ACTIVE = "active";
+export const FIND_ALERT_ID_BY_EVENT_KEY =
+  "SELECT id FROM alert_events WHERE event_key = ?";
+
 export interface ScheduleRunInsert {
   report_type: string;
   report_date: string;
@@ -60,7 +68,7 @@ export interface IDatabase {
   save(): Promise<void>;
 
   getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null>;
-  /** Get the most recent run (any terminal status: sent, skipped). Used by catch-up detection. */
+  /** Any terminal status (sent, skipped); used by catch-up detection. */
   getLastRun(reportType: string): Promise<ScheduleRunRow | null>;
   recordRun(run: ScheduleRunInsert): Promise<number>;
   updateRunStatus(
@@ -69,13 +77,12 @@ export interface IDatabase {
     errorMessage?: string,
   ): Promise<void>;
 
-  /** Check which of the given event keys already exist (batch query). */
   getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>>;
   recordAlert(alert: AlertEventInsert): Promise<number>;
   recordAlerts(alerts: AlertEventInsert[]): Promise<number[]>;
   markAlertSent(id: number): Promise<void>;
   markAlertsSent(ids: number[]): Promise<void>;
-  /** Mark alerts as sent by their event keys (for deferred delivery after catch-up). */
+  /** For deferred delivery after catch-up. */
   markAlertsByEventKeys(eventKeys: string[]): Promise<void>;
 
   upsertMember(member: MemberHistoryInsert): Promise<void>;

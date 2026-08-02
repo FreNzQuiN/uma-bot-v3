@@ -1,9 +1,3 @@
-/**
- * Integration tests with snapshot data for daily-fans functions.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import {
   getFirstPositiveDay,
   getLatestDataDay,

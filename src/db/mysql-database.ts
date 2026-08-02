@@ -20,6 +20,14 @@ import type {
   RankHistoryInsert,
 } from "./types";
 import {
+  STATUS_SENT,
+  STATUS_SKIPPED,
+  STATUS_SUPPRESSED,
+  STATUS_PENDING,
+  STATUS_ACTIVE,
+  FIND_ALERT_ID_BY_EVENT_KEY,
+} from "./types";
+import {
   mapScheduleRunRow,
   mapMemberHistoryRow,
   mapRankHistoryRow,
@@ -49,6 +57,8 @@ export class MysqlDatabase implements IDatabase {
 
   /** Minimum MySQL version required. CREATE INDEX IF NOT EXISTS needs 8.0.31+. */
   private static readonly MIN_MYSQL_VERSION = { major: 8, minor: 0, patch: 31 };
+  /** MySQL error number for "duplicate key name" — index already exists. */
+  private static readonly ER_DUP_KEYNAME = 1061;
 
   async initialize(): Promise<void> {
     const poolConfig: mysql.PoolOptions = {
@@ -143,7 +153,10 @@ export class MysqlDatabase implements IDatabase {
     } catch (err: unknown) {
       // ER_DUP_KEYNAME = 1061 — index already exists, safe to ignore
       const mysqlErr = err as { code?: string; errno?: number };
-      if (mysqlErr.errno === 1061 || mysqlErr.code === "ER_DUP_KEYNAME") {
+      if (
+        mysqlErr.errno === MysqlDatabase.ER_DUP_KEYNAME ||
+        mysqlErr.code === "ER_DUP_KEYNAME"
+      ) {
         return;
       }
       throw err;
@@ -227,7 +240,7 @@ export class MysqlDatabase implements IDatabase {
     const conn = this.getConn();
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
       "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1",
-      [reportType, "sent"],
+      [reportType, STATUS_SENT],
     );
     if (rows.length === 0) return null;
     return mapScheduleRunRow(rows[0] as Record<string, unknown>);
@@ -237,7 +250,7 @@ export class MysqlDatabase implements IDatabase {
     const conn = this.getConn();
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
       "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1",
-      [reportType, "sent", "skipped"],
+      [reportType, STATUS_SENT, STATUS_SKIPPED],
     );
     if (rows.length === 0) return null;
     return mapScheduleRunRow(rows[0] as Record<string, unknown>);
@@ -272,7 +285,7 @@ export class MysqlDatabase implements IDatabase {
     errorMessage?: string,
   ): Promise<void> {
     const conn = this.getConn();
-    if (status === "sent") {
+    if (status === STATUS_SENT) {
       const now = new Date().toISOString();
       await conn.query(
         "UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?",
@@ -292,7 +305,7 @@ export class MysqlDatabase implements IDatabase {
     const placeholders = eventKeys.map(() => "?").join(",");
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
       `SELECT event_key FROM alert_events WHERE event_key IN (${placeholders}) AND status IN (?, ?)`,
-      [...eventKeys, "sent", "suppressed"],
+      [...eventKeys, STATUS_SENT, STATUS_SUPPRESSED],
     );
     return new Set(rows.map((row) => row.event_key as string));
   }
@@ -311,7 +324,7 @@ export class MysqlDatabase implements IDatabase {
         alert.member_viewer_id,
         alert.report_date,
         alert.created_at,
-        alert.status ?? "pending",
+        alert.status ?? STATUS_PENDING,
         alert.message,
       ],
     );
@@ -323,9 +336,8 @@ export class MysqlDatabase implements IDatabase {
     const lastId = rows[0].id as number;
     if (lastId > 0) return lastId;
 
-    // Duplicate — fetch existing ID
     const [existing] = await conn.query<mysql.RowDataPacket[]>(
-      "SELECT id FROM alert_events WHERE event_key = ?",
+      FIND_ALERT_ID_BY_EVENT_KEY,
       [alert.event_key],
     );
     return existing[0].id as number;
@@ -336,7 +348,7 @@ export class MysqlDatabase implements IDatabase {
     const now = new Date().toISOString();
     await conn.query(
       "UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?",
-      ["sent", now, id],
+      [STATUS_SENT, now, id],
     );
   }
 
@@ -358,7 +370,7 @@ export class MysqlDatabase implements IDatabase {
     const placeholders = ids.map(() => "?").join(",");
     await conn.query(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE id IN (${placeholders})`,
-      ["sent", now, ...ids],
+      [STATUS_SENT, now, ...ids],
     );
   }
 
@@ -369,7 +381,7 @@ export class MysqlDatabase implements IDatabase {
     const placeholders = eventKeys.map(() => "?").join(",");
     await conn.query(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE event_key IN (${placeholders})`,
-      ["sent", now, ...eventKeys],
+      [STATUS_SENT, now, ...eventKeys],
     );
   }
 
@@ -383,7 +395,7 @@ export class MysqlDatabase implements IDatabase {
       member.last_seen,
       member.previous_circle_id ?? null,
       member.previous_circle_name ?? null,
-      member.status ?? "active",
+      member.status ?? STATUS_ACTIVE,
     ];
 
     // TiDB requires VALUES() syntax; standard MySQL 8.0.20+ uses AS new_vals alias.

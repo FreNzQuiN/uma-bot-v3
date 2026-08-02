@@ -13,7 +13,6 @@ import {
   getLatestSnapshotDate,
 } from "../../src/data/snapshot";
 
-/** Create a minimal valid Snapshot for testing. */
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     circle: {
@@ -355,9 +354,8 @@ describe("getDataDayFromSnapshot", () => {
   });
 
   test("returns correct day for real snapshot", () => {
-    // Real snapshot has data up to day 11 (index 10 is the last positive)
     const result = getDataDayFromSnapshot(realSnapshot);
-    expect(result).toBeGreaterThanOrEqual(11);
+    expect(result).toBe(11);
   });
 
   test("handles single member", () => {

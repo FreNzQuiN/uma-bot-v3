@@ -96,7 +96,7 @@ function detectDemotionRisk(
   return { keys, alerts };
 }
 
-const MIN_STREAK_DAYS = 3;
+export const MIN_STREAK_DAYS = 3;
 
 function detectStreakBreaks(
   computedMembers: ComputedMember[],
@@ -161,10 +161,9 @@ function detectRankDrop(
   const keys: string[] = [];
   const alerts: Alert[] = [];
 
+  const yesterdayRank = snapshot.circle.yesterday_rank ?? 0;
   const diff =
-    (snapshot.circle.yesterday_rank ?? 0) > 0
-      ? snapshot.circle.monthly_rank - snapshot.circle.yesterday_rank!
-      : 0;
+    yesterdayRank > 0 ? snapshot.circle.monthly_rank - yesterdayRank : 0;
 
   if (diff > config.alerts.rankDrop.positions) {
     const eventKey = `rank_drop:${reportDate}`;
@@ -298,7 +297,6 @@ export async function detectAlerts(
       : new Set<string>();
   const alerts = candidateAlerts.filter((a) => !existingKeys.has(a.eventKey));
 
-  // Quiet hours: record for dedup but suppress delivery
   if (await suppressDuringQuietHours(alerts, existingKeys, config, db)) {
     return [];
   }

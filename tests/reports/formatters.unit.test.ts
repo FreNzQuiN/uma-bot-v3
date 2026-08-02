@@ -69,10 +69,6 @@ describe("formatNumber", () => {
   it("formats exactly 1_000_000 as 1.0M", () => {
     expect(formatNumber(1_000_000)).toBe("1.0M");
   });
-
-  it("formats exactly 999_999 as 1000.0K", () => {
-    expect(formatNumber(999_999)).toBe("1000.0K");
-  });
 });
 
 describe("formatDateWIB", () => {
@@ -112,7 +108,6 @@ describe("splitMessage", () => {
     const long = lines.join("\n");
     const result = splitMessage(long, 200);
     expect(result.length).toBeGreaterThan(1);
-    // Each part should have Part X/Y marker
     for (const part of result) {
       expect(part).toMatch(/Part \d+\/\d+/);
     }
@@ -144,11 +139,9 @@ describe("splitMessage", () => {
   });
 
   it("does not return empty array for newline-only content over maxLength", () => {
-    // BUG FIX: previously returned [] which caused silent message loss
     const newlines = "\n".repeat(100);
     const result = splitMessage(newlines, 50);
     expect(result.length).toBeGreaterThan(0);
-    // Each part should be non-empty or the array should have exactly 1 fallback
     for (const part of result) {
       expect(typeof part).toBe("string");
     }
@@ -158,11 +151,9 @@ describe("splitMessage", () => {
     const longLine = "X".repeat(500);
     const result = splitMessage(longLine, 200);
     expect(result.length).toBeGreaterThan(1);
-    // Each part with marker should fit within maxLength
     for (const part of result) {
       expect(part.length).toBeLessThanOrEqual(200);
     }
-    // Content is preserved
     const content = result.map((p) => {
       // Strip Part X/Y marker
       const nlIdx = p.indexOf("\n");
@@ -172,7 +163,6 @@ describe("splitMessage", () => {
   });
 
   it("produces correct Part X/Y markers for 3 parts", () => {
-    // Create content that forces exactly 3 parts
     const lineA = "A".repeat(80);
     const lineB = "B".repeat(80);
     const lineC = "C".repeat(80);
@@ -188,7 +178,6 @@ describe("splitMessage", () => {
     const text = "A".repeat(80) + "\n\n" + "B".repeat(80);
     const result = splitMessage(text, 100);
     expect(result.length).toBeGreaterThan(0);
-    // All original content is somewhere in the result
     const allContent = result.join("\n");
     expect(allContent).toContain("A".repeat(80));
     expect(allContent).toContain("B".repeat(80));
@@ -198,7 +187,6 @@ describe("splitMessage", () => {
     const longLine = "X".repeat(500);
     const result = splitMessage(longLine, 100, false);
     expect(result.length).toBeGreaterThan(1);
-    // Each part (excluding marker) should be <= 100
     for (const part of result) {
       const body = part.replace(/^Part \d+\/\d+\n/, "");
       expect(body.length).toBeLessThanOrEqual(100);

@@ -50,6 +50,10 @@ const PID_FILE = "data/bot.pid";
 
 /** Warn when the bot hasn't run successfully for a week — WhatsApp revokes sessions after ~14 days offline. */
 const INACTIVITY_WARNING_MS = 7 * 24 * 60 * 60 * 1000;
+const EXIT_DELAY_MS = 6_000;
+const CONFIG_POLL_MS = 5_000;
+const CONNECT_POLL_MS = 1_000;
+const PREFETCH_OFFSETS = [1, 2];
 
 let emergencyCleanup: (() => Promise<void>) | null = null;
 
@@ -63,7 +67,7 @@ process.on("unhandledRejection", (reason) => {
 process.on("uncaughtException", (err) => {
   log.error("Bot", `Uncaught exception: ${err.message}`, err);
   if (emergencyCleanup) emergencyCleanup().catch(() => {});
-  setTimeout(() => process.exit(1), 6_000);
+  setTimeout(() => process.exit(1), EXIT_DELAY_MS);
 });
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -244,13 +248,15 @@ async function main() {
         err,
       );
     }
-  }, 5000);
-  log.info("Config", "Watching config.yaml for changes (polling every 5s)");
+  }, CONFIG_POLL_MS);
+  log.info(
+    "Config",
+    `Watching config.yaml for changes (polling every ${CONFIG_POLL_MS / 1000}s)`,
+  );
 
   const { year: currentYear, month: currentMonth } = getDataDateComponents();
   const todayStr = getDataDate();
 
-  // Current month
   const currentResult = await fetchAndSaveSnapshot(
     umaMoe,
     config.circleId,
@@ -259,8 +265,7 @@ async function main() {
   );
   if (currentResult.snapshot) setCachedSnapshot(currentResult.snapshot);
 
-  // Past months
-  for (const offset of [1, 2]) {
+  for (const offset of PREFETCH_OFFSETS) {
     try {
       let prevMonth = currentMonth - offset;
       let prevYear = currentYear;
@@ -358,7 +363,7 @@ async function main() {
 
   const runPostConnectTasks = async () => {
     while (!waClient.isConnected()) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, CONNECT_POLL_MS));
     }
     log.info("WhatsApp", "Connected — running catch-up");
 

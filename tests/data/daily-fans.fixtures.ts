@@ -1,9 +1,3 @@
-/**
- * Shared test fixtures for daily-fans unit tests.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 /** Ryu: positive days 1-11, zeros after. Normal member, no transfer. */
 export const RYU_DAILY_FANS: number[] = [
   316856492, 319191258, 320992164, 323514848, 327253973, 328785007, 329925021,
@@ -49,4 +43,16 @@ export const VITOHOW_DAILY_FANS: number[] = [
   -285128340, 0, 285651571, 286952371, 287552390, 288142157, 288726749,
   289000998, 290092002, 290948071, 292101214, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+/** Previous-circle id/name carried by transfer members. */
+export const PREVIOUS_CIRCLE_ID = 555894304;
+export const PREVIOUS_CIRCLE_NAME = "Advent";
+
+/** Three negatives followed by zeros — no positive values. */
+export const ALL_NEGATIVE_DAILY_FANS: number[] = [
+  -100,
+  -200,
+  -300,
+  ...new Array(29).fill(0),
 ];

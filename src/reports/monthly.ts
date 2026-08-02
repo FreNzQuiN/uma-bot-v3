@@ -19,6 +19,9 @@ import {
 import { INDONESIAN_MONTHS } from "../utils/timezone";
 import { loadHistoricalSnapshot } from "./helpers";
 
+// At/above this, requirement is displayed compactly via formatNumber
+const COMPACT_DISPLAY_THRESHOLD = 1_000_000;
+
 function formatMonthYear(month: number, year: number): string {
   return `${INDONESIAN_MONTHS[month - 1]} ${year}`;
 }
@@ -121,7 +124,7 @@ export function generateMonthlyReport(
     const failCount = reqActiveMembers.length - passCount;
     lines.push("");
     lines.push(
-      `*🎯 Requirement: ${monthlyReq >= 1_000_000 ? formatNumber(monthlyReq) : monthlyReq}/bulan*`,
+      `*🎯 Requirement: ${monthlyReq >= COMPACT_DISPLAY_THRESHOLD ? formatNumber(monthlyReq) : monthlyReq}/bulan*`,
     );
     lines.push(`✅ ${passCount} pass | ❌ ${failCount} kurang`);
     const failingMembers = reqActiveMembers.filter(
@@ -138,7 +141,7 @@ export function generateMonthlyReport(
     }
   }
 
-  // Stale members (rolling window: consecutive zero-gain days at end >= threshold)
+  // Stale window: definition in buildStaleSection
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
   lines.push(
     ...buildStaleSection(

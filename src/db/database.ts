@@ -20,6 +20,14 @@ import type {
   RankHistoryInsert,
 } from "./types";
 import {
+  STATUS_SENT,
+  STATUS_SKIPPED,
+  STATUS_SUPPRESSED,
+  STATUS_PENDING,
+  STATUS_ACTIVE,
+  FIND_ALERT_ID_BY_EVENT_KEY,
+} from "./types";
+import {
   mapScheduleRunRow,
   mapMemberHistoryRow,
   mapRankHistoryRow,
@@ -39,6 +47,10 @@ import {
 import * as path from "path";
 import { log } from "../utils/logger";
 
+const DEFAULT_DB_PATH = "data/bot.db";
+const DEFAULT_AUTO_SAVE_MS = 30_000;
+const MEMORY_DB_PATH = ":memory:";
+
 export class SqliteDatabase implements IDatabase {
   private db: SqlJsDatabase | null = null;
   private dbPath: string;
@@ -47,14 +59,14 @@ export class SqliteDatabase implements IDatabase {
   private dirty = false;
 
   constructor(dbPath?: string, autoSaveMs?: number) {
-    this.dbPath = dbPath ?? "data/bot.db";
-    this.autoSaveMs = autoSaveMs ?? 30_000;
+    this.dbPath = dbPath ?? DEFAULT_DB_PATH;
+    this.autoSaveMs = autoSaveMs ?? DEFAULT_AUTO_SAVE_MS;
   }
 
   async initialize(): Promise<void> {
     const SQL = await initSqlJs();
 
-    if (this.dbPath === ":memory:") {
+    if (this.dbPath === MEMORY_DB_PATH) {
       this.db = new SQL.Database();
     } else {
       const dir = path.dirname(this.dbPath);
@@ -82,7 +94,7 @@ export class SqliteDatabase implements IDatabase {
 
     this.createTables();
 
-    if (this.dbPath !== ":memory:") {
+    if (this.dbPath !== MEMORY_DB_PATH) {
       this.saveTimer = setInterval(() => {
         this.save().catch((err) => {
           log.error(
@@ -203,7 +215,7 @@ export class SqliteDatabase implements IDatabase {
   ): Promise<ScheduleRunRow | null> {
     const result = this.execSql(
       "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1",
-      [reportType, "sent"],
+      [reportType, STATUS_SENT],
     );
     if (result.length === 0 || result[0].values.length === 0) {
       return null;
@@ -214,7 +226,7 @@ export class SqliteDatabase implements IDatabase {
   async getLastRun(reportType: string): Promise<ScheduleRunRow | null> {
     const result = this.execSql(
       "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1",
-      [reportType, "sent", "skipped"],
+      [reportType, STATUS_SENT, STATUS_SKIPPED],
     );
     if (result.length === 0 || result[0].values.length === 0) {
       return null;
@@ -238,8 +250,7 @@ export class SqliteDatabase implements IDatabase {
         run.error_message ?? null,
       ],
     );
-    const result = this.execSql("SELECT last_insert_rowid() as id");
-    return result[0].values[0][0] as number;
+    return this.lastInsertId();
   }
 
   async updateRunStatus(
@@ -247,7 +258,7 @@ export class SqliteDatabase implements IDatabase {
     status: string,
     errorMessage?: string,
   ): Promise<void> {
-    if (status === "sent") {
+    if (status === STATUS_SENT) {
       const now = new Date().toISOString();
       this.runSql(
         "UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?",
@@ -266,7 +277,7 @@ export class SqliteDatabase implements IDatabase {
     const placeholders = eventKeys.map(() => "?").join(",");
     const result = this.execSql(
       `SELECT event_key FROM alert_events WHERE event_key IN (${placeholders}) AND status IN (?, ?)`,
-      [...eventKeys, "sent", "suppressed"],
+      [...eventKeys, STATUS_SENT, STATUS_SUPPRESSED],
     );
     if (result.length === 0) return new Set();
     return new Set(result[0].values.map((row) => row[0] as string));
@@ -276,10 +287,9 @@ export class SqliteDatabase implements IDatabase {
     // NOTE: This check-then-insert is not atomic (TOCTOU). Safe in single-process
     // mode due to SQLite file-level locking. For multi-process scenarios, use the
     // MySQL adapter's INSERT IGNORE pattern instead.
-    const existing = this.execSql(
-      "SELECT id FROM alert_events WHERE event_key = ?",
-      [alert.event_key],
-    );
+    const existing = this.execSql(FIND_ALERT_ID_BY_EVENT_KEY, [
+      alert.event_key,
+    ]);
     if (existing.length > 0 && existing[0].values.length > 0) {
       return existing[0].values[0][0] as number;
     }
@@ -294,19 +304,18 @@ export class SqliteDatabase implements IDatabase {
         alert.member_viewer_id,
         alert.report_date,
         alert.created_at,
-        alert.status ?? "pending",
+        alert.status ?? STATUS_PENDING,
         alert.message,
       ],
     );
-    const result = this.execSql("SELECT last_insert_rowid() as id");
-    return result[0].values[0][0] as number;
+    return this.lastInsertId();
   }
 
   async markAlertSent(id: number): Promise<void> {
     const now = new Date().toISOString();
     this.runSql(
       "UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?",
-      ["sent", now, id],
+      [STATUS_SENT, now, id],
     );
   }
 
@@ -327,7 +336,7 @@ export class SqliteDatabase implements IDatabase {
     const placeholders = ids.map(() => "?").join(",");
     this.runSql(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE id IN (${placeholders})`,
-      ["sent", now, ...ids],
+      [STATUS_SENT, now, ...ids],
     );
   }
 
@@ -337,7 +346,7 @@ export class SqliteDatabase implements IDatabase {
     const placeholders = eventKeys.map(() => "?").join(",");
     this.runSql(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE event_key IN (${placeholders})`,
-      ["sent", now, ...eventKeys],
+      [STATUS_SENT, now, ...eventKeys],
     );
   }
 
@@ -361,7 +370,7 @@ export class SqliteDatabase implements IDatabase {
         member.last_seen,
         member.previous_circle_id ?? null,
         member.previous_circle_name ?? null,
-        member.status ?? "active",
+        member.status ?? STATUS_ACTIVE,
       ],
     );
   }
@@ -463,12 +472,17 @@ export class SqliteDatabase implements IDatabase {
       this.saveTimer = null;
     }
     if (this.db) {
-      if (this.dbPath !== ":memory:") {
+      if (this.dbPath !== MEMORY_DB_PATH) {
         await this.save();
       }
       this.db.close();
       this.db = null;
     }
+  }
+
+  private lastInsertId(): number {
+    const result = this.execSql("SELECT last_insert_rowid() as id");
+    return result[0].values[0][0] as number;
   }
 
   private rowToScheduleRun(result: {

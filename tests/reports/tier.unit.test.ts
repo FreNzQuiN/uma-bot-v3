@@ -1,10 +1,3 @@
-/**
- * Tier Report Tests
- *
- * Tests the tier report generation including tier info,
- * promotion/demotion gaps, pace, and projections.
- */
-
 import { Snapshot, BotConfig } from "../../src/types";
 import { getDefaultConfig } from "../../src/config";
 import { computeMembers } from "../../src/reports/compute";

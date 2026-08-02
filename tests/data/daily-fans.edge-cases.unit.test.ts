@@ -1,9 +1,3 @@
-/**
- * Additional edge case tests for daily-fans functions.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import {
   computeRollingAverage,
   countActiveDays,
@@ -33,7 +27,6 @@ describe("Additional edge cases", () => {
 
   describe("getMonthlyGain: latest value less than first (negative gain)", () => {
     it("returns negative gain when latest < first", () => {
-      // first positive day 1=500, latest positive day 3=300 → gain = -200
       const arr = [
         500, 400, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -50,40 +43,31 @@ describe("Additional edge cases", () => {
 
   describe("getWeeklyGain: transfer member in week 5", () => {
     it("handles transfer member with negatives in week 5 block", () => {
-      // Transfer: negative days 1-28, positive days 29-31
       const arr = [...new Array(28).fill(-1000), 50000, 55000, 60000];
-      // Week 5 (days 29-31): no valueBeforeBlock (all negatives before)
-      // firstPositiveInBlock = 50000, lastPositiveInBlock = 60000
-      // baseline = firstPositiveInBlock = 50000
-      // gain = 60000 - 50000 = 10000
+      // No valueBeforeBlock (all negatives before week 5) → baseline = firstPositiveInBlock = 50000.
       expect(getWeeklyGain(arr, 5)).toBe(10000);
     });
 
     it("handles week 5 with valueBeforeBlock from week 4", () => {
-      // Positive days 1-28, positive days 29-31
       const arr = [...new Array(28).fill(100000), 200000, 210000, 220000];
-      // valueBeforeBlock = last positive before day 29 = dailyFans[27] = 100000
-      // lastPositiveInBlock = 220000
-      // gain = 220000 - 100000 = 120000
+      // valueBeforeBlock = last positive before day 29 = dailyFans[27] = 100000.
       expect(getWeeklyGain(arr, 5)).toBe(120000);
     });
   });
 
   describe("getDailyGain: exact boundary", () => {
     it("returns 0 for day exactly at array length (padding)", () => {
-      // 32-element array, day 32 = index 31 (padding, value 0)
       expect(getDailyGain(RYU_DAILY_FANS, 32)).toBe(0);
     });
 
     it("returns correct gain for day exactly at array length when last is positive", () => {
       const arr = [100, 200, 300, 400];
-      expect(getDailyGain(arr, 4)).toBe(100); // 400 - 300
+      expect(getDailyGain(arr, 4)).toBe(100);
     });
   });
 
   describe("computeRollingAverage: all gains are zero", () => {
     it("returns 0 when all consecutive values are equal (zero gains)", () => {
-      // All same value → all gains are 0 → no positive gains counted
       const arr = new Array(32).fill(1000);
       expect(computeRollingAverage(arr, 10, 7)).toBe(0);
     });

@@ -41,7 +41,7 @@ function makeSnapshot(
       join_style: 0,
       policy: 0,
       created_at: "",
-      last_updated: "2026-07-20T00:00:00Z",
+      last_updated: "2020-01-01T00:00:00Z",
       monthly_rank: 100,
       monthly_point: 1000000,
       last_month_rank: null,

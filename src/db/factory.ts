@@ -1,7 +1,3 @@
-/**
- * Database factory — creates the appropriate adapter based on config.
- */
-
 import type { IDatabase } from "./types";
 import type { BotConfig } from "../types";
 import { SqliteDatabase } from "./database";

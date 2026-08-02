@@ -9,16 +9,20 @@
 import { generateWeeklyReport } from "../../../src/reports/weekly";
 import { computeMembers } from "../../../src/reports/compute";
 import { getDefaultConfig } from "../../../src/config";
-import { formatNumber } from "../../../src/utils/format";
 import type { Snapshot, BotConfig } from "../../../src/types";
 import {
   loadRealSnapshot,
   makeConfig,
+  parseFormattedGain,
   TRANSFER_NAMES,
   mockCurrentDate,
   restoreDateMocks,
   WHATSAPP_MAX_LENGTH,
 } from "../../_helpers";
+
+const MEMBER_LINE_RE = /^\d+\.\s/;
+// Layout contract: stale section only exists in reports this long (30 members).
+const STALE_WARNING_MIN_LINES = 44;
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -81,7 +85,7 @@ describe("Full weekly report output (offset=0, W2)", () => {
   });
 
   it("has 30 contributing members (gain > 0)", () => {
-    const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = lines.filter((l) => MEMBER_LINE_RE.test(l));
     expect(memberLines.length).toBe(30);
   });
 
@@ -94,12 +98,12 @@ describe("Full weekly report output (offset=0, W2)", () => {
   });
 
   it("last member is *ursa* — +875.7K (bold name)", () => {
-    const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = lines.filter((l) => MEMBER_LINE_RE.test(l));
     expect(memberLines[29]).toBe("30. *ursa* — +875.7K");
   });
 
   it("members are sorted by weekly gain descending", () => {
-    const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = lines.filter((l) => MEMBER_LINE_RE.test(l));
     const gains: number[] = [];
     for (const line of memberLines) {
       const match = line.match(/— \+?([\d.]+[KMB]?|0)$/);
@@ -109,12 +113,7 @@ describe("Full weekly report output (offset=0, W2)", () => {
         gains.push(0);
         continue;
       }
-      const numStr = val.replace(/[+-]/, "");
-      let num = parseFloat(numStr);
-      if (val.endsWith("K")) num *= 1_000;
-      if (val.endsWith("M")) num *= 1_000_000;
-      if (val.endsWith("B")) num *= 1_000_000_000;
-      gains.push(num);
+      gains.push(parseFormattedGain(val));
     }
     for (let i = 1; i < gains.length; i++) {
       expect(gains[i - 1]).toBeGreaterThanOrEqual(gains[i]);
@@ -122,7 +121,7 @@ describe("Full weekly report output (offset=0, W2)", () => {
   });
 
   it("stale members (DOA IBU, Kuro, Rowking, Lebowski) are NOT in member list", () => {
-    const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = lines.filter((l) => MEMBER_LINE_RE.test(l));
     for (const line of memberLines) {
       expect(line).not.toContain("DOA IBU");
       expect(line).not.toContain("Kuro");
@@ -154,7 +153,9 @@ describe("Transfer badges in weekly report", () => {
   });
 
   it("all 6 transfer members have 🔄 badge", () => {
-    const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = report
+      .split("\n")
+      .filter((l) => MEMBER_LINE_RE.test(l));
     for (const name of TRANSFER_NAMES) {
       const line = memberLines.find((l) => l.includes(name));
       expect(line).toBeDefined();
@@ -163,7 +164,9 @@ describe("Transfer badges in weekly report", () => {
   });
 
   it("exactly 6 lines contain 🔄", () => {
-    const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = report
+      .split("\n")
+      .filter((l) => MEMBER_LINE_RE.test(l));
     const transferLines = memberLines.filter((l) => l.includes("🔄"));
     expect(transferLines.length).toBe(6);
   });
@@ -199,7 +202,7 @@ describe("Offset=1 shows W1 (days 1-7)", () => {
   });
 
   it("has 30 contributing members", () => {
-    const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = lines.filter((l) => MEMBER_LINE_RE.test(l));
     expect(memberLines.length).toBe(30);
   });
 
@@ -210,7 +213,7 @@ describe("Offset=1 shows W1 (days 1-7)", () => {
   });
 
   it("transfer badges still present in W1", () => {
-    const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = lines.filter((l) => MEMBER_LINE_RE.test(l));
     for (const name of TRANSFER_NAMES) {
       const line = memberLines.find((l) => l.includes(name));
       expect(line).toBeDefined();
@@ -292,12 +295,12 @@ describe("Header format and metadata", () => {
 describe("Report size within WhatsApp limits", () => {
   it("weekly report (offset=0) does not exceed 4096 chars", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 
   it("weekly report (offset=1) does not exceed 4096 chars", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 1);
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 
   it("weekly report with below-requirement does not exceed 4096 chars", () => {
@@ -308,7 +311,7 @@ describe("Report size within WhatsApp limits", () => {
       computeMembers(snapshot, cfg),
       0,
     );
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 });
 
@@ -330,8 +333,7 @@ describe("Special characters in trainer names", () => {
   });
 
   it("DOA IBU with space renders correctly in empty member list context", () => {
-    // DOA IBU has 0 W2 gain, so not in member list
-    // But verify the snapshot data is correct
+    // DOA IBU has 0 W2 gain — verify snapshot, not report
     const m = snapshot.members.find((mm) => mm.trainer_name === "DOA IBU");
     expect(m).toBeDefined();
     expect(m!.trainer_name).toBe("DOA IBU");
@@ -384,7 +386,7 @@ describe("Line-by-line verification of W2 report", () => {
 
   it("report contains 30 member lines with bold names", () => {
     const lines = report.split("\n");
-    const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
+    const memberLines = lines.filter((l) => MEMBER_LINE_RE.test(l));
     expect(memberLines.length).toBe(30);
     for (const line of memberLines) {
       expect(line).toMatch(/^\d+\.\s\*[^*]+\*\s/);
@@ -393,10 +395,11 @@ describe("Line-by-line verification of W2 report", () => {
 
   it("line after members: empty separator or stale section", () => {
     const lines = report.split("\n");
-    // 30 member lines end around index 39
-    // line 40 is empty separator before stale section
-    if (lines.length > 40) {
-      expect(lines[40]).toBe("");
+    const memberIndexes = lines
+      .map((l, i) => (MEMBER_LINE_RE.test(l) ? i : -1))
+      .filter((i) => i !== -1);
+    if (memberIndexes.length > 0) {
+      expect(lines[memberIndexes[memberIndexes.length - 1] + 1]).toBe("");
     }
   });
 
@@ -405,7 +408,7 @@ describe("Line-by-line verification of W2 report", () => {
     const staleWarningIdx = lines.findIndex((l) =>
       l.includes("⚠️ Data klub mungkin tidak terbaru"),
     );
-    if (lines.length > 44) {
+    if (lines.length > STALE_WARNING_MIN_LINES) {
       expect(staleWarningIdx).toBeGreaterThanOrEqual(0);
     }
   });

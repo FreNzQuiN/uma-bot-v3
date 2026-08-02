@@ -15,6 +15,7 @@ import { CLUB_TIERS } from "../types";
 import { getLatestDataDay, isStaleForReport } from "../data/daily-fans";
 import { getDataDayFromSnapshot } from "../data/snapshot";
 import { sanitizeName } from "../utils/format";
+import { STALE_DAY_TOLERANCE } from "./helpers";
 
 /**
  * @param now - Optional Date override for testing (defaults to current time)
@@ -32,7 +33,7 @@ export function getStaleDataWarning(
   } = getDataDateComponents(now);
 
   if (snapshotYear === currentYear && snapshotMonth === currentMonth) {
-    if (dataDay < currentDay - 1) {
+    if (dataDay < currentDay - STALE_DAY_TOLERANCE) {
       const dateStr = `${snapshotYear}-${String(snapshotMonth).padStart(2, "0")}-${String(dataDay).padStart(2, "0")}`;
       const formattedDate = formatDateWIB(dateStr);
       return `⚠️ Data klub mungkin tidak terbaru (update terakhir: ${formattedDate})`;
@@ -52,12 +53,14 @@ export function buildDateStr(snapshot: Snapshot, dataDay?: number): string {
 export function buildFooter(config: BotConfig, snapshotDate?: string): string {
   const parsed =
     snapshotDate && /^\d{4}-\d{2}-\d{2}$/.test(snapshotDate)
-      ? new Date(snapshotDate + "T22:00:00+07:00")
+      ? new Date(snapshotDate + DATA_UPDATE_OFFSET)
       : new Date();
   const dateToUse = isNaN(parsed.getTime()) ? new Date() : parsed;
   return `⸻\nTerakhir sync: ${formatForDisplay(dateToUse, config.timezone)}`;
 }
 
+// Pins the data-update instant: 22:00 WIB = 00:00 JST, matches DATA_UPDATE_STRING
+const DATA_UPDATE_OFFSET = "T22:00:00+07:00";
 const DATA_UPDATE_STRING = "22:00 WIB";
 
 function buildDataLine(formattedDate: string): string {
@@ -65,8 +68,7 @@ function buildDataLine(formattedDate: string): string {
 }
 
 /**
- * Returns array of lines (without trailing empty line).
- * @param includeDataLine - Whether to append the "Periode data" line (default: true)
+ * Lines without trailing empty line; callers push separators themselves.
  */
 export function buildReportHeader(
   snapshot: Snapshot,
@@ -88,6 +90,11 @@ export function buildReportHeader(
   return lines;
 }
 
+/**
+ * Section listing active members stale as of dataDay: trailing zero-gain
+ * streak from dataDay reaching staleThreshold (contract in isStaleForReport).
+ * Returns [] when no stale members.
+ */
 export function buildStaleSection(
   computedMembers: ComputedMember[],
   dataDay: number,

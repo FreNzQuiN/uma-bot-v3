@@ -3,17 +3,6 @@
  *
  * Tests the ranks (monthly leaderboard) report.
  * Uses real snapshot (examples/snapshot-june-12.json, 34 members).
- * All tests print full output for visual inspection.
- *
- * Verification checklist:
- * 1. Top 10 active+transfer members sorted by monthlyGain descending
- * 2. Top 3 get medal emojis (no number prefix). 4th+ get "N. " prefix
- * 3. Transfer members show badge
- * 4. No stale members in list
- * 5. Header: Peringkat Bulanan + club name + tier
- * 6. Monthly gain values match raw data (latestPositive - firstPositive)
- * 7. Empty snapshot returns warning
- * 8. No Markdown formatting (WhatsApp uses *bold* not **bold**)
  */
 
 import { generateRanksReport } from "../../src/reports/ranks";
@@ -35,6 +24,9 @@ import { loadRealSnapshot, STALE_NAMES } from "../_helpers";
 let snapshot: Snapshot;
 const config = getDefaultConfig();
 
+// jgd is stale at report threshold 3 but has non-zero gain, so it is not in STALE_NAMES.
+const STALE_NAMES_AT_REPORT_THRESHOLD = [...STALE_NAMES, "jgd"];
+
 beforeAll(() => {
   snapshot = loadRealSnapshot();
 });
@@ -50,9 +42,7 @@ function parseFormattedGain(formatted: string): number {
 
 describe("Snapshot data fundamentals", () => {
   it("has correct club metadata", () => {
-    expect(snapshot.circle.name).toBe(
-      "\u0048\u006f\u006c\uFF3F\u0048\u006f\u0072\u0073\u0065",
-    );
+    expect(snapshot.circle.name).toBe("Hol＿Horse");
     expect(snapshot.club_rank).toBe(8);
     expect(CLUB_TIERS[8]).toBe("A+");
   });
@@ -71,7 +61,9 @@ describe("Member classification for ranks", () => {
         staleNames.push(member.trainer_name);
       }
     }
-    expect(staleNames.sort()).toEqual([...STALE_NAMES, "jgd"].sort());
+    expect(staleNames.sort()).toEqual(
+      [...STALE_NAMES_AT_REPORT_THRESHOLD].sort(),
+    );
   });
 
   it("identifies 6 transfer members", () => {
@@ -89,7 +81,7 @@ describe("Member classification for ranks", () => {
     ]);
   });
 
-  it("active(24) + transfer(6) + stale(4) = 34 total", () => {
+  it("active(23) + transfer(6) + stale(5) = 34 total", () => {
     const latestDataDay = getDataDayFromSnapshot(snapshot);
     let active = 0,
       stale = 0,
@@ -113,8 +105,28 @@ describe("Member classification for ranks", () => {
   });
 });
 
+type Top10Expectation =
+  | {
+      name: string;
+      gain: number;
+      transfer: boolean;
+      first: number;
+      last: number;
+    }
+  | {
+      name: string;
+      gain: number;
+      transfer: boolean;
+      firstDay: number;
+      lastDay: number;
+      firstIdx: number;
+      lastIdx: number;
+      first: number;
+      last: number;
+    };
+
 describe("Monthly gain verification for top 10", () => {
-  const expectedTop10 = [
+  const expectedTop10: Top10Expectation[] = [
     {
       name: "GoldFamily",
       gain: 27709705,
@@ -200,17 +212,14 @@ describe("Monthly gain verification for top 10", () => {
       expect(isTransferMember(m)).toBe(expected.transfer);
       expect(getMonthlyGain(m.daily_fans)).toBe(expected.gain);
 
-      if ("first" in expected && "firstIdx" in expected === false) {
+      if ("firstIdx" in expected) {
+        expect(m.daily_fans[expected.firstIdx]).toBe(expected.first);
+        expect(m.daily_fans[expected.lastIdx]).toBe(expected.last);
+        expect(getFirstPositiveDay(m.daily_fans)).toBe(expected.firstDay);
+        expect(getLatestDataDay(m.daily_fans)).toBe(expected.lastDay);
+      } else {
         expect(m.daily_fans[0]).toBe(expected.first);
         expect(m.daily_fans[10]).toBe(expected.last);
-      }
-      if ("firstIdx" in expected) {
-        expect(m.daily_fans[(expected as any).firstIdx]).toBe(expected.first);
-        expect(m.daily_fans[(expected as any).lastIdx]).toBe(expected.last);
-        expect(getFirstPositiveDay(m.daily_fans)).toBe(
-          (expected as any).firstDay,
-        );
-        expect(getLatestDataDay(m.daily_fans)).toBe((expected as any).lastDay);
       }
     });
   }
@@ -245,12 +254,12 @@ describe("Report header structure", () => {
     lines = report.split("\n");
   });
 
-  it("prints the full report for visual inspection", () => {
+  it("produces a non-empty report (smoke test)", () => {
     expect(report.length).toBeGreaterThan(0);
   });
 
   it("line 0: Peringkat Bulanan header (bold)", () => {
-    expect(lines[0]).toBe("\uD83C\uDFC6 *Peringkat Bulanan*");
+    expect(lines[0]).toBe("🏆 *Peringkat Bulanan*");
   });
 
   it("line 1: blank", () => {
@@ -258,7 +267,7 @@ describe("Report header structure", () => {
   });
 
   it("line 2: club name + tier + rank", () => {
-    expect(lines[2]).toBe("Hol\uFF3FHorse | A+ (#431)");
+    expect(lines[2]).toBe("Hol＿Horse | A+ (#431)");
   });
 
   it("line 3: data line", () => {
@@ -270,9 +279,7 @@ describe("Report header structure", () => {
   });
 
   it("has exactly 10 member lines (5 header + 10 members + 3 footer = 18 total)", () => {
-    const memberLines = lines.filter((l) =>
-      /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l),
-    );
+    const memberLines = lines.filter((l) => /^🥇|^🥈|^🥉|^\d+\.\s/.test(l));
     expect(memberLines.length).toBe(10);
     expect(lines.length).toBe(18);
   });
@@ -290,17 +297,17 @@ describe("Medal positions (top 3)", () => {
   });
 
   it("line 5: medal GoldFamily - 27.7M (bold name, +prefix)", () => {
-    expect(lines[5]).toBe("\uD83E\uDD47 *GoldFamily* \u2014 +27.7M");
+    expect(lines[5]).toBe("🥇 *GoldFamily* — +27.7M");
     expect(formatNumber(27709705)).toBe("27.7M");
   });
 
   it("line 6: medal RngF - 19.2M", () => {
-    expect(lines[6]).toBe("\uD83E\uDD48 *RngF* \u2014 +19.2M");
+    expect(lines[6]).toBe("🥈 *RngF* — +19.2M");
     expect(formatNumber(19244182)).toBe("19.2M");
   });
 
   it("line 7: medal Aditya - 18.6M", () => {
-    expect(lines[7]).toBe("\uD83E\uDD49 *Aditya* \u2014 +18.6M");
+    expect(lines[7]).toBe("🥉 *Aditya* — +18.6M");
     expect(formatNumber(18554473)).toBe("18.6M");
   });
 
@@ -311,9 +318,9 @@ describe("Medal positions (top 3)", () => {
   });
 
   it("medals start with emoji", () => {
-    expect(lines[5]).toMatch(/^\uD83E\uDD47/);
-    expect(lines[6]).toMatch(/^\uD83E\uDD48/);
-    expect(lines[7]).toMatch(/^\uD83E\uDD49/);
+    expect(lines[5]).toMatch(/^🥇/);
+    expect(lines[6]).toMatch(/^🥈/);
+    expect(lines[7]).toMatch(/^🥉/);
   });
 });
 
@@ -329,35 +336,35 @@ describe("Numbered positions (4-10)", () => {
   });
 
   it("4. DzFx - 18.2M", () => {
-    expect(lines[8]).toBe("4. *DzFx* \u2014 +18.2M");
+    expect(lines[8]).toBe("4. *DzFx* — +18.2M");
     expect(formatNumber(18163942)).toBe("18.2M");
   });
 
   it("5. Sairen (transfer) - 17.9M", () => {
-    expect(lines[9]).toBe("5. *Sairen* \uD83D\uDD04 \u2014 +17.9M");
+    expect(lines[9]).toBe("5. *Sairen* 🔄 — +17.9M");
     const m = snapshot.members.find((mm) => mm.trainer_name === "Sairen")!;
     expect(isTransferMember(m)).toBe(true);
     expect(formatNumber(17882090)).toBe("17.9M");
   });
 
   it("6. sirsokban - 17.1M", () => {
-    expect(lines[10]).toBe("6. *sirsokban* \u2014 +17.1M");
+    expect(lines[10]).toBe("6. *sirsokban* — +17.1M");
   });
 
   it("7. Luck99 - 16.8M", () => {
-    expect(lines[11]).toBe("7. *Luck99* \u2014 +16.8M");
+    expect(lines[11]).toBe("7. *Luck99* — +16.8M");
   });
 
   it("8. Anshu - 16.1M", () => {
-    expect(lines[12]).toBe("8. *Anshu* \u2014 +16.1M");
+    expect(lines[12]).toBe("8. *Anshu* — +16.1M");
   });
 
   it("9. Ryu - 15.4M", () => {
-    expect(lines[13]).toBe("9. *Ryu* \u2014 +15.4M");
+    expect(lines[13]).toBe("9. *Ryu* — +15.4M");
   });
 
   it("10. Seterako - 15.3M", () => {
-    expect(lines[14]).toBe("10. *Seterako* \u2014 +15.3M");
+    expect(lines[14]).toBe("10. *Seterako* — +15.3M");
   });
 
   it("all numbered lines start with digit + dot + space", () => {
@@ -374,13 +381,11 @@ describe("Sorting order (monthlyGain descending)", () => {
       config,
       computeMembers(snapshot, config),
     ).split("\n");
-    const memberLines = lines.filter((l) =>
-      /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l),
-    );
+    const memberLines = lines.filter((l) => /^🥇|^🥈|^🥉|^\d+\.\s/.test(l));
 
     const gains: number[] = [];
     for (const line of memberLines) {
-      const match = line.match(/\u2014 \+?([\d.]+[KMB]?)$/);
+      const match = line.match(/— \+?([\d.]+[KMB]?)$/);
       expect(match).not.toBeNull();
       gains.push(parseFormattedGain(match![1]));
     }
@@ -404,7 +409,7 @@ describe("Transfer badge", () => {
     ).split("\n");
     const sairenLine = lines.find((l) => l.includes("Sairen"));
     expect(sairenLine).toBeDefined();
-    expect(sairenLine).toContain("\uD83D\uDD04");
+    expect(sairenLine).toContain("🔄");
   });
 
   it("only Sairen and Zero from transfer members are in top 10", () => {
@@ -413,14 +418,10 @@ describe("Transfer badge", () => {
       config,
       computeMembers(snapshot, config),
     ).split("\n");
-    const memberLines = lines.filter((l) =>
-      /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l),
-    );
+    const memberLines = lines.filter((l) => /^🥇|^🥈|^🥉|^\d+\.\s/.test(l));
 
     // Transfer members in top 10: Sairen (rank 5), Zero is rank 11 (excluded)
-    const transferInReport = memberLines.filter((l) =>
-      l.includes("\uD83D\uDD04"),
-    );
+    const transferInReport = memberLines.filter((l) => l.includes("🔄"));
     expect(transferInReport.length).toBe(1);
     expect(transferInReport[0]).toContain("Sairen");
   });
@@ -431,9 +432,7 @@ describe("Transfer badge", () => {
       config,
       computeMembers(snapshot, config),
     ).split("\n");
-    const memberLines = lines.filter((l) =>
-      /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l),
-    );
+    const memberLines = lines.filter((l) => /^🥇|^🥈|^🥉|^\d+\.\s/.test(l));
     const zeroLine = memberLines.find((l) => l.includes("Zero"));
     expect(zeroLine).toBeUndefined();
   });
@@ -503,11 +502,9 @@ describe("WhatsApp formatting compliance", () => {
     );
     const memberLines = report
       .split("\n")
-      .filter((l) =>
-        /^\uD83E\uDD47|^\uD83E\uDD48|^\uD83E\uDD49|^\d+\.\s/.test(l),
-      );
+      .filter((l) => /^🥇|^🥈|^🥉|^\d+\.\s/.test(l));
     for (const line of memberLines) {
-      expect(line).toContain(" \u2014 ");
+      expect(line).toContain(" — ");
     }
   });
 });
@@ -521,7 +518,6 @@ describe("Complete line-by-line verification against raw data", () => {
     );
     const lines = report.split("\n");
 
-    // Build expected top 10 from raw data
     const latestDataDay = getDataDayFromSnapshot(snapshot);
     const candidates: { name: string; gain: number; isTransfer: boolean }[] =
       [];
@@ -540,32 +536,30 @@ describe("Complete line-by-line verification against raw data", () => {
     candidates.sort((a, b) => b.gain - a.gain);
     const top10 = candidates.slice(0, 10);
 
-    // Verify header
-    expect(lines[0]).toBe("\uD83C\uDFC6 *Peringkat Bulanan*");
+    expect(lines[0]).toBe("🏆 *Peringkat Bulanan*");
     expect(lines[1]).toBe("");
-    expect(lines[2]).toBe("Hol\uFF3FHorse | A+ (#431)");
+    expect(lines[2]).toBe("Hol＿Horse | A+ (#431)");
     expect(lines[3]).toBe("Periode data: 11 Juni 2026, 22:00 WIB");
     expect(lines[4]).toBe("");
 
-    // Verify each member line (index 5-14)
+    // Member lines sit at indices 5-14, after the 5 header lines.
     for (let i = 0; i < top10.length; i++) {
       const member = top10[i];
       const gainStr = formatNumber(member.gain);
-      const transferBadge = member.isTransfer ? " \uD83D\uDD04" : "";
+      const transferBadge = member.isTransfer ? " 🔄" : "";
 
       if (i < 3) {
-        const medals = ["\uD83E\uDD47", "\uD83E\uDD48", "\uD83E\uDD49"];
+        const medals = ["🥇", "🥈", "🥉"];
         expect(lines[5 + i]).toBe(
-          `${medals[i]} *${member.name}*${transferBadge} \u2014 +${gainStr}`,
+          `${medals[i]} *${member.name}*${transferBadge} — +${gainStr}`,
         );
       } else {
         expect(lines[5 + i]).toBe(
-          `${i + 1}. *${member.name}*${transferBadge} \u2014 +${gainStr}`,
+          `${i + 1}. *${member.name}*${transferBadge} — +${gainStr}`,
         );
       }
     }
 
-    // Verify no extra lines (18 = 5 header + 10 members + 3 footer)
     expect(lines.length).toBe(18);
   });
 });

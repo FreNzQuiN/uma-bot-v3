@@ -15,10 +15,6 @@ const SNAPSHOTS_DIR = "data/snapshots";
 
 let cachedLatestSnapshot: Snapshot | null = null;
 
-/**
- * Get the cached latest snapshot (no disk I/O).
- * Returns null if cache is empty (e.g., before first load).
- */
 export function getCachedSnapshot(): Snapshot | null {
   return cachedLatestSnapshot;
 }
@@ -44,11 +40,6 @@ export function setCachedSnapshot(snapshot: Snapshot | null): void {
   cachedLatestSnapshot = snapshot;
 }
 
-/**
- * Build the full path for a snapshot file.
- * @param dataDay date string (YYYY-MM-DD)
- * @param rootDir Base directory (default: project root)
- */
 function buildSnapshotPath(dataDay: string, rootDir: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dataDay)) {
     throw new Error(
@@ -70,11 +61,8 @@ function isValidSnapshot(data: unknown): data is Snapshot {
 }
 
 /**
- * Save a snapshot to disk.
- *
- * @param dataDay - date string (YYYY-MM-DD)
- * @param rootDir - Base project directory (for testing; defaults to process.cwd())
- * @returns The file path that was saved
+ * Save a snapshot to disk and return the written path.
+ * @param rootDir - base project directory (for testing; defaults to process.cwd())
  */
 export function saveSnapshot(
   snapshot: Snapshot,
@@ -101,10 +89,8 @@ export function saveSnapshot(
 
 /**
  * Load a snapshot from disk.
- *
- * @param dataDay - date string (YYYY-MM-DD)
- * @param rootDir - Base project directory (for testing; defaults to process.cwd())
- * @returns Parsed Snapshot or null if file doesn't exist or is invalid
+ * @param rootDir - base project directory (for testing; defaults to process.cwd())
+ * @returns parsed Snapshot, or null if the file doesn't exist or is invalid
  */
 export function loadSnapshot(
   dataDay: string,
@@ -137,11 +123,9 @@ export function loadSnapshot(
 }
 
 /**
- * Load the most recent snapshot from disk.
- * Scans all YYYY/MM/DD.json files and returns the latest by date.
- *
- * @param rootDir - Base project directory (for testing; defaults to process.cwd())
- * @returns The latest Snapshot or null if none exist
+ * Load the most recent snapshot by date from disk.
+ * @param rootDir - base project directory (for testing; defaults to process.cwd())
+ * @returns the latest Snapshot, or null if none exist
  */
 export function loadLatestSnapshot(
   rootDir: string = process.cwd(),
@@ -155,11 +139,10 @@ export function loadLatestSnapshot(
 
 /**
  * Load the latest snapshot for a given year/month.
- *
  * @param year - e.g. 2026
- * @param month - e.g. 6
- * @param rootDir - Base project directory (for testing; defaults to process.cwd())
- * @returns The latest Snapshot for the month, or null if none exist
+ * @param month - 1-12, not zero-padded (e.g. 6)
+ * @param rootDir - base project directory (for testing; defaults to process.cwd())
+ * @returns the latest Snapshot for the month, or null if none exist
  */
 export function loadMonthSnapshot(
   year: number,
@@ -186,13 +169,6 @@ export function loadMonthSnapshot(
   return loadSnapshot(dataDay, rootDir);
 }
 
-/**
- * Check if a snapshot file exists for the given date.
- *
- * @param dataDay - date string (YYYY-MM-DD)
- * @param rootDir - Base project directory (for testing; defaults to process.cwd())
- * @returns true if file exists
- */
 export function snapshotExists(
   dataDay: string,
   rootDir: string = process.cwd(),
@@ -201,10 +177,6 @@ export function snapshotExists(
   return fs.existsSync(filePath);
 }
 
-/**
- * Scan the snapshots directory and return all date strings (YYYY-MM-DD)
- * for which a JSON file exists.
- */
 function listSnapshotDates(rootDir: string): string[] {
   const snapshotsDir = path.join(rootDir, SNAPSHOTS_DIR);
   if (!fs.existsSync(snapshotsDir)) return [];
@@ -227,10 +199,6 @@ function listSnapshotDates(rootDir: string): string[] {
   return dates;
 }
 
-/**
- * List subdirectories in a given path.
- * Returns directory names only (not files).
- */
 function listDirs(dirPath: string): string[] {
   if (!fs.existsSync(dirPath)) return [];
 
@@ -240,12 +208,6 @@ function listDirs(dirPath: string): string[] {
     .map((d) => d.name);
 }
 
-/**
- * Get the latest snapshot date string (YYYY-MM-DD) from disk.
- *
- * @param rootDir - Base project directory (for testing; defaults to process.cwd())
- * @returns The latest date string or null if no snapshots exist
- */
 export function getLatestSnapshotDate(
   rootDir: string = process.cwd(),
 ): string | null {
@@ -256,7 +218,6 @@ export function getLatestSnapshotDate(
   return dates[0];
 }
 
-/** Returns empty string if no snapshot date is available. */
 export function staleSnapshotMessage(snapshotDate: string | null): string {
   if (!snapshotDate) return "";
 

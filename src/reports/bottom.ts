@@ -15,6 +15,7 @@ import {
   buildReportHeader,
   buildStaleSection,
 } from "./format";
+import { TOP_N } from "./helpers";
 
 export function generateBottomReport(
   snapshot: Snapshot,
@@ -49,7 +50,7 @@ export function generateBottomReport(
   }
   lines.push("");
 
-  const bottomCount = Math.min(10, contributing.length);
+  const bottomCount = Math.min(TOP_N, contributing.length);
   for (let i = 0; i < bottomCount; i++) {
     const m = contributing[i];
     const transferBadge = m.isTransfer ? " 🔄" : "";
@@ -69,7 +70,7 @@ export function generateBottomReport(
     );
   }
 
-  // Add stale members (rolling window: consecutive zero-gain days at end >= threshold)
+  // Stale window: definition in buildStaleSection
   const staleThreshold = config.memberStatus.staleAfterDaysMonthly;
   lines.push(
     ...buildStaleSection(

@@ -10,7 +10,14 @@ import { generateWeeklyReport } from "../../../src/reports/weekly";
 import { computeMembers } from "../../../src/reports/compute";
 import { getDefaultConfig } from "../../../src/config";
 import type { Snapshot, BotConfig } from "../../../src/types";
-import { loadRealSnapshot, makeConfig } from "../../_helpers";
+import {
+  loadRealSnapshot,
+  makeConfig,
+  makeEmptySnapshot,
+} from "../../_helpers";
+
+// Layout contract: summary line is the 8th line of the split report.
+const SUMMARY_LINE_INDEX = 8;
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -143,7 +150,6 @@ describe("Below-requirement section", () => {
       0,
     );
     const belowSection = report.substring(report.indexOf("⚠️ Di bawah target"));
-    // These members have W2 gain >= 5M → not listed
     expect(belowSection).not.toContain("• Sairen");
     expect(belowSection).not.toContain("• GoldFamily");
     expect(belowSection).not.toContain("• Luck99");
@@ -171,15 +177,7 @@ describe("Below-requirement section", () => {
 
 describe("Empty snapshot guard", () => {
   it("returns warning for empty members array", () => {
-    const emptySnapshot: Snapshot = {
-      circle: snapshot.circle,
-      members: [],
-      club_rank: 8,
-      fans_to_next_tier: 349208495,
-      fans_to_lower_tier: 21848493,
-      yesterday_fans_to_next_tier: 305715171,
-      yesterday_fans_to_lower_tier: 20621702,
-    };
+    const emptySnapshot = makeEmptySnapshot(snapshot);
     const result = generateWeeklyReport(
       emptySnapshot,
       config,
@@ -190,15 +188,7 @@ describe("Empty snapshot guard", () => {
   });
 
   it("empty warning has no other report content", () => {
-    const emptySnapshot: Snapshot = {
-      circle: snapshot.circle,
-      members: [],
-      club_rank: 8,
-      fans_to_next_tier: 349208495,
-      fans_to_lower_tier: 21848493,
-      yesterday_fans_to_next_tier: 305715171,
-      yesterday_fans_to_lower_tier: 20621702,
-    };
+    const emptySnapshot = makeEmptySnapshot(snapshot);
     const result = generateWeeklyReport(
       emptySnapshot,
       config,
@@ -213,20 +203,17 @@ describe("Empty snapshot guard", () => {
 
 describe("Cross-week consistency", () => {
   it("W1 total + W2 total ≠ monthly total (different baselines)", () => {
-    // W1 and W2 gains are computed against different baselines,
-    // so they should NOT sum to the monthly gain.
     const w1Report = generateWeeklyReport(snapshot, config, computedMembers, 1);
     const w2Report = generateWeeklyReport(snapshot, config, computedMembers, 0);
 
     const w1TotalMatch = w1Report
-      .split("\n")[8]
-      .match(/Total: ([\d.]+)([KMB])/);
+      .split("\n")
+      [SUMMARY_LINE_INDEX].match(/Total: ([\d.]+)([KMB])/);
     const w2TotalMatch = w2Report
-      .split("\n")[8]
-      .match(/Total: ([\d.]+)([KMB])/);
+      .split("\n")
+      [SUMMARY_LINE_INDEX].match(/Total: ([\d.]+)([KMB])/);
     expect(w1TotalMatch).not.toBeNull();
     expect(w2TotalMatch).not.toBeNull();
-    // Just verify both exist and are different values
     expect(w1TotalMatch![1] + w1TotalMatch![2]).not.toBe(
       w2TotalMatch![1] + w2TotalMatch![2],
     );

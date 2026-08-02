@@ -35,6 +35,11 @@ function p2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
+function isCurrentMonthFetch(year: number, month: number): boolean {
+  const { year: curYear, month: curMonth } = getDataDateComponents();
+  return curYear === year && curMonth === month;
+}
+
 /** Derive file path from snapshot metadata, not clock. Returns null when no member exists to derive from. */
 function getDataDateForFile(snapshot: Snapshot): string | null {
   const member = snapshot.members[0];
@@ -79,10 +84,7 @@ function isSnapshotStale(snapshot: Snapshot): boolean {
  * Used to decide whether to retry a fetch (scraper might still be running).
  */
 function isDataFreshEnough(snapshot: Snapshot): boolean {
-  const dataDay = getDataDayFromSnapshot(snapshot);
-  if (dataDay === 0) return false;
-  const currentDay = getDataDay();
-  return dataDay >= currentDay - 1;
+  return !isSnapshotStale(snapshot);
 }
 
 /** Past-month snapshot: true if data covers the entire month. */
@@ -155,12 +157,12 @@ async function fetchOnce(
 /**
  * Fetch a snapshot from uma.moe and save it if it's newer than what's on disk.
  *
- * For current-month fetches, retries with backoff if the fetched data is behind
- * today's JST date (scraper might still be running). Retries scale:
- * 5m → 10m → 20m → 25m → ... capped at 1hr per delay, 1hr cumulative max.
+ * For current-month fetches, retries with backoff (5m → 10m → 20m → 40m → 60m,
+ * per-delay cap 1h) while data is behind today's JST date (scraper might still
+ * be running). Retry budget = 23h minus data age; expired budget → single attempt.
  *
  * Returns the snapshot (fresh or existing) and whether a save happened.
- * Never throws — fetch failures return the existing snapshot.
+ * Fetch failures return the existing snapshot; save errors propagate.
  */
 export async function fetchAndSaveSnapshot(
   umaMoe: UmaMoeClientLike,
@@ -174,7 +176,6 @@ export async function fetchAndSaveSnapshot(
 
   const existing = loadMonthSnapshot(year, month, rootDir);
 
-  // Determine if we need to fetch
   let needFetch = !existing;
   if (existing) {
     if (existing.circle.circle_id !== circleId) {
@@ -184,8 +185,7 @@ export async function fetchAndSaveSnapshot(
       );
       needFetch = true;
     } else {
-      const { year: curYear, month: curMonth } = getDataDateComponents();
-      const isCurrentMonth = curYear === year && curMonth === month;
+      const isCurrentMonth = isCurrentMonthFetch(year, month);
       if (isCurrentMonth) {
         needFetch = isSnapshotStale(existing);
       } else {
@@ -199,9 +199,7 @@ export async function fetchAndSaveSnapshot(
     return { snapshot: existing, saved: false, reason: "fresh" };
   }
 
-  // Check if existing data is already fresh enough (today or yesterday)
-  const { year: curYear, month: curMonth } = getDataDateComponents();
-  const isCurrentMonth = curYear === year && curMonth === month;
+  const isCurrentMonth = isCurrentMonthFetch(year, month);
 
   if (existing && isCurrentMonth && isDataFreshEnough(existing)) {
     log.debug(
@@ -217,6 +215,7 @@ export async function fetchAndSaveSnapshot(
   const HOUR_MS = 60 * 60_000;
   const MAX_RETRY_BUDGET_MS = 23 * HOUR_MS;
   const MAX_DELAY_MS = 60 * HOUR_MS;
+  const INITIAL_DELAY_MS = 5 * HOUR_MS;
 
   let dataAgeMs = 0;
   if (existing && existing.members.length > 0) {
@@ -243,7 +242,7 @@ export async function fetchAndSaveSnapshot(
 
   let lastError = "";
   let cumulativeWait = 0;
-  let delay = 5 * 60_000; // start at 5m
+  let delay = INITIAL_DELAY_MS;
   let attempt = 0;
 
   while (true) {

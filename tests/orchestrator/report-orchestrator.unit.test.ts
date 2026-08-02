@@ -5,10 +5,10 @@ import {
   mockCurrentDate,
   restoreDateMocks,
 } from "../_helpers";
-import type { Alert } from "../../src/alerts/alerts";
+import { detectAlerts, type Alert } from "../../src/alerts/alerts";
 import { fetchAndSaveSnapshot } from "../../src/data/fetch-snapshot";
+import { computeMembers } from "../../src/reports/compute";
 
-// ── Module-level mocks ─────────────────────────────────────
 jest.mock("../../src/data/snapshot", () => {
   const actual = jest.requireActual("../../src/data/snapshot");
   return { ...actual, saveSnapshot: jest.fn() };
@@ -19,8 +19,6 @@ jest.mock("../../src/data/fetch-snapshot");
 const mockedFetchSnapshot = fetchAndSaveSnapshot as jest.MockedFunction<
   typeof fetchAndSaveSnapshot
 >;
-
-// ── Mock factories ────────────────────────────────────────────
 
 function makeWaClient(overrides: Partial<Record<string, jest.Mock>> = {}) {
   return {
@@ -61,7 +59,11 @@ function makeOrchestrator(
   return { orch, config, waClient };
 }
 
-// ── Tests ─────────────────────────────────────────────────────
+function makeComputedFixture() {
+  const snapshot = loadRealSnapshot();
+  const config = makeConfig();
+  return { snapshot, config, members: computeMembers(snapshot, config) };
+}
 
 describe("ReportOrchestrator — deliverReport", () => {
   const REPORT_TEXT = "== Laporan Harian ==\nTop: Player1\nTotal: 50000";
@@ -101,7 +103,6 @@ describe("ReportOrchestrator — deliverReport", () => {
       waClient: makeWaClient({ isConnected: jest.fn().mockReturnValue(false) }),
     });
 
-    // Should not throw
     await orch.deliverReport(REPORT_TEXT, REPORT_TYPE);
 
     expect(waClient.sendMessage).not.toHaveBeenCalled();
@@ -122,12 +123,10 @@ describe("ReportOrchestrator — deliverReport", () => {
   it("does not throw when some sends fail but at least one succeeds", async () => {
     const { orch, waClient } = makeOrchestrator();
 
-    // First group fails, second succeeds
     waClient.sendMessage
       .mockRejectedValueOnce(new Error("network error"))
       .mockResolvedValueOnce(undefined);
 
-    // Should NOT throw
     await orch.deliverReport(REPORT_TEXT, REPORT_TYPE);
 
     expect(waClient.sendMessage).toHaveBeenCalledTimes(2);
@@ -368,10 +367,7 @@ describe("ReportOrchestrator — alignSnapshotToMonth", () => {
 describe("ReportOrchestrator — buildReportString", () => {
   it("returns report string for known type", async () => {
     const { orch } = makeOrchestrator();
-    const snapshot = loadRealSnapshot();
-    const config = makeConfig();
-    const { computeMembers } = require("../../src/reports/compute");
-    const members = computeMembers(snapshot, config);
+    const { snapshot, config, members } = makeComputedFixture();
 
     const result = await orch.buildReportString(
       "daily",
@@ -387,10 +383,7 @@ describe("ReportOrchestrator — buildReportString", () => {
 
   it("returns undefined for unknown type", async () => {
     const { orch } = makeOrchestrator();
-    const snapshot = loadRealSnapshot();
-    const config = makeConfig();
-    const { computeMembers } = require("../../src/reports/compute");
-    const members = computeMembers(snapshot, config);
+    const { snapshot, config, members } = makeComputedFixture();
 
     const result = await orch.buildReportString(
       "nonexistent",
@@ -404,10 +397,7 @@ describe("ReportOrchestrator — buildReportString", () => {
 
   it("inserts catch-up tag below title when isCatchUp is true", async () => {
     const { orch } = makeOrchestrator();
-    const snapshot = loadRealSnapshot();
-    const config = makeConfig();
-    const { computeMembers } = require("../../src/reports/compute");
-    const members = computeMembers(snapshot, config);
+    const { snapshot, config, members } = makeComputedFixture();
 
     const result = await orch.buildReportString(
       "daily",
@@ -419,18 +409,15 @@ describe("ReportOrchestrator — buildReportString", () => {
 
     expect(result).toBeDefined();
     expect(result).toContain("*⚠️ Catch-up*");
-    // Tag should appear after the title line (second line, after blank line)
+    // Layout: title(0), blank(1), tag(2)
     const lines = result!.split("\n");
-    expect(lines[0]).toMatch(/^\📊/);
+    expect(lines[0]).toMatch(/^📊/);
     expect(lines[2]).toBe("*⚠️ Catch-up*");
   });
 
   it("does not insert catch-up tag when isCatchUp is false", async () => {
     const { orch } = makeOrchestrator();
-    const snapshot = loadRealSnapshot();
-    const config = makeConfig();
-    const { computeMembers } = require("../../src/reports/compute");
-    const members = computeMembers(snapshot, config);
+    const { snapshot, config, members } = makeComputedFixture();
 
     const result = await orch.buildReportString(
       "daily",
@@ -448,10 +435,7 @@ describe("ReportOrchestrator — buildReportString", () => {
 describe("ReportOrchestrator — generateCombinedReportString", () => {
   it("returns combined report string", () => {
     const { orch } = makeOrchestrator();
-    const snapshot = loadRealSnapshot();
-    const config = makeConfig();
-    const { computeMembers } = require("../../src/reports/compute");
-    const members = computeMembers(snapshot, config);
+    const { snapshot, config, members } = makeComputedFixture();
 
     const result = orch.generateCombinedReportString(
       ["daily", "weekly"],
@@ -471,7 +455,8 @@ jest.mock("../../src/alerts/alerts", () => {
   const actual = jest.requireActual("../../src/alerts/alerts");
   return {
     ...actual,
-    detectAlerts: (...args: any[]) => mockDetectAlerts(...args),
+    detectAlerts: (...args: Parameters<typeof detectAlerts>) =>
+      mockDetectAlerts(...args),
   };
 });
 
@@ -620,7 +605,6 @@ describe("ReportOrchestrator — processAlertsForReport", () => {
     };
     mockDetectAlerts.mockResolvedValue([sampleAlert]);
 
-    // Should not throw — error is caught internally
     const result = await orch.processAlertsForReport(
       "daily",
       loadRealSnapshot(),

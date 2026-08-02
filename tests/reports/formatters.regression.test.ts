@@ -1,10 +1,9 @@
 import { splitMessage } from "../../src/utils/format";
 
-describe("Bug 1: splitMessage Part marker overhead", () => {
+describe("splitMessage Part marker overhead", () => {
   const MAX_LENGTH = 4096;
 
   it("all parts including Part X/Y markers must be ≤ maxLength", () => {
-    // Create a message that will need splitting
     const lines = Array.from(
       { length: 200 },
       (_, i) => `Line ${i}: ${"x".repeat(30)}`,
@@ -13,7 +12,6 @@ describe("Bug 1: splitMessage Part marker overhead", () => {
 
     const parts = splitMessage(longMessage, MAX_LENGTH);
 
-    // Every part must respect maxLength
     for (const part of parts) {
       expect(part.length).toBeLessThanOrEqual(MAX_LENGTH);
     }
@@ -34,7 +32,7 @@ describe("Bug 1: splitMessage Part marker overhead", () => {
   });
 
   it("single-line parts with markers respect maxLength", () => {
-    // Create a message with lines just under maxLength
+    // Lines just under maxLength so the Part marker pushes each part over
     const line = "x".repeat(100);
     const lines = Array.from({ length: 50 }, () => line);
     const longMessage = lines.join("\n");
@@ -49,7 +47,6 @@ describe("Bug 1: splitMessage Part marker overhead", () => {
   });
 
   it("force-split long lines also respect maxLength with markers", () => {
-    // A single line that exceeds maxLength should be force-split
     const longLine = "x".repeat(200);
     const maxLen = 50;
 
@@ -61,7 +58,6 @@ describe("Bug 1: splitMessage Part marker overhead", () => {
   });
 
   it("real-world report content respects maxLength after splitting", () => {
-    // Simulate a very long report
     const reportHeader =
       "📊 Daily Report — 12 Juni 2026\n\nHol＿Horse | A+ (#431)\n";
     const memberLines = Array.from(
@@ -70,10 +66,11 @@ describe("Bug 1: splitMessage Part marker overhead", () => {
     ).join("\n");
     const report = reportHeader + memberLines;
 
-    if (report.length > MAX_LENGTH) {
-      const parts = splitMessage(report, MAX_LENGTH);
+    const smallMax = 800;
+    if (report.length > smallMax) {
+      const parts = splitMessage(report, smallMax);
       for (const part of parts) {
-        expect(part.length).toBeLessThanOrEqual(MAX_LENGTH);
+        expect(part.length).toBeLessThanOrEqual(smallMax);
       }
     }
   });

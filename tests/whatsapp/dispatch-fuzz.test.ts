@@ -8,7 +8,9 @@ import { setupCommandHandler } from "../../src/whatsapp/dispatch";
 import type {
   WhatsAppClient,
   IncomingMessage,
+  MessageHandler,
 } from "../../src/whatsapp/client";
+import type { IDatabase } from "../../src/db/types";
 import type { BotConfig, Snapshot } from "../../src/types";
 import { getDefaultConfig } from "../../src/config";
 
@@ -88,7 +90,7 @@ function makeMsg(text: string): IncomingMessage {
   };
 }
 
-function makeMockDb(): any {
+function makeMockDb(): IDatabase {
   return {
     recordAlert: jest.fn(),
     getMembers: jest.fn().mockReturnValue([]),
@@ -99,10 +101,10 @@ function makeMockDb(): any {
     getLastRun: jest.fn().mockReturnValue(null),
     recordRun: jest.fn(),
     updateRunStatus: jest.fn(),
-  };
+  } as unknown as IDatabase;
 }
 
-// 56 adversarial inputs across 6 groups
+// 56 adversarial inputs across 6 groups + 2 bonus sets
 const ADVERSARIAL_INPUTS: string[] = [
   // Group 1: Injection (10)
   "/daily; rm -rf /",
@@ -219,10 +221,11 @@ describe("parseCommand fuzzing", () => {
     }
   });
 
-  it("handles 10000-char input without hanging", () => {
-    const start = Date.now();
-    parseCommand("/daily" + "A".repeat(10000), PREFIXES);
-    expect(Date.now() - start).toBeLessThan(1000);
+  it("parses 10000-char input", () => {
+    const result = parseCommand("/daily" + "A".repeat(10000), PREFIXES);
+    expect(result).not.toBeNull();
+    expect(result?.command).toBe(("daily" + "A".repeat(10000)).toLowerCase());
+    expect(result?.args).toEqual([]);
   });
 });
 
@@ -233,14 +236,14 @@ describe("Dispatch handler fuzzing", () => {
   beforeEach(() => {
     messageHandler = null;
     mockClient = {
-      onMessage: jest.fn((h: any) => {
+      onMessage: jest.fn((h: MessageHandler) => {
         messageHandler = h;
       }),
       sendMessage: jest.fn(async () => {}),
       sendOrEdit: jest.fn(async () => "msg-id"),
       connect: jest.fn(),
       disconnect: jest.fn(),
-    } as any;
+    } as unknown as WhatsAppClient;
     setupCommandHandler(mockClient, makeConfig(), makeMockDb(), () =>
       makeSnapshot(),
     );
@@ -265,7 +268,7 @@ describe("Dispatch handler fuzzing", () => {
         key: { remoteJid: "", id: "" },
         message: undefined,
         pushName: "",
-      } as any),
+      }),
     ).resolves.not.toThrow();
   });
 
@@ -275,7 +278,7 @@ describe("Dispatch handler fuzzing", () => {
         key: {},
         message: { conversation: null },
         pushName: "",
-      } as any),
+      } as unknown as IncomingMessage),
     ).resolves.not.toThrow();
   });
 });

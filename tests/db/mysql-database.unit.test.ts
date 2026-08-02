@@ -46,6 +46,18 @@ const config: MysqlConfig = {
   ssl: false,
 };
 
+const MYSQL_VERSION = "8.0.35";
+const OLD_MYSQL_VERSION = "5.7.40-log";
+const TIDB_VERSION = "5.7.25-TiDB-v7.1.0";
+const MIN_MYSQL_VERSION = "8.0.31";
+
+function mockVersion(version: string): void {
+  mockConnQuery
+    .mockReset()
+    .mockResolvedValueOnce([[{ version }], undefined])
+    .mockResolvedValue([[], undefined]);
+}
+
 let db: MysqlDatabase;
 
 beforeEach(async () => {
@@ -60,9 +72,7 @@ beforeEach(async () => {
 
   // checkVersion() runs on pool.getConnection() result (mockConn), so mockConnQuery
   // must return a valid version first. Pool queries (mockPoolQuery) follow after.
-  mockConnQuery
-    .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
-    .mockResolvedValue([[], undefined]);
+  mockVersion(MYSQL_VERSION);
 
   db = new MysqlDatabase(config);
   await db.initialize();
@@ -80,10 +90,7 @@ beforeEach(async () => {
 describe("initialize()", () => {
   it("creates pool with correct config and verifies connection", async () => {
     const mysql = await import("mysql2/promise");
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion(MYSQL_VERSION);
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
 
@@ -101,12 +108,9 @@ describe("initialize()", () => {
     expect(mockRelease).toHaveBeenCalled();
   });
 
-  it("runs 5 CREATE TABLE + 3 CREATE INDEX statements", async () => {
+  it("runs 4 CREATE TABLE + 3 CREATE INDEX statements", async () => {
     mockPoolQuery.mockClear();
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion(MYSQL_VERSION);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
@@ -126,10 +130,7 @@ describe("initialize()", () => {
 
   it("creates MySQL-compatible DDL (INT AUTO_INCREMENT, VARCHAR, TINYINT)", async () => {
     mockPoolQuery.mockClear();
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion(MYSQL_VERSION);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
@@ -145,10 +146,7 @@ describe("initialize()", () => {
   });
 
   it("checks MySQL version on initialize", async () => {
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion(MYSQL_VERSION);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
@@ -160,19 +158,19 @@ describe("initialize()", () => {
   it("throws clear error when MySQL version is below minimum", async () => {
     mockConnQuery
       .mockReset()
-      .mockResolvedValueOnce([[{ version: "5.7.40-log" }], undefined]);
+      .mockResolvedValueOnce([[{ version: OLD_MYSQL_VERSION }], undefined]);
 
     const freshDb = new MysqlDatabase(config);
     await expect(freshDb.initialize()).rejects.toThrow(
-      /MySQL 5\.7\.40-log detected.*Minimum required: 8\.0\.31.*Upgrade MySQL.*or switch to database\.backend: sqlite/s,
+      new RegExp(
+        `MySQL ${OLD_MYSQL_VERSION.replace(/\./g, "\\.")} detected.*Minimum required: ${MIN_MYSQL_VERSION.replace(/\./g, "\\.")}.*Upgrade MySQL.*or switch to database\\.backend: sqlite`,
+        "s",
+      ),
     );
   });
 
   it("allows TiDB version strings without version check", async () => {
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "5.7.25-TiDB-v7.1.0" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion(TIDB_VERSION);
 
     const freshDb = new MysqlDatabase(config);
     // Should NOT throw — TiDB is MySQL 8.0+ compatible
@@ -180,22 +178,15 @@ describe("initialize()", () => {
   });
 
   it("proceeds with warning when version string cannot be parsed", async () => {
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "custom-build-123" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion("custom-build-123");
 
     const freshDb = new MysqlDatabase(config);
-    // Should NOT throw — just log a warning
     await expect(freshDb.initialize()).resolves.toBeUndefined();
   });
 
   it("CREATE INDEX does not use IF NOT EXISTS syntax", async () => {
     mockPoolQuery.mockClear();
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion(MYSQL_VERSION);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
@@ -348,11 +339,7 @@ describe("upsertMember()", () => {
   });
 
   it("uses VALUES() syntax for TiDB", async () => {
-    // Create a TiDB-backed instance
-    mockConnQuery
-      .mockReset()
-      .mockResolvedValueOnce([[{ version: "5.7.25-TiDB-v7.1.0" }], undefined])
-      .mockResolvedValue([[], undefined]);
+    mockVersion(TIDB_VERSION);
     const tidbDb = new MysqlDatabase(config);
     await tidbDb.initialize();
 

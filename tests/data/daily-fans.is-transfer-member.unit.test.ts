@@ -1,19 +1,18 @@
-/**
- * Tests for isTransferMember.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import { isTransferMember } from "../../src/data/daily-fans";
-import { RYU_DAILY_FANS, ZERO_DAILY_FANS } from "./daily-fans.fixtures";
+import {
+  RYU_DAILY_FANS,
+  ZERO_DAILY_FANS,
+  PREVIOUS_CIRCLE_ID,
+  PREVIOUS_CIRCLE_NAME,
+} from "./daily-fans.fixtures";
 
 describe("isTransferMember", () => {
   it("returns true when previous_circle_id is set", () => {
     expect(
       isTransferMember({
         daily_fans: RYU_DAILY_FANS,
-        previous_circle_id: 555894304,
-        previous_circle_name: "Advent",
+        previous_circle_id: PREVIOUS_CIRCLE_ID,
+        previous_circle_name: PREVIOUS_CIRCLE_NAME,
       }),
     ).toBe(true);
   });
@@ -30,10 +29,7 @@ describe("isTransferMember", () => {
   it("returns true when daily_fans[0] is negative", () => {
     expect(
       isTransferMember({
-        daily_fans: [
-          -100, 200, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ],
+        daily_fans: [-100, 200, 300, ...new Array(29).fill(0)],
       }),
     ).toBe(true);
   });
@@ -42,8 +38,8 @@ describe("isTransferMember", () => {
     expect(
       isTransferMember({
         daily_fans: ZERO_DAILY_FANS,
-        previous_circle_id: 555894304,
-        previous_circle_name: "Advent",
+        previous_circle_id: PREVIOUS_CIRCLE_ID,
+        previous_circle_name: PREVIOUS_CIRCLE_NAME,
       }),
     ).toBe(true);
   });
@@ -59,10 +55,7 @@ describe("isTransferMember", () => {
   it("returns false for all-positive daily_fans with no previous info", () => {
     expect(
       isTransferMember({
-        daily_fans: [
-          100, 200, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ],
+        daily_fans: [100, 200, 300, ...new Array(29).fill(0)],
       }),
     ).toBe(false);
   });

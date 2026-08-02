@@ -23,8 +23,6 @@ import {
   loadRealSnapshot,
   makeConfig as makeConfigBase,
   makeMessage,
-  TRANSFER_NAMES,
-  STALE_NAMES,
   mockCurrentDate,
   restoreDateMocks,
   makeMockDb,
@@ -34,6 +32,17 @@ const ADMIN_JID = "6281234567890@s.whatsapp.net";
 const NON_ADMIN_JID = "6289999999999@s.whatsapp.net";
 const COMMAND_GROUP = "group-cmd@g.us";
 const OTHER_GROUP = "group-other@g.us";
+
+const STALE_AFTER_DAYS = 3;
+
+// Transfer members with positive gain on day 11; Falkrum (0 gain) is excluded
+const POSITIVE_GAIN_TRANSFERS = [
+  "Zero",
+  "TheTengOne",
+  "Sairen",
+  "VitoHoow",
+  "Ceciria",
+];
 
 let snapshot: Snapshot;
 
@@ -120,15 +129,7 @@ describe("/daily dispatch integration (real snapshot)", () => {
       expect(line).toMatch(/^\d+\.\s\*.+\*\s*(🔄)? — \+[\d.]+[KMB]?$/);
     }
 
-    // Transfer badges (Falkrum has 0 gain on day 11, in stale section)
-    const transferNames = [
-      "Zero",
-      "TheTengOne",
-      "Sairen",
-      "VitoHoow",
-      "Ceciria",
-    ];
-    for (const name of transferNames) {
+    for (const name of POSITIVE_GAIN_TRANSFERS) {
       const line = memberLines.find((l) => l.includes(name));
       expect(line).toBeDefined();
       expect(line!).toContain("🔄");
@@ -137,12 +138,10 @@ describe("/daily dispatch integration (real snapshot)", () => {
     // Left members section removed from daily report (only in /members)
     expect(report).not.toContain("🚪 Keluar dari klub:");
 
-    // Stale data warning — now guaranteed because we mocked date to June 13
     expect(report).toContain(
       "⚠️ Data klub mungkin tidak terbaru (update terakhir: 11 Juni 2026)",
     );
 
-    // Footer
     expect(report).toContain("⸻");
     expect(report).toMatch(/Terakhir sync: \d+\/\d+ \d{2}:\d{2}$/);
 
@@ -412,15 +411,8 @@ describe("/daily dispatch integration (real snapshot)", () => {
     );
 
     const report = sentMessages[1].text;
-    const transferNames = [
-      "Zero",
-      "TheTengOne",
-      "Sairen",
-      "VitoHoow",
-      "Ceciria",
-    ];
 
-    for (const name of transferNames) {
+    for (const name of POSITIVE_GAIN_TRANSFERS) {
       const line = report.split("\n").find((l) => l.includes(name));
       expect(line).toBeDefined();
       expect(line).toContain("🔄");
@@ -446,7 +438,6 @@ describe("/daily dispatch integration (real snapshot)", () => {
 
     const report = sentMessages[1].text;
 
-    // Left section removed from daily report
     expect(report).not.toContain("🚪 Keluar dari klub:");
 
     const lines = report.split("\n");
@@ -485,7 +476,11 @@ describe("Exact total gain verification", () => {
     for (const member of snapshot.members) {
       const isT = isTransferMember(member);
       const latestPositiveDay = getLatestDataDay(member.daily_fans);
-      const stale = isStaleForReport(member.daily_fans, latestDataDay, 3);
+      const stale = isStaleForReport(
+        member.daily_fans,
+        latestDataDay,
+        STALE_AFTER_DAYS,
+      );
       const status = isT
         ? "transfer"
         : latestPositiveDay === 0 || stale
@@ -527,7 +522,11 @@ describe("Exact total gain verification", () => {
     for (const member of snapshot.members) {
       const isT = isTransferMember(member);
       const latestPositiveDay = getLatestDataDay(member.daily_fans);
-      const stale = isStaleForReport(member.daily_fans, latestDataDay, 3);
+      const stale = isStaleForReport(
+        member.daily_fans,
+        latestDataDay,
+        STALE_AFTER_DAYS,
+      );
       const status = isT
         ? "transfer"
         : latestPositiveDay === 0 || stale

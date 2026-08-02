@@ -13,7 +13,14 @@ import { getDataDayFromSnapshot } from "../../../src/data/snapshot";
 import { formatNumber } from "../../../src/utils/format";
 import { WEEK_BLOCKS } from "../../../src/types";
 import type { Snapshot, BotConfig } from "../../../src/types";
-import { loadRealSnapshot, TRANSFER_NAMES } from "../../_helpers";
+import {
+  loadRealSnapshot,
+  parseFormattedGain,
+  TRANSFER_NAMES,
+} from "../../_helpers";
+
+// Layout contract: summary line is the 8th line of the split report.
+const SUMMARY_LINE_INDEX = 8;
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -32,7 +39,6 @@ beforeAll(() => {
 function manualWeeklyGain(dailyFans: number[], weekNumber: number): number {
   const block = WEEK_BLOCKS.find((b) => b.week === weekNumber)!;
 
-  // Find last positive before block
   let valueBeforeBlock: number | null = null;
   for (let day = 1; day < block.start; day++) {
     const idx = day - 1;
@@ -41,7 +47,6 @@ function manualWeeklyGain(dailyFans: number[], weekNumber: number): number {
     }
   }
 
-  // Find last positive in block
   let lastPositiveInBlock: number | null = null;
   let firstPositiveInBlock: number | null = null;
   for (let day = block.start; day <= block.end; day++) {
@@ -234,7 +239,6 @@ describe("All 30 W2 contributors verified against raw data", () => {
   });
 
   it("every ranked member gain matches manual getWeeklyGain calculation", () => {
-    // Build expected gains from raw data
     const expectedGains: { name: string; gain: number; isTransfer: boolean }[] =
       [];
     for (const member of snapshot.members) {
@@ -267,16 +271,11 @@ describe("All 30 W2 contributors verified against raw data", () => {
       expectedTotal += getWeeklyGain(member.daily_fans, 2);
     }
     // Summary line is at index 8: "👥 30 kontribusi dari 30 anggota | Total: 144.5M"
-    const summaryLine = report.split("\n")[8];
+    const summaryLine = report.split("\n")[SUMMARY_LINE_INDEX];
     const match = summaryLine.match(/Total: ([\d.]+)([KMB])/);
     expect(match).not.toBeNull();
 
-    let reportedTotal: number;
-    const num = parseFloat(match![1]);
-    if (match![2] === "K") reportedTotal = num * 1_000;
-    else if (match![2] === "M") reportedTotal = num * 1_000_000;
-    else if (match![2] === "B") reportedTotal = num * 1_000_000_000;
-    else reportedTotal = num;
+    const reportedTotal = parseFormattedGain(`${match![1]}${match![2]}`);
 
     // Allow 0.1M rounding tolerance
     expect(Math.abs(reportedTotal - expectedTotal)).toBeLessThan(100_000);
@@ -298,7 +297,6 @@ describe("getWeeklyGain edge cases", () => {
   });
 
   it("returns 0 when only one positive value in block (same as baseline)", () => {
-    // If member has day 1 = 100 and day 7 = 100 (no change in W1)
     const fans = [
       100, 100, 100, 100, 100, 100, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -307,7 +305,6 @@ describe("getWeeklyGain edge cases", () => {
   });
 
   it("returns gain when block values differ from baseline", () => {
-    // day1 = 100, day7 = 200 → W1 gain = 100
     const fans = [
       100, 120, 140, 160, 180, 190, 200, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -333,7 +330,6 @@ describe("getWeeklyGain edge cases", () => {
   it("handles transfer member with negative prefix correctly", () => {
     // Zero's actual data: negative days 1-2, 0 day 3, positive days 4+
     const z = snapshot.members.find((m) => m.trainer_name === "Zero")!;
-    // W2 gain should work correctly despite negative prefix
     const gain = getWeeklyGain(z.daily_fans, 2);
     expect(gain).toBe(6107365); // 315,534,000 - 309,426,635
   });

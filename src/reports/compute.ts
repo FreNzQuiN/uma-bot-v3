@@ -22,6 +22,9 @@ import {
 } from "../data/daily-fans";
 export { computeTierData } from "../data/daily-fans";
 
+// Ghost-gap sanity cap: gaps above this ratio mean member_count is a data error, not leavers
+const GHOST_GAP_MAX_RATIO = 0.5;
+
 /**
  * Stale is computed per-report using report-specific thresholds,
  * NOT globally here. The only status assignments in this function are:
@@ -85,7 +88,10 @@ export function computeMembers(
   const ghostCount =
     memberCount > 0 ? Math.max(0, snapshot.members.length - memberCount) : 0;
 
-  if (ghostCount > 0 && ghostCount < snapshot.members.length * 0.5) {
+  if (
+    ghostCount > 0 &&
+    ghostCount < snapshot.members.length * GHOST_GAP_MAX_RATIO
+  ) {
     const candidates = [...membersWithGain].sort(
       (a, b) => a.monthlyGain - b.monthlyGain,
     );

@@ -49,14 +49,11 @@ export function isAnnouncementGroup(
 /**
  * Check if a sender can use a given command in a given chat.
  *
- * Rules:
- * - Admin commands: only admin JIDs can use them, and only in command groups
- *   or private chats (not in non-command groups).
- * - Report commands: allowed in command groups, or if sender is admin.
- * - Auto-delivery: only to announcement groups.
- * - Non-admin in non-command group: blocked for all commands.
- * - Non-admin in private chat: blocked for all commands.
- * - Admin in any context: allowed for all commands they have access to.
+ * Admin commands: admin JIDs only, and only in command groups or
+ * private chats. Other commands: anyone in a command group, or an
+ * admin in a private chat. Non-admins are always blocked outside
+ * command groups. Announcement groups are not a valid chat for any
+ * command.
  */
 export function canUseCommand(
   command: string,
@@ -69,18 +66,16 @@ export function canUseCommand(
 
   const senderIsAdmin = isAdmin(senderJid, config);
   const chatIsCmdGroup = isCommandGroup(chatJid, config);
-  const chatIsAnnounce = isAnnouncementGroup(chatJid, config);
+  const isPrivateChat = !chatJid.endsWith("@g.us");
 
   if (ADMIN_COMMANDS.has(command)) {
     if (!senderIsAdmin) return false;
     if (chatIsCmdGroup) return true;
-    const isPrivateChat = !chatJid.endsWith("@g.us");
     return isPrivateChat;
   }
 
   if (senderIsAdmin) {
     if (chatIsCmdGroup) return true;
-    const isPrivateChat = !chatJid.endsWith("@g.us");
     return isPrivateChat;
   }
 

@@ -8,6 +8,12 @@
 import type { BotConfig } from "../types";
 import { validateConfig, saveConfig } from "../config";
 import { formatNumber } from "../utils/format";
+import { parseStrictInt } from "./commands";
+
+const REQ_FIELDS = {
+  monthly: { key: "monthlyFans", label: "Monthly" },
+  weekly: { key: "weeklyFans", label: "Weekly" },
+} as const;
 
 export function handleSetReq(
   args: string[],
@@ -26,16 +32,17 @@ export function handleSetReq(
   }
 
   const sub = args[0]?.toLowerCase();
-  const value = parseInt(args[1], 10);
+  const value = parseStrictInt(args[1]);
 
-  if (!sub || !["monthly", "weekly"].includes(sub)) {
+  const field = REQ_FIELDS[sub as keyof typeof REQ_FIELDS];
+  if (!field) {
     return {
       config,
       message: "Usage: /setreq monthly <amount> atau /setreq weekly <amount>",
     };
   }
 
-  if (isNaN(value) || value < 0) {
+  if (value === null || value < 0) {
     return { config, message: "Amount harus angka positif." };
   }
 
@@ -43,16 +50,15 @@ export function handleSetReq(
     ...config,
     requirements: {
       ...config.requirements,
-      [sub === "monthly" ? "monthlyFans" : "weeklyFans"]: value,
+      [field.key]: value,
     },
   };
 
   const validated = validateConfig(updated);
-  const label = sub === "monthly" ? "Monthly" : "Weekly";
   saveConfig(validated);
   return {
     config: validated,
-    message: `${label} requirement diubah ke ${formatNumber(value)} fans.`,
+    message: `${field.label} requirement diubah ke ${formatNumber(value)} fans.`,
   };
 }
 
@@ -97,7 +103,6 @@ export function handleStatus(
   info?: {
     lastFetch?: string;
     lastReport?: string;
-    snapshotDay?: number;
     uptime?: string;
     reconnects?: number;
     configReloads?: number;
@@ -127,10 +132,6 @@ export function handleStatus(
     lines.push(`Last report: ${info.lastReport}`);
   } else {
     lines.push("Last report: never");
-  }
-
-  if (info?.snapshotDay) {
-    lines.push(`Snapshot data day: ${info.snapshotDay}`);
   }
 
   lines.push("");

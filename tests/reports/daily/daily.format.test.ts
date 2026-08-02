@@ -110,7 +110,6 @@ describe("WhatsApp formatting compliance", () => {
 
   it("uses *bold* (WhatsApp) not **bold** (Markdown)", () => {
     expect(report).toContain("📊 *Daily Report");
-    // No double-asterisk bold anywhere
     expect(report).not.toMatch(/\*\*[^*]+\*\*/);
   });
 
@@ -178,7 +177,6 @@ describe("Ghost member awareness (members.length vs member_count)", () => {
   it("ghost members not shown in daily report (left only in /members)", () => {
     const report = generateDailyReport(snapshot, config, computedMembers, 0);
     const staleNames = [...STALE_NAMES];
-    // Left section removed from daily report
     expect(report).not.toContain("🚪 Keluar dari klub:");
 
     const memberLines = report.split("\n").filter((l) => /^\d+\./.test(l));

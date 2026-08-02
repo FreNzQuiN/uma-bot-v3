@@ -9,7 +9,7 @@
 import { generateMonthlyReport } from "../../../src/reports/monthly";
 import { computeMembers } from "../../../src/reports/compute";
 import { getDefaultConfig } from "../../../src/config";
-import { getMonthlyGain } from "../../../src/data/daily-fans";
+import { getLatestDataDay, getMonthlyGain } from "../../../src/data/daily-fans";
 import { getDataDayFromSnapshot } from "../../../src/data/snapshot";
 import { formatNumber } from "../../../src/utils/format";
 import type { Snapshot, BotConfig } from "../../../src/types";
@@ -197,15 +197,7 @@ describe("Member counts", () => {
     const staleNames = [...STALE_NAMES];
     for (const name of staleNames) {
       const m = snapshot.members.find((mm) => mm.trainer_name === name)!;
-      // getLatestDataDay from their daily_fans
-      const fans = m.daily_fans;
-      let latest = 0;
-      for (let i = fans.length - 1; i >= 0; i--) {
-        if (typeof fans[i] === "number" && fans[i] > 0) {
-          latest = i + 1;
-          break;
-        }
-      }
+      const latest = getLatestDataDay(m.daily_fans);
       expect(latest).toBeLessThanOrEqual(4);
     }
   });
@@ -269,11 +261,7 @@ describe("Requirement section", () => {
       0,
     );
 
-    // Members with monthlyGain >= 10M:
-    // GoldFamily: 27.7M, RngF: 19.2M, Aditya: 18.6M, DzFx: 18.2M,
-    // Sairen: 17.9M, sirsokban: 17.1M, Luck99: 16.8M, Anshu: 16.1M,
-    // Ryu: 15.4M, Seterako: 15.3M, Zero: 14.1M, Dyy": 13.1M, Nargi: 10.3M
-    // = 13 pass
+    // 13 members ≥ 10M: GoldFamily 27.7M … Nargi 10.3M
     expect(report).toContain("✅ 13 pass | ❌ 17 kurang");
   });
 });
@@ -346,8 +334,7 @@ describe("Header format and metadata", () => {
     expect(report).toMatch(/👥 \d+ kontribusi dari \d+ anggota \| Total: /);
   });
 
-  it("formatDateWIB formats correctly", () => {
-    // Header uses month+year format
+  it("header shows month+year format", () => {
     const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
     expect(report).toContain("Juni 2026");
   });
@@ -356,12 +343,12 @@ describe("Header format and metadata", () => {
 describe("Report size within WhatsApp limits", () => {
   it("monthly report (offset=0) does not exceed 4096 chars", () => {
     const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 
   it("monthly report (offset=1) does not exceed 4096 chars", () => {
     const report = generateMonthlyReport(snapshot, config, computedMembers, 1);
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 
   it("monthly report with 10M requirement does not exceed 4096 chars", () => {
@@ -372,7 +359,7 @@ describe("Report size within WhatsApp limits", () => {
       computeMembers(snapshot, cfg),
       0,
     );
-    expect(report.length).toBeLessThanOrEqual(4096);
+    expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
   });
 });
 

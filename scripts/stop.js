@@ -11,7 +11,6 @@ const path = require('path');
 
 const PID_FILE = path.join(__dirname, '..', 'data', 'bot.pid');
 
-// Try PID file first
 if (fs.existsSync(PID_FILE)) {
   const pid = parseInt(fs.readFileSync(PID_FILE, 'utf-8').trim(), 10);
   if (!isNaN(pid)) {
@@ -19,16 +18,20 @@ if (fs.existsSync(PID_FILE)) {
       process.kill(pid, 'SIGTERM');
       console.log(`Stopped bot (PID: ${pid})`);
     } catch (e) {
-      console.log(`Process ${pid} not running (already stopped)`);
+      if (e.code !== 'ESRCH') {
+        console.error(`Failed to stop PID ${pid}: ${e.message}`);
+      } else {
+        console.log(`Process ${pid} not running (already stopped)`);
+      }
     }
   }
-  try { fs.unlinkSync(PID_FILE); } catch {}
+  try { fs.unlinkSync(PID_FILE); } catch (e) {
+    if (e.code !== 'ENOENT') console.error(`Failed to remove ${PID_FILE}: ${e.message}`);
+  }
 } else {
-  // Fallback: find node process running dist/index.js
   try {
     const isWin = process.platform === 'win32';
     if (isWin) {
-      // Windows: find PID from command line
       const output = execSync('wmic process where "commandline like \'%dist/index.js%\' and name=\'node.exe\'" get processid', {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -38,22 +41,31 @@ if (fs.existsSync(PID_FILE)) {
         try {
           process.kill(pid, 'SIGTERM');
           console.log(`Stopped bot (PID: ${pid})`);
-        } catch {}
+        } catch (e) {
+          if (e.code !== 'ESRCH') console.error(`Failed to stop PID ${pid}: ${e.message}`);
+        }
       }
       if (pids.length === 0) console.log('No running bot process found');
     } else {
-      // Unix/Mac
       const output = execSync("pgrep -f 'dist/index.js'", { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
       const pids = output.trim().split('\n').map(l => parseInt(l, 10)).filter(p => !isNaN(p));
       for (const pid of pids) {
         try {
           process.kill(pid, 'SIGTERM');
           console.log(`Stopped bot (PID: ${pid})`);
-        } catch {}
+        } catch (e) {
+          if (e.code !== 'ESRCH') console.error(`Failed to stop PID ${pid}: ${e.message}`);
+        }
       }
       if (pids.length === 0) console.log('No running bot process found');
     }
   } catch (e) {
-    console.log('No running bot process found');
+    // pgrep exits 1 when nothing matches; anything else is a real failure
+    // (e.g. wmic removed on Win 11 24H2+) and must not read as "not running".
+    if (e.status === 1) {
+      console.log('No running bot process found');
+    } else {
+      console.error(`Failed to find bot process: ${e.message}`);
+    }
   }
 }

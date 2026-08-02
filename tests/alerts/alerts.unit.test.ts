@@ -7,6 +7,25 @@ import type { IDatabase } from "../../src/db/types";
 
 const SNAPSHOT: Snapshot = loadRealSnapshot();
 
+const FANS_ARRAY_LENGTH = 32;
+const TRANSFER_MARKER = -1;
+
+const baseCircle = {
+  circle_id: 1,
+  comment: "",
+  leader_viewer_id: 100,
+  leader_name: "Leader",
+  join_style: 1,
+  policy: 1,
+  created_at: "2026-01-01T00:00:00Z",
+  monthly_rank: 100,
+  last_month_rank: 100,
+  archived: false,
+  live_points: null,
+  live_rank: 100,
+  last_live_update: null,
+} as const;
+
 let db: IDatabase;
 
 beforeEach(() => {
@@ -16,27 +35,15 @@ beforeEach(() => {
 function makeSnapshotWithTransfer(): Snapshot {
   return {
     circle: {
-      circle_id: 1,
+      ...baseCircle,
       name: "TestCircle",
-      comment: "",
-      leader_viewer_id: 100,
-      leader_name: "Leader",
-      member_count: 1,
-      join_style: 1,
-      policy: 1,
-      created_at: "2026-01-01T00:00:00Z",
       last_updated: "2026-06-22T15:00:00Z",
-      monthly_rank: 100,
+      member_count: 1,
       monthly_point: 1000000,
-      last_month_rank: 100,
       last_month_point: 1000000,
-      archived: false,
       yesterday_updated: "2026-06-21T15:00:00Z",
       yesterday_points: 500000,
       yesterday_rank: 95,
-      live_points: null,
-      live_rank: 100,
-      last_live_update: null,
     },
     members: [
       {
@@ -48,8 +55,38 @@ function makeSnapshotWithTransfer(): Snapshot {
         year: 2026,
         month: 6,
         daily_fans: [
-          -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0,
+          TRANSFER_MARKER,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
         ],
         last_updated: "2026-06-22T15:00:00Z",
         previous_circle_id: 42,
@@ -110,7 +147,6 @@ describe("detectAlerts", () => {
     const transferAlerts = alerts.filter((a) => a.type === "new_transfer");
     // Snapshot has transfer members: Zero, TheTengOne, Sairen, VitoHoow, Ceciria, Falkrum
     expect(transferAlerts.length).toBeGreaterThan(0);
-    // Check Zero is included
     const zeroAlert = transferAlerts.find((a) => a.message.includes("Zero"));
     expect(zeroAlert).toBeDefined();
     expect(zeroAlert!.message).toContain("Advent");
@@ -128,13 +164,11 @@ describe("detectAlerts", () => {
     );
     expect(alerts1.length).toBeGreaterThan(0);
 
-    // Record each alert key in the mock DB's getExistingAlertKeys
     for (const alert of alerts1) {
       recordedKeys.add(alert.eventKey);
     }
-    (db as any).getExistingAlertKeys.mockResolvedValue(recordedKeys);
+    jest.mocked(db).getExistingAlertKeys.mockResolvedValue(recordedKeys);
 
-    // Second detection should return 0 (all deduped via recorded keys)
     const alerts2 = await detectAlerts(
       computeMembers(SNAPSHOT, config),
       SNAPSHOT,
@@ -148,7 +182,6 @@ describe("detectAlerts", () => {
     const config = makeConfig();
     const snapshot = makeSnapshotWithTransfer();
 
-    // Day 1: detect and record alerts
     const alerts1 = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -165,11 +198,9 @@ describe("detectAlerts", () => {
       expect(key).not.toMatch(/new_transfer:\d{4}-\d{2}-\d{2}:/);
     }
 
-    // Simulate existing keys in DB (all day-1 keys recorded)
     const recordedKeys = new Set(transferKeys1);
-    (db as any).getExistingAlertKeys.mockResolvedValue(recordedKeys);
+    jest.mocked(db).getExistingAlertKeys.mockResolvedValue(recordedKeys);
 
-    // Day 2: same snapshot, new_transfer should NOT re-fire
     const alerts2 = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -189,8 +220,7 @@ describe("detectAlerts", () => {
       db,
     );
     const demotionAlerts = alerts.filter((a) => a.type === "demotion_risk");
-    // Demotion risk depends on snapshot tier data — may or may not be HIGH.
-    // Verify no crash and that the filter returns valid alert objects.
+    // Real snapshot tier data may not be HIGH — assert shape, not presence.
     for (const alert of demotionAlerts) {
       expect(alert.type).toBe("demotion_risk");
       expect(alert.eventKey).toContain("demotion_risk");
@@ -206,9 +236,8 @@ describe("detectAlerts", () => {
       db,
     );
     const perfAlerts = alerts.filter((a) => a.type === "performance_drop");
-    // Verify no stale/inactive member appears in performance alerts
+    // Circle-level alerts use the "club" sentinel viewer id.
     for (const alert of perfAlerts) {
-      // The message should contain a member name, not "club"
       expect(alert.memberViewerId).not.toBe("club");
     }
   });
@@ -330,64 +359,11 @@ describe("quiet hours edge cases", () => {
     });
   }
 
-  function makeSnapshotWithTransfer(): Snapshot {
-    return {
-      circle: {
-        circle_id: 1,
-        name: "TestCircle",
-        comment: "",
-        leader_viewer_id: 100,
-        leader_name: "Leader",
-        member_count: 1,
-        join_style: 1,
-        policy: 1,
-        created_at: "2026-01-01T00:00:00Z",
-        last_updated: "2026-06-22T15:00:00Z",
-        monthly_rank: 100,
-        monthly_point: 1000000,
-        last_month_rank: 100,
-        last_month_point: 1000000,
-        archived: false,
-        yesterday_updated: "2026-06-21T15:00:00Z",
-        yesterday_points: 500000,
-        yesterday_rank: 95,
-        live_points: null,
-        live_rank: 100,
-        last_live_update: null,
-      },
-      members: [
-        {
-          id: 1,
-          circle_id: 1,
-          viewer_id: 999,
-          trainer_name: "TestTrainer",
-          shame_score: null,
-          year: 2026,
-          month: 6,
-          daily_fans: [
-            -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          ],
-          last_updated: "2026-06-22T15:00:00Z",
-          previous_circle_id: 42,
-          previous_circle_name: "PrevCircle",
-        },
-      ],
-      club_rank: 5,
-      fans_to_next_tier: 1000000,
-      fans_to_lower_tier: 500000,
-      yesterday_fans_to_next_tier: 1100000,
-      yesterday_fans_to_lower_tier: 600000,
-    };
-  }
-
   it("suppresses alerts at exactly quiet hours start (hour 22)", async () => {
-    // Arrange: quiet hours 22:00-06:00, current time is 22:30
     mockSystemTime(22, 30);
     const config = makeQuietConfig("22:00", "06:00");
     const snapshot = makeSnapshotWithTransfer();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -395,17 +371,14 @@ describe("quiet hours edge cases", () => {
       db,
     );
 
-    // Assert: transfer alert should be suppressed
     expect(alerts).toHaveLength(0);
   });
 
   it("does NOT suppress alerts one minute before quiet hours start", async () => {
-    // Arrange: quiet hours 22:00-06:00, current time is 21:59
     mockSystemTime(21, 59);
     const config = makeQuietConfig("22:00", "06:00");
     const snapshot = makeSnapshotWithTransfer();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -413,18 +386,15 @@ describe("quiet hours edge cases", () => {
       db,
     );
 
-    // Assert: alerts should NOT be suppressed
     const transferAlerts = alerts.filter((a) => a.type === "new_transfer");
     expect(transferAlerts.length).toBeGreaterThan(0);
   });
 
   it("suppresses alerts during last quiet hour (hour 05)", async () => {
-    // Arrange: quiet hours 22:00-06:00, current time is 05:30
     mockSystemTime(5, 30);
     const config = makeQuietConfig("22:00", "06:00");
     const snapshot = makeSnapshotWithTransfer();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -432,17 +402,15 @@ describe("quiet hours edge cases", () => {
       db,
     );
 
-    // Assert
     expect(alerts).toHaveLength(0);
   });
 
   it("does NOT suppress alerts at first non-quiet hour (hour 06)", async () => {
-    // Arrange: quiet hours 22:00-06:00, current time is 06:00 (end hour, exclusive)
+    // 06:00 is the exclusive end boundary.
     mockSystemTime(6, 0);
     const config = makeQuietConfig("22:00", "06:00");
     const snapshot = makeSnapshotWithTransfer();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -450,18 +418,16 @@ describe("quiet hours edge cases", () => {
       db,
     );
 
-    // Assert: alerts should NOT be suppressed (hour 06 is NOT quiet, end is exclusive)
+    // End is exclusive — 06:00 falls outside quiet hours.
     const transferAlerts = alerts.filter((a) => a.type === "new_transfer");
     expect(transferAlerts.length).toBeGreaterThan(0);
   });
 
   it("suppresses alerts during wrap-around midnight (hour 01 with 23:00-06:00)", async () => {
-    // Arrange: quiet hours 23:00-06:00, current time is 01:00
     mockSystemTime(1, 0);
     const config = makeQuietConfig("23:00", "06:00");
     const snapshot = makeSnapshotWithTransfer();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -469,17 +435,14 @@ describe("quiet hours edge cases", () => {
       db,
     );
 
-    // Assert
     expect(alerts).toHaveLength(0);
   });
 
   it("does NOT suppress alerts before wrap-around start (hour 22 with 23:00-06:00)", async () => {
-    // Arrange: quiet hours 23:00-06:00, current time is 22:00
     mockSystemTime(22, 0);
     const config = makeQuietConfig("23:00", "06:00");
     const snapshot = makeSnapshotWithTransfer();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -487,22 +450,19 @@ describe("quiet hours edge cases", () => {
       db,
     );
 
-    // Assert: 22 is before 23, so NOT quiet
     const transferAlerts = alerts.filter((a) => a.type === "new_transfer");
     expect(transferAlerts.length).toBeGreaterThan(0);
   });
 
   it("does not throw when suppressing alerts during quiet hours (log is emitted)", async () => {
-    // Arrange: quiet hours 22:00-06:00, current time is 23:00
     mockSystemTime(23, 0);
     const config = makeQuietConfig("22:00", "06:00");
     const snapshot = makeSnapshotWithTransfer();
 
-    // Act & Assert: should not throw (log.info is called internally)
+    // Quiet hours log instead of throwing.
     await expect(
       detectAlerts(computeMembers(snapshot, config), snapshot, config, db),
     ).resolves.not.toThrow();
-    // The function returns empty during quiet hours
     expect(
       await detectAlerts(
         computeMembers(snapshot, config),
@@ -518,27 +478,15 @@ describe("detection edge cases", () => {
   function makeEmptySnapshot(): Snapshot {
     return {
       circle: {
-        circle_id: 1,
+        ...baseCircle,
         name: "EmptyCircle",
-        comment: "",
-        leader_viewer_id: 100,
-        leader_name: "Leader",
-        member_count: 0,
-        join_style: 1,
-        policy: 1,
-        created_at: "2026-01-01T00:00:00Z",
         last_updated: "2026-06-22T15:00:00Z",
-        monthly_rank: 100,
+        member_count: 0,
         monthly_point: 0,
-        last_month_rank: 100,
         last_month_point: 0,
-        archived: false,
         yesterday_updated: null,
         yesterday_points: null,
         yesterday_rank: null,
-        live_points: null,
-        live_rank: 100,
-        last_live_update: null,
       },
       members: [],
       club_rank: 5,
@@ -552,27 +500,15 @@ describe("detection edge cases", () => {
   function makeSingleMemberSnapshot(): Snapshot {
     return {
       circle: {
-        circle_id: 1,
+        ...baseCircle,
         name: "SoloCircle",
-        comment: "",
-        leader_viewer_id: 100,
-        leader_name: "Leader",
-        member_count: 1,
-        join_style: 1,
-        policy: 1,
-        created_at: "2026-01-01T00:00:00Z",
         last_updated: "2026-06-22T15:00:00Z",
-        monthly_rank: 100,
+        member_count: 1,
         monthly_point: 500000,
-        last_month_rank: 100,
         last_month_point: 500000,
-        archived: false,
         yesterday_updated: "2026-06-21T15:00:00Z",
         yesterday_points: 400000,
         yesterday_rank: 100,
-        live_points: null,
-        live_rank: 100,
-        last_live_update: null,
       },
       members: [
         {
@@ -619,27 +555,15 @@ describe("detection edge cases", () => {
 
     return {
       circle: {
-        circle_id: 1,
+        ...baseCircle,
         name: "ZeroCircle",
-        comment: "",
-        leader_viewer_id: 100,
-        leader_name: "Leader",
-        member_count: memberCount,
-        join_style: 1,
-        policy: 1,
-        created_at: "2026-01-01T00:00:00Z",
         last_updated: "2026-06-22T15:00:00Z",
-        monthly_rank: 100,
+        member_count: memberCount,
         monthly_point: memberCount * 1000000,
-        last_month_rank: 100,
         last_month_point: memberCount * 1000000,
-        archived: false,
         yesterday_updated: "2026-06-21T15:00:00Z",
         yesterday_points: (memberCount - 1) * 1000000,
         yesterday_rank: 100,
-        live_points: null,
-        live_rank: 100,
-        last_live_update: null,
       },
       members,
       club_rank: 5,
@@ -651,11 +575,9 @@ describe("detection edge cases", () => {
   }
 
   it("returns no alerts for empty snapshot", async () => {
-    // Arrange
     const config = makeConfig();
     const snapshot = makeEmptySnapshot();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -663,16 +585,13 @@ describe("detection edge cases", () => {
       db,
     );
 
-    // Assert: no members → no performance_drop, no streak_break, no transfer
     expect(alerts).toHaveLength(0);
   });
 
   it("detects alerts correctly for single-member snapshot", async () => {
-    // Arrange
     const config = makeConfig();
     const snapshot = makeSingleMemberSnapshot();
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -685,18 +604,14 @@ describe("detection edge cases", () => {
     // The member has no transfer marker and is active
     const perfAlerts = alerts.filter((a) => a.type === "performance_drop");
     const transferAlerts = alerts.filter((a) => a.type === "new_transfer");
-    // No transfer marker → no transfer alert
     expect(transferAlerts).toHaveLength(0);
-    // Member is active with data → performance alert possible
     for (const alert of perfAlerts) {
       expect(alert.memberViewerId).toBe("1001");
     }
   });
 
   it("detects performance_drop for all members at zero fans (threshold=1)", async () => {
-    // Arrange: 3 members with 10 days of steady gains, then 0 today
-    // Rolling avg = 100000/day, today gain = 0, threshold = 1%
-    // 0 < 100000 * 0.01 = 1000 → triggers performance_drop
+    // 10 days @100000/day avg, gain 0 < 1% threshold (1000) → fires.
     const config = makeConfig({
       alerts: {
         ...getDefaultConfig().alerts,
@@ -716,7 +631,6 @@ describe("detection edge cases", () => {
     });
     const snapshot = makeAllZeroFansSnapshot(3);
 
-    // Act
     const alerts = await detectAlerts(
       computeMembers(snapshot, config),
       snapshot,
@@ -724,10 +638,8 @@ describe("detection edge cases", () => {
       db,
     );
 
-    // Assert: each member should trigger a performance_drop
     const perfAlerts = alerts.filter((a) => a.type === "performance_drop");
     expect(perfAlerts).toHaveLength(3);
-    // Each alert should reference a different member
     const memberIds = new Set(perfAlerts.map((a) => a.memberViewerId));
     expect(memberIds.size).toBe(3);
   });
@@ -742,31 +654,19 @@ describe("detection edge cases", () => {
     for (let i = 1; i <= dataDay; i++) {
       dailyFans.push(currentPace * i);
     }
-    while (dailyFans.length < 32) dailyFans.push(0);
+    while (dailyFans.length < FANS_ARRAY_LENGTH) dailyFans.push(0);
 
     return {
       circle: {
-        circle_id: 1,
+        ...baseCircle,
         name: "Test",
-        comment: "",
-        leader_viewer_id: 100,
-        leader_name: "Leader",
-        member_count: 1,
-        join_style: 1,
-        policy: 1,
-        created_at: "2026-01-01T00:00:00Z",
         last_updated: "2026-06-10T15:00:00Z",
-        monthly_rank: 100,
+        member_count: 1,
         monthly_point: monthlyPoint,
-        last_month_rank: 100,
         last_month_point: monthlyPoint,
-        archived: false,
         yesterday_updated: "2026-06-09T15:00:00Z",
         yesterday_points: 9_000_000,
         yesterday_rank: 95,
-        live_points: null,
-        live_rank: 100,
-        last_live_update: null,
       },
       members: [
         {

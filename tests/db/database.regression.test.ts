@@ -1,6 +1,6 @@
 import { SqliteDatabase } from "../../src/db/database";
 
-describe("Bug 4: recordAlert returns correct ID", () => {
+describe("recordAlert returns correct ID", () => {
   let db: SqliteDatabase;
 
   beforeEach(async () => {
@@ -31,7 +31,6 @@ describe("Bug 4: recordAlert returns correct ID", () => {
       message: "Alert 2",
     });
 
-    // IDs should be sequential and unique
     expect(id1).toBeGreaterThan(0);
     expect(id2).toBe(id1 + 1);
   });
@@ -48,16 +47,15 @@ describe("Bug 4: recordAlert returns correct ID", () => {
 
     const id2 = await db.recordAlert({
       alert_type: "performance_drop",
-      event_key: "perf:2026-06-12:33333", // same key
+      event_key: "perf:2026-06-12:33333",
       member_viewer_id: "33333",
       report_date: "2026-06-12",
       created_at: "2026-06-12T15:06:00Z",
       message: "Duplicate",
     });
 
-    // First insert should return valid ID
     expect(id1).toBeGreaterThan(0);
-    // Duplicate returns the existing ID so caller can mark it sent
+    // Same ID so the caller can mark the original as sent
     expect(id2).toBe(id1);
   });
 
@@ -71,7 +69,6 @@ describe("Bug 4: recordAlert returns correct ID", () => {
       message: "Original",
     });
 
-    // Duplicate returns same ID
     const id2 = await db.recordAlert({
       alert_type: "performance_drop",
       event_key: "perf:2026-06-12:44444",
@@ -81,7 +78,6 @@ describe("Bug 4: recordAlert returns correct ID", () => {
       message: "Duplicate",
     });
 
-    // id2 === id1, so marking it sent marks the original
     expect(id2).toBe(id1);
     await expect(db.markAlertSent(id2)).resolves.not.toThrow();
     const keys = await db.getExistingAlertKeys(["perf:2026-06-12:44444"]);

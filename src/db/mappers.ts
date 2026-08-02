@@ -20,6 +20,7 @@ export function mapScheduleRunRow(
     scheduled_at: row.scheduled_at as string,
     sent_at: row.sent_at as string | null,
     status: row.status as ScheduleRunRow["status"],
+    // sql.js returns 1; mysql2 returns 1 or true
     is_catch_up: row.is_catch_up === 1 || row.is_catch_up === true,
     target_jid: row.target_jid as string,
     error_message: row.error_message as string | null,

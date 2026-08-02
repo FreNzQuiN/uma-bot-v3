@@ -67,12 +67,16 @@ describe("Stale data warning in monthly report", () => {
 
   it("no stale warning when snapshot is from a different month", () => {
     mockCurrentDate(2026, 6, 13);
+    // May snapshot: data ends at day 28, rest zeroed
+    const MAY_SNAPSHOT_LAST_DAY = 28;
     const maySnapshot: Snapshot = {
       ...snapshot,
       members: snapshot.members.map((m) => ({
         ...m,
         month: 5,
-        daily_fans: m.daily_fans.map((v, i) => (i < 28 ? v : 0)),
+        daily_fans: m.daily_fans.map((v, i) =>
+          i < MAY_SNAPSHOT_LAST_DAY ? v : 0,
+        ),
       })),
     };
     const report = generateMonthlyReport(

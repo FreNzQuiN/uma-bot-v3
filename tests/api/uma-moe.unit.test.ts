@@ -14,7 +14,6 @@ describe("UmaMoeClient", () => {
 
     it("closeSession is safe when no browser", async () => {
       const client = new UmaMoeClient();
-      // Should not throw
       await client.closeSession();
       expect(client.isSessionValid()).toBe(false);
     });
@@ -32,6 +31,5 @@ describe("UmaMoeClient", () => {
     });
   });
 
-  // NOTE: fetchCircleData integration tests require Playwright + network
-  // Run manually: node -e "..." with real uma.moe access
+  // fetchCircleData has no automated tests — it needs Playwright and a live uma.moe session
 });

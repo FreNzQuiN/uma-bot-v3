@@ -1,9 +1,3 @@
-/**
- * Tests for getDailyGain.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import { getDailyGain } from "../../src/data/daily-fans";
 import {
   RYU_DAILY_FANS,
@@ -13,18 +7,15 @@ import {
 } from "./daily-fans.fixtures";
 
 describe("getDailyGain", () => {
-  // --- Real data tests ---
   it("returns 0 for day 1 of Ryu (no previous day)", () => {
     expect(getDailyGain(RYU_DAILY_FANS, 1)).toBe(0);
   });
 
   it("returns correct gain for Ryu day 2", () => {
-    // 319191258 - 316856492 = 2334766
     expect(getDailyGain(RYU_DAILY_FANS, 2)).toBe(319191258 - 316856492);
   });
 
   it("returns correct gain for Ryu day 11 (last data day)", () => {
-    // 332207534 - 331992091 = 215443
     expect(getDailyGain(RYU_DAILY_FANS, 11)).toBe(332207534 - 331992091);
   });
 
@@ -37,7 +28,6 @@ describe("getDailyGain", () => {
   });
 
   it("returns correct gain for Zero day 5", () => {
-    // 304147592 - 301413137 = 2734455
     expect(getDailyGain(ZERO_DAILY_FANS, 5)).toBe(304147592 - 301413137);
   });
 
@@ -45,7 +35,6 @@ describe("getDailyGain", () => {
     expect(getDailyGain(ZERO_DAILY_FANS, 3)).toBe(0);
   });
 
-  // --- Edge cases ---
   it("returns 0 for day 0 (invalid 1-indexed)", () => {
     expect(getDailyGain(RYU_DAILY_FANS, 0)).toBe(0);
   });
@@ -67,8 +56,7 @@ describe("getDailyGain", () => {
   });
 
   it("returns 0 when previous is negative (transfer marker)", () => {
-    // Zero day 2: dailyFans[1]=-298399518 (negative), dailyFans[0]=-297503758 (negative)
-    // Both non-positive → 0
+    // Zero day 2: dailyFans[0]=-297503758, dailyFans[1]=-298399518
     expect(getDailyGain(ZERO_DAILY_FANS, 2)).toBe(0);
   });
 

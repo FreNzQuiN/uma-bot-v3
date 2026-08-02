@@ -1,9 +1,3 @@
-/**
- * Tests for getMonthlyGain.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import { getMonthlyGain } from "../../src/data/daily-fans";
 import {
   RYU_DAILY_FANS,
@@ -11,10 +5,10 @@ import {
   THE_TENG_ONE_DAILY_FANS,
   DOA_IBU_DAILY_FANS,
   KURO_DAILY_FANS,
+  ALL_NEGATIVE_DAILY_FANS,
 } from "./daily-fans.fixtures";
 
 describe("getMonthlyGain", () => {
-  // --- Real data tests ---
   it("returns correct monthly gain for Ryu", () => {
     // First positive: 316856492 (day 1), Latest positive: 332207534 (day 11)
     // Gain = 332207534 - 316856492 = 15351042
@@ -37,19 +31,17 @@ describe("getMonthlyGain", () => {
     expect(getMonthlyGain(DOA_IBU_DAILY_FANS)).toBe(0);
   });
 
-  it("returns 0 for Kuro (only one positive value, same value both days)", () => {
-    // Kuro day 1=251759384, day 2=251759384 → same value, gain = 0
+  it("returns 0 for Kuro (same value on both days — zero gain)", () => {
     expect(getMonthlyGain(KURO_DAILY_FANS)).toBe(0);
   });
 
-  // --- Edge cases ---
   it("returns 0 for all-zero array", () => {
     const allZero = new Array(32).fill(0);
     expect(getMonthlyGain(allZero)).toBe(0);
   });
 
   it("returns 0 for all-negative array", () => {
-    const allNeg = [-100, -200, -300, ...new Array(29).fill(0)];
+    const allNeg = ALL_NEGATIVE_DAILY_FANS;
     expect(getMonthlyGain(allNeg)).toBe(0);
   });
 

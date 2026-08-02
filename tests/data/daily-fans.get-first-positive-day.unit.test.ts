@@ -1,9 +1,3 @@
-/**
- * Tests for getFirstPositiveDay.
- *
- * Split from tests/data/daily-fans.unit.test.ts
- */
-
 import { getFirstPositiveDay } from "../../src/data/daily-fans";
 import {
   RYU_DAILY_FANS,
@@ -11,10 +5,10 @@ import {
   THE_TENG_ONE_DAILY_FANS,
   SAIREN_DAILY_FANS,
   VITOHOW_DAILY_FANS,
+  ALL_NEGATIVE_DAILY_FANS,
 } from "./daily-fans.fixtures";
 
 describe("getFirstPositiveDay", () => {
-  // --- Real data tests ---
   it("returns 1 for Ryu (first positive at index 0)", () => {
     expect(getFirstPositiveDay(RYU_DAILY_FANS)).toBe(1);
   });
@@ -35,14 +29,13 @@ describe("getFirstPositiveDay", () => {
     expect(getFirstPositiveDay(VITOHOW_DAILY_FANS)).toBe(3);
   });
 
-  // --- Edge cases ---
   it("returns 0 for all-zero array", () => {
     const allZero = new Array(32).fill(0);
     expect(getFirstPositiveDay(allZero)).toBe(0);
   });
 
   it("returns 0 for all-negative array", () => {
-    const allNeg = [-100, -200, -300, ...new Array(29).fill(0)];
+    const allNeg = ALL_NEGATIVE_DAILY_FANS;
     expect(getFirstPositiveDay(allNeg)).toBe(0);
   });
 

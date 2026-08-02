@@ -40,6 +40,8 @@ jest.mock("../../src/utils/logger", () => ({
   },
 }));
 
+const DAY = 24 * 60 * 60 * 1000;
+
 let tempDir: string;
 
 beforeEach(() => {
@@ -60,13 +62,10 @@ function createFile(name: string, ageMs: number = 0): void {
   }
 }
 
-/** Write a realistic creds.json with nextPreKeyId/firstUnuploadedPreKeyId. */
 function writeCreds(overrides: Record<string, unknown> = {}): void {
   const creds = {
     me: { id: "62812345678@s.whatsapp.net:15" },
     signedIdentityKey: "base64key==",
-    nextPreKeyId: 350,
-    firstUnuploadedPreKeyId: 300,
     ...overrides,
   };
   writeFileSync(join(tempDir, "creds.json"), JSON.stringify(creds));
@@ -113,11 +112,11 @@ describe("getAuthStats", () => {
 
 describe("pruneStaleLidMappings", () => {
   it("deletes lid-mapping files older than maxAgeMs", () => {
-    createFile("lid-mapping-old.json", 10 * 24 * 60 * 60 * 1000); // 10 days old
+    createFile("lid-mapping-old.json", 10 * DAY); // 10 days old
     createFile("lid-mapping-recent.json", 0); // just created
-    createFile("creds.json", 10 * 24 * 60 * 60 * 1000); // old but not lid-mapping
+    createFile("creds.json", 10 * DAY); // old but not lid-mapping
 
-    const result = pruneStaleLidMappings(tempDir, 7 * 24 * 60 * 60 * 1000);
+    const result = pruneStaleLidMappings(tempDir, 7 * DAY);
 
     expect(result.deleted).toBe(1);
     expect(result.errors).toBe(0);
@@ -131,7 +130,7 @@ describe("pruneStaleLidMappings", () => {
     createFile("lid-mapping-new1.json", 0);
     createFile("lid-mapping-new2.json", 0);
 
-    const result = pruneStaleLidMappings(tempDir, 7 * 24 * 60 * 60 * 1000);
+    const result = pruneStaleLidMappings(tempDir, 7 * DAY);
 
     expect(result.deleted).toBe(0);
     expect(result.errors).toBe(0);
@@ -147,11 +146,11 @@ describe("pruneStaleLidMappings", () => {
   });
 
   it("only deletes lid-mapping files, not other types", () => {
-    createFile("pre-key-old.json", 100 * 24 * 60 * 60 * 1000); // very old
-    createFile("session-old.json", 100 * 24 * 60 * 60 * 1000); // very old
-    createFile("lid-mapping-old.json", 100 * 24 * 60 * 60 * 1000); // very old
+    createFile("pre-key-old.json", 100 * DAY); // very old
+    createFile("session-old.json", 100 * DAY); // very old
+    createFile("lid-mapping-old.json", 100 * DAY); // very old
 
-    const result = pruneStaleLidMappings(tempDir, 7 * 24 * 60 * 60 * 1000);
+    const result = pruneStaleLidMappings(tempDir, 7 * DAY);
 
     expect(result.deleted).toBe(1); // only the lid-mapping
     expect(result.errors).toBe(0);
@@ -163,10 +162,10 @@ describe("pruneStaleLidMappings", () => {
 
   it("handles multiple old lid-mapping files", () => {
     for (let i = 0; i < 10; i++) {
-      createFile(`lid-mapping-${i}.json`, 30 * 24 * 60 * 60 * 1000); // 30 days old
+      createFile(`lid-mapping-${i}.json`, 30 * DAY); // 30 days old
     }
 
-    const result = pruneStaleLidMappings(tempDir, 7 * 24 * 60 * 60 * 1000);
+    const result = pruneStaleLidMappings(tempDir, 7 * DAY);
 
     expect(result.deleted).toBe(10);
     expect(result.errors).toBe(0);
@@ -223,7 +222,7 @@ describe("deleteCorruptedSenderKey", () => {
 describe("runAuthCleanup", () => {
   it("prunes stale lid-mapping and logs stats", () => {
     createFile("creds.json");
-    createFile("lid-mapping-old.json", 30 * 24 * 60 * 60 * 1000);
+    createFile("lid-mapping-old.json", 30 * DAY);
     createFile("lid-mapping-new.json", 0);
     createFile("pre-key-1.json");
 
@@ -311,11 +310,14 @@ describe("backupCreds / restoreCredsBackup / isCredsUsable", () => {
 });
 
 describe("last-connect marker / shouldPurgeSignalState", () => {
+  const PURGE_DAYS = 14;
+
   it("writeLastConnect then getLastConnect roundtrip", () => {
     writeLastConnect(tempDir);
     const ts = getLastConnect(tempDir);
     expect(ts).not.toBeNull();
-    expect(Math.abs((ts ?? 0) - Date.now())).toBeLessThan(60_000);
+    const TOLERANCE_MS = 60_000;
+    expect(Math.abs((ts ?? 0) - Date.now())).toBeLessThan(TOLERANCE_MS);
   });
 
   it("getLastConnect returns null when marker is missing", () => {
@@ -325,28 +327,28 @@ describe("last-connect marker / shouldPurgeSignalState", () => {
 
   it("shouldPurgeSignalState: no creds → never purge (fresh install)", () => {
     writeLastConnect(tempDir);
-    expect(shouldPurgeSignalState(tempDir, 14)).toBe(false);
+    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(false);
   });
 
   it("shouldPurgeSignalState: creds + missing marker → purge (unknown staleness)", () => {
     writeCreds();
-    expect(shouldPurgeSignalState(tempDir, 14)).toBe(true);
+    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(true);
   });
 
   it("shouldPurgeSignalState: creds + recent marker → no purge", () => {
     writeCreds();
     writeLastConnect(tempDir);
-    expect(shouldPurgeSignalState(tempDir, 14)).toBe(false);
+    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(false);
   });
 
   it("shouldPurgeSignalState: creds + old marker → purge", () => {
     writeCreds();
     writeLastConnect(tempDir);
-    const past = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
+    const past = new Date(Date.now() - 20 * DAY);
     const { utimesSync } = require("node:fs");
     utimesSync(join(tempDir, ".last-connect"), past, past);
 
-    expect(shouldPurgeSignalState(tempDir, 14)).toBe(true);
+    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(true);
   });
 
   it("shouldPurgeSignalState: markers never restart a classic fresh-connect purge once written", () => {
@@ -354,8 +356,8 @@ describe("last-connect marker / shouldPurgeSignalState", () => {
     // rewritten every connect, but the marker is written once on open).
     writeCreds();
     writeLastConnect(tempDir);
-    expect(shouldPurgeSignalState(tempDir, 14)).toBe(false);
-    expect(shouldPurgeSignalState(tempDir, 14)).toBe(false);
+    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(false);
+    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(false);
   });
 });
 
@@ -460,7 +462,6 @@ describe("resolveProtectedLids", () => {
 });
 
 describe("pruneStaleSignalState", () => {
-  const DAY = 24 * 60 * 60 * 1000;
   const MAX_AGE = 30 * DAY;
   const protectedJids = new Set(["62811111111", "62822222222"]);
   const protectedGroups = new Set(["120363238771337472@g.us"]);
@@ -563,7 +564,6 @@ describe("pruneStaleSignalState", () => {
 });
 
 describe("pruneStaleSenderKeys", () => {
-  const DAY = 24 * 60 * 60 * 1000;
   const MAX_AGE = 30 * DAY;
 
   it("deletes old sender-keys for non-protected groups only", () => {

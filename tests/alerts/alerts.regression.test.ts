@@ -1,5 +1,5 @@
 import { computeMembers } from "../../src/reports/compute";
-import { detectAlerts } from "../../src/alerts/alerts";
+import { detectAlerts, MIN_STREAK_DAYS } from "../../src/alerts/alerts";
 import type { Snapshot } from "../../src/types";
 import { loadRealSnapshot, makeConfig, makeMockDb } from "../_helpers";
 
@@ -7,9 +7,17 @@ const realSnapshot: Snapshot = loadRealSnapshot();
 
 const db = makeMockDb();
 
-describe("Bug 2: countActiveDaysUpTo consecutive streak counting", () => {
+function makeMemberAFans(): number[] {
+  const fans = new Array(32).fill(0);
+  fans[0] = 1000;
+  for (let i = 1; i < 9; i++) {
+    fans[i] = 1000 * (i + 1);
+  }
+  return fans;
+}
+
+describe("countActiveDaysUpTo consecutive streak counting", () => {
   // The function is not exported, so we test via detectAlerts.
-  // Fixed: now reports the streak that just broke, not the max streak ever.
 
   it("reports the streak that just broke (not total active days or max streak)", async () => {
     // Construct data where:
@@ -21,11 +29,7 @@ describe("Bug 2: countActiveDaysUpTo consecutive streak counting", () => {
     //   Days 8-9: 0
     // The streak that just broke = 5 (days 2-6)
 
-    const memberAFans = new Array(32).fill(0);
-    memberAFans[0] = 1000;
-    for (let i = 1; i < 9; i++) {
-      memberAFans[i] = 1000 * (i + 1);
-    }
+    const memberAFans = makeMemberAFans();
 
     const memberBFans = new Array(32).fill(0);
     memberBFans[0] = 1000; // day 1: baseline
@@ -65,7 +69,7 @@ describe("Bug 2: countActiveDaysUpTo consecutive streak counting", () => {
     };
 
     const config = makeConfig({
-      alerts: { streakBreak: { enabled: true } } as any,
+      alerts: { streakBreak: { enabled: true } },
     });
 
     const alerts = await detectAlerts(
@@ -78,20 +82,16 @@ describe("Bug 2: countActiveDaysUpTo consecutive streak counting", () => {
       (a) => a.type === "streak_break" && a.memberViewerId === "99999",
     );
 
-    // There should be a streak break alert (member stopped gaining after 5-day streak)
     expect(streakAlerts.length).toBe(1);
 
-    // The message should say the streak that just broke (5), not total active days
     expect(streakAlerts[0].message).toContain("5 hari aktif berturut-turut");
   });
 
   it("no streak break when broken streak is below threshold", async () => {
-    // Member had a 1-day streak that broke — below the 3-day threshold
-    const memberAFans = new Array(32).fill(0);
-    memberAFans[0] = 1000;
-    for (let i = 1; i < 9; i++) {
-      memberAFans[i] = 1000 * (i + 1);
-    }
+    // Fixture encodes a streak below the src threshold — pin it so changes break loudly.
+    expect(MIN_STREAK_DAYS).toBe(3);
+    // Member had a 1-day streak that broke — below MIN_STREAK_DAYS threshold
+    const memberAFans = makeMemberAFans();
 
     const memberBFans = new Array(32).fill(0);
     memberBFans[0] = 1000; // day 1: baseline
@@ -129,7 +129,7 @@ describe("Bug 2: countActiveDaysUpTo consecutive streak counting", () => {
     };
 
     const config = makeConfig({
-      alerts: { streakBreak: { enabled: true } } as any,
+      alerts: { streakBreak: { enabled: true } },
     });
 
     const alerts = await detectAlerts(
@@ -142,7 +142,6 @@ describe("Bug 2: countActiveDaysUpTo consecutive streak counting", () => {
       (a) => a.type === "streak_break" && a.memberViewerId === "99999",
     );
 
-    // No alert — streak was only 1 day, below the 3-day threshold
     expect(streakAlerts.length).toBe(0);
   });
 });
