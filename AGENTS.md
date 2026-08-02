@@ -29,7 +29,7 @@ uma.moe → Snapshot (immutable JSON) → computeMembers() → Report → WhatsA
 1. Playwright fetches circle data from uma.moe (solves Cloudflare Turnstile)
 2. Saved as `data/snapshots/YYYY/MM/DD.json` — immutable once written
 3. `computeMembers()` transforms `daily_fans` arrays into `ComputedMember` objects
-4. 12 report generators produce WhatsApp-formatted strings
+4. 11 report generators produce WhatsApp-formatted strings
 5. Split at newline boundaries (4096 char limit), sent to announcement groups
 
 ### Source Layout
@@ -40,7 +40,7 @@ src/
 ├── config.ts         # YAML config + Zod validation + hot-reload
 ├── data/             # Snapshots (immutable JSON) + daily_fans arithmetic
 ├── db/               # Pluggable database (SQLite default, MySQL/TiDB optional)
-├── reports/          # 12 report generators + compute engine + registry
+├── reports/          # 11 report generators + compute engine + registry
 ├── alerts/           # Performance drop, demotion risk, streak break detection
 ├── scheduler/        # Cron delivery + catch-up on restart
 ├── orchestrator/     # Report pipeline: generation → delivery → alerts

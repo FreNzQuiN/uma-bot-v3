@@ -29,7 +29,7 @@ uma.moe API → Snapshot (immutable JSON) → computeMembers() → Report → Wh
 1. **Fetch:** Playwright opens uma.moe, solves Cloudflare Turnstile, gets circle data.
 2. **Snapshot:** Saved as `data/snapshots/YYYY/MM/DD.json`. Immutable once written — reports recompute from the array each time.
 3. **Compute:** `computeMembers()` transforms raw `daily_fans` arrays into `ComputedMember` objects with gains, status, weekly breakdowns.
-4. **Report:** 12 generator functions produce WhatsApp-formatted strings from computed members.
+4. **Report:** 11 generator functions produce WhatsApp-formatted strings from computed members.
 5. **Deliver:** Split at newline boundaries (WhatsApp 4096 char limit), send to announcement groups.
 
 **When data is fetched:** On startup (if stale), on schedule (before daily report), on-demand (`npm run fetch`), on month mismatch.
@@ -109,7 +109,9 @@ Baileys-based WhatsApp Web connection. Commands are parsed from incoming message
 
 ### Report Engine
 
-12 generator functions, each producing a WhatsApp-formatted string from computed members. `computeMembers()` is called once per pipeline and injected into generators — never called internally by generators.
+11 generator functions, each producing a WhatsApp-formatted string from computed members. 8 are registered in `reports/registry.ts`; `generateCompareReport` (compare), `generateAnalyzeReport` (analyze), and `generateCombinedReport` (combined) stay outside the registry — compare/analyze take extra member-name arguments and are dispatched directly from `whatsapp/dispatch.ts`, combined is a wrapper joining daily/weekly/monthly into one message.
+
+`computeMembers()` is called once per pipeline and injected into generators, with two exceptions: historical-offset reports (`monthly`, `analyze`) recompute from their own snapshot via `loadHistoricalSnapshot()` in `reports/helpers.ts`, and the REST API computes per request (`api/server.ts`).
 
 | Type     | What it computes                            |
 | -------- | ------------------------------------------- |
