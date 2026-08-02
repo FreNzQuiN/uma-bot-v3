@@ -11,6 +11,10 @@ import { getTargetMonth } from "../utils/timezone";
 export const SCHEDULED_REPORT_TYPES = ["daily", "weekly", "monthly"] as const;
 export type ScheduledReportType = (typeof SCHEDULED_REPORT_TYPES)[number];
 
+export const SCHEDULED_DAILY: ScheduledReportType = SCHEDULED_REPORT_TYPES[0];
+export const SCHEDULED_WEEKLY: ScheduledReportType = SCHEDULED_REPORT_TYPES[1];
+export const SCHEDULED_MONTHLY: ScheduledReportType = SCHEDULED_REPORT_TYPES[2];
+
 export function getCollidingTypes(
   dayOfMonth: number,
   config: BotConfig,
@@ -31,7 +35,7 @@ export function getCollidingTypes(
   }
 
   const dailyGroup = Array.from(groups.values()).find((g) =>
-    g.includes("daily"),
+    g.includes(SCHEDULED_DAILY),
   );
   if (dailyGroup) return dailyGroup;
 
@@ -49,20 +53,19 @@ export function groupByCollision(
   const timeMap = new Map<string, string[]>();
   for (const reportType of types) {
     let time: string | undefined;
-    if (reportType === "daily") time = schedule.daily.time;
-    else if (reportType === "weekly") time = schedule.weekly.time;
-    else if (reportType === "monthly") time = schedule.monthly.time;
+    if (reportType === SCHEDULED_DAILY) time = schedule.daily.time;
+    else if (reportType === SCHEDULED_WEEKLY) time = schedule.weekly.time;
+    else if (reportType === SCHEDULED_MONTHLY) time = schedule.monthly.time;
     if (!time) continue;
     if (!timeMap.has(time)) timeMap.set(time, []);
     timeMap.get(time)!.push(reportType);
   }
-  const order = { daily: 0, weekly: 1, monthly: 2 };
   const groups: string[][] = [];
   for (const [, grouped] of timeMap) {
     grouped.sort(
       (a, b) =>
-        (order[a as keyof typeof order] ?? 0) -
-        (order[b as keyof typeof order] ?? 0),
+        SCHEDULED_REPORT_TYPES.indexOf(a as ScheduledReportType) -
+        SCHEDULED_REPORT_TYPES.indexOf(b as ScheduledReportType),
     );
     groups.push(grouped);
   }

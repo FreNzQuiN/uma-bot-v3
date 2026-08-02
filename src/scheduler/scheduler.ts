@@ -11,7 +11,12 @@ import type { BotConfig } from "../types";
 import type { IDatabase } from "../db/types";
 import { getDataDate, getDisplayDay } from "../utils/timezone";
 import { log } from "../utils/logger";
-import { getCollidingTypes, SCHEDULED_REPORT_TYPES } from "./helpers";
+import {
+  getCollidingTypes,
+  SCHEDULED_DAILY,
+  SCHEDULED_WEEKLY,
+  SCHEDULED_MONTHLY,
+} from "./helpers";
 
 export class Scheduler {
   private getConfig: () => BotConfig;
@@ -199,7 +204,7 @@ export class Scheduler {
               if (collidingTypes.length > 1) {
                 await this.recordAndSendCombined(collidingTypes);
               } else {
-                await this.recordAndSend("daily");
+                await this.recordAndSend(SCHEDULED_DAILY);
               }
             } catch (error) {
               log.error("Scheduler", "Daily report failed", error);
@@ -226,8 +231,8 @@ export class Scheduler {
               const dailyEnabled = this.config.schedule.daily.enabled;
 
               if (
-                collidingTypes.includes(SCHEDULED_REPORT_TYPES[0]) &&
-                collidingTypes.includes(SCHEDULED_REPORT_TYPES[1]) &&
+                collidingTypes.includes(SCHEDULED_DAILY) &&
+                collidingTypes.includes(SCHEDULED_WEEKLY) &&
                 dailyEnabled
               ) {
                 return;
@@ -241,13 +246,13 @@ export class Scheduler {
 
               if (monthlyEnabled && sameTimeAsMonthly && isMonthlyDay) {
                 await this.recordAndSendCombined([
-                  SCHEDULED_REPORT_TYPES[1],
-                  SCHEDULED_REPORT_TYPES[2],
+                  SCHEDULED_WEEKLY,
+                  SCHEDULED_MONTHLY,
                 ]);
                 return;
               }
 
-              await this.recordAndSend("weekly");
+              await this.recordAndSend(SCHEDULED_WEEKLY);
             } catch (error) {
               log.error("Scheduler", "Weekly report failed", error);
             }
@@ -274,8 +279,8 @@ export class Scheduler {
 
               // Skip if daily handler will combine with monthly (same time)
               if (
-                collidingTypes.includes(SCHEDULED_REPORT_TYPES[0]) &&
-                collidingTypes.includes(SCHEDULED_REPORT_TYPES[2]) &&
+                collidingTypes.includes(SCHEDULED_DAILY) &&
+                collidingTypes.includes(SCHEDULED_MONTHLY) &&
                 dailyEnabled
               ) {
                 return;
@@ -292,7 +297,7 @@ export class Scheduler {
                 return;
               }
 
-              await this.recordAndSend("monthly", { offset: -1 });
+              await this.recordAndSend(SCHEDULED_MONTHLY, { offset: -1 });
             } catch (error) {
               log.error("Scheduler", "Monthly report failed", error);
             }
