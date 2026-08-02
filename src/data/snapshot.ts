@@ -265,6 +265,8 @@ export function staleSnapshotMessage(snapshotDate: string | null): string {
 }
 
 // The function itself lives in ./ensure-snapshot.ts to avoid a data → api dependency.
+// This re-export closes a CJS cycle (snapshot → ensure-snapshot → fetch-snapshot → snapshot),
+// benign only while cross-cycle symbols stay function-body-scoped.
 export { ensureMonthSnapshot } from "./ensure-snapshot";
 
 // Re-export for backward compatibility — function now lives in daily-fans.ts

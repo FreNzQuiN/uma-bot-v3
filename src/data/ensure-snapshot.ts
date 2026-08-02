@@ -5,12 +5,12 @@
  * freshness checks, and save. Throws only if no snapshot is available at all.
  */
 
-import type { UmaMoeClient } from "../api/uma-moe";
+import type { UmaMoeClientLike } from "./fetch-snapshot";
 import type { Snapshot } from "../types";
 import { fetchAndSaveSnapshot } from "./fetch-snapshot";
 
 export async function ensureMonthSnapshot(
-  umaMoe: UmaMoeClient,
+  umaMoe: UmaMoeClientLike,
   circleId: number,
   year: number,
   month: number,

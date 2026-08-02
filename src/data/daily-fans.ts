@@ -230,7 +230,8 @@ export function computeRollingAverage(
 }
 
 /**
- * Count the number of days where gain > 0 (consecutive positive differences).
+ * Count active days: day 1 counts when it has data (no baseline exists to
+ * compute a gain), later days count when gain > 0.
  */
 export function countActiveDays(
   dailyFans: number[],

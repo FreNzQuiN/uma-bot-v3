@@ -10,7 +10,6 @@
  * finished yet (data is behind today's JST date).
  */
 
-import type { UmaMoeClient } from "../api/uma-moe";
 import type { Snapshot } from "../types";
 import { loadMonthSnapshot, saveSnapshot } from "./snapshot";
 import { getDataDateComponents, getDataDay } from "../utils/timezone";
@@ -23,15 +22,23 @@ export interface FetchResult {
   reason?: string;
 }
 
+/** Structural type for the uma.moe client — keeps the data layer free of api-layer imports. */
+export interface UmaMoeClientLike {
+  fetchCircleData(
+    circleId: number,
+    year: number,
+    month: number,
+  ): Promise<Snapshot>;
+}
+
 function p2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
-/** Derive file path from snapshot metadata, not clock. */
-export function getDataDateForFile(snapshot: Snapshot): string {
+/** Derive file path from snapshot metadata, not clock. Returns null when no member exists to derive from. */
+export function getDataDateForFile(snapshot: Snapshot): string | null {
   const member = snapshot.members[0];
-  if (!member)
-    return `${getDataDateComponents().year}-${p2(getDataDateComponents().month)}-${p2(getDataDateComponents().day)}`;
+  if (!member) return null;
   const day = getDataDayFromSnapshot(snapshot);
   if (day === 0) return `${member.year}-${p2(member.month)}-01`;
   return `${member.year}-${p2(member.month)}-${p2(day)}`;
@@ -95,7 +102,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function fetchOnce(
-  umaMoe: UmaMoeClient,
+  umaMoe: UmaMoeClientLike,
   circleId: number,
   year: number,
   month: number,
@@ -134,7 +141,7 @@ async function fetchOnce(
  * Never throws — fetch failures return the existing snapshot.
  */
 export async function fetchAndSaveSnapshot(
-  umaMoe: UmaMoeClient,
+  umaMoe: UmaMoeClientLike,
   circleId: number,
   year: number,
   month: number,
@@ -196,19 +203,24 @@ export async function fetchAndSaveSnapshot(
       dataAgeMs = Date.now() - new Date(lastUpdated).getTime();
     }
   }
-  const maxWaitMs = Math.max(0, MAX_RETRY_BUDGET_MS - dataAgeMs);
+  let maxWaitMs = Math.max(0, MAX_RETRY_BUDGET_MS - dataAgeMs);
+  // Unparseable last_updated makes dataAgeMs NaN — NaN <= 0 is false, so the
+  // budget check below would never trip and the error path would loop forever.
+  if (!Number.isFinite(maxWaitMs)) maxWaitMs = 0;
 
   if (!isCurrentMonth || maxWaitMs <= 0) {
     // Past month or data too old — single attempt, no retry
     const result = await fetchOnce(umaMoe, circleId, year, month, existing);
     if ("fetched" in result) {
       const fileDate = getDataDateForFile(result.fetched);
-      saveSnapshot(result.fetched, fileDate, rootDir);
-      log.info(
-        "Snapshot",
-        `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
-      );
-      return { snapshot: result.fetched, saved: true };
+      if (fileDate) {
+        saveSnapshot(result.fetched, fileDate, rootDir);
+        log.info(
+          "Snapshot",
+          `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
+        );
+      }
+      return { snapshot: result.fetched, saved: fileDate !== null };
     }
     log.warn("Snapshot", `Fetch failed for ${monthLabel}: ${result.error}`);
     return { snapshot: existing, saved: false, reason: result.error };
@@ -225,11 +237,13 @@ export async function fetchAndSaveSnapshot(
 
     if ("fetched" in result) {
       const fileDate = getDataDateForFile(result.fetched);
-      saveSnapshot(result.fetched, fileDate, rootDir);
-      log.info(
-        "Snapshot",
-        `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
-      );
+      if (fileDate) {
+        saveSnapshot(result.fetched, fileDate, rootDir);
+        log.info(
+          "Snapshot",
+          `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
+        );
+      }
 
       if (!isDataFreshEnough(result.fetched)) {
         const fetchedDay = getDataDayFromSnapshot(result.fetched);
@@ -254,7 +268,7 @@ export async function fetchAndSaveSnapshot(
         );
       }
 
-      return { snapshot: result.fetched, saved: true };
+      return { snapshot: result.fetched, saved: fileDate !== null };
     }
 
     lastError = result.error;
