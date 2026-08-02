@@ -108,6 +108,9 @@ describe("canUseCommand", () => {
       "catchup",
       "alerts",
       "schedule",
+      "debug",
+      "admin",
+      "fetch",
     ];
 
     it.each(adminCommands)(

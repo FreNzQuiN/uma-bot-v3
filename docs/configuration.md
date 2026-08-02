@@ -87,7 +87,7 @@ commands:
 | **Type**    | `string[]` |
 | **Default** | `[]`       |
 
-WhatsApp JIDs of bot administrators. Admins can use admin-only commands (`/setreq`, `/config`, `/status`, `/catchup`, `/alerts`, `/debug`) and all report commands from any context.
+WhatsApp JIDs of bot administrators. Admins can use admin-only commands (`/setreq`, `/config`, `/status`, `/catchup`, `/alerts`, `/debug`, `/fetch`) and all report commands from any context.
 
 ```yaml
 admins:

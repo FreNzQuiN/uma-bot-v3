@@ -18,6 +18,7 @@ export const ADMIN_COMMANDS = new Set([
   "schedule",
   "debug",
   "admin",
+  "fetch",
 ]);
 
 export const ADMIN_COMMAND_HELP: Record<string, string> = {
@@ -29,6 +30,7 @@ export const ADMIN_COMMAND_HELP: Record<string, string> = {
   schedule: "`/schedule` — Pengaturan jadwal",
   debug: "`/debug` — Info debug bot",
   admin: "`/admin` — Info perintah admin",
+  fetch: "`/fetch` — Paksa ambil data baru dari uma.moe",
 };
 
 export function isAdmin(senderJid: string, config: BotConfig): boolean {

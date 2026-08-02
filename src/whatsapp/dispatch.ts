@@ -7,6 +7,8 @@
 
 import type { BotConfig, Snapshot } from "../types";
 import type { IDatabase } from "../db/types";
+import type { FetchResult } from "../data/fetch-snapshot";
+import { getDataDayFromSnapshot } from "../data/daily-fans";
 import type { WhatsAppClient, IncomingMessage } from "./client";
 import { parseCommand, parseStrictInt, resolveMemberName } from "./commands";
 import {
@@ -36,8 +38,19 @@ import {
   recordMessageResponded,
   recordMessageFailed,
 } from "../runtime";
-import { getTargetMonth, getDataDateComponents } from "../utils/timezone";
+import {
+  getTargetMonth,
+  getDataDateComponents,
+  getDataDay,
+} from "../utils/timezone";
 import { preFetchMonthlySnapshot } from "../scheduler/helpers";
+
+/** Result of the /fetch force-refresh callback. `previous` is present when the
+ * current month has no usable data yet and the previous month was backfilled. */
+export interface ForceFetchResult {
+  current: FetchResult;
+  previous?: FetchResult;
+}
 
 interface DispatchContext {
   client: WhatsAppClient;
@@ -45,6 +58,7 @@ interface DispatchContext {
   db: IDatabase;
   getSnapshot: () => Snapshot | null;
   prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>;
+  forceFetchSnapshot?: () => Promise<ForceFetchResult>;
   onConfigUpdate?: (config: BotConfig) => void;
 }
 
@@ -91,7 +105,7 @@ export function setupCommandHandler(
   getSnapshot: () => Snapshot | null,
   onConfigUpdate?: (config: BotConfig) => void,
   prefetchSnapshot?: (year: number, month: number) => Promise<Snapshot>,
-  fetchIfStale?: () => Promise<void>,
+  forceFetchSnapshot?: () => Promise<ForceFetchResult>,
 ): void {
   const isGetter = typeof configOrGetter === "function";
   let localConfig: BotConfig | undefined = isGetter
@@ -100,6 +114,7 @@ export function setupCommandHandler(
   const getConfig: () => BotConfig = isGetter
     ? (configOrGetter as () => BotConfig)
     : () => localConfig!;
+  const fetchInFlight = { active: false };
 
   client.onMessage(async (msg: IncomingMessage) => {
     try {
@@ -109,6 +124,7 @@ export function setupCommandHandler(
         db,
         getSnapshot,
         prefetchSnapshot,
+        forceFetchSnapshot,
         onConfigUpdate: (updated) => {
           if (isGetter) {
             onConfigUpdate?.(updated);
@@ -117,7 +133,7 @@ export function setupCommandHandler(
           }
         },
       };
-      await dispatchMessage(ctx, msg);
+      await dispatchMessage(ctx, msg, fetchInFlight);
     } catch (error) {
       log.error("Dispatch", "Error handling message", error);
     }
@@ -127,6 +143,7 @@ export function setupCommandHandler(
 async function dispatchMessage(
   ctx: DispatchContext,
   msg: IncomingMessage,
+  fetchInFlight: { active: boolean },
 ): Promise<void> {
   // Use || not ?? — protobuf decodes a missing text field as "" (not null),
   // which ?? treats as non-nullish and short-circuits the fallback chain.
@@ -171,7 +188,123 @@ async function dispatchMessage(
     return;
   }
 
-  await generateAndSend(ctx, parsed, chatJid, senderJid);
+  await generateAndSend(ctx, parsed, chatJid, senderJid, fetchInFlight);
+}
+
+async function handleFetchCommand(
+  ctx: DispatchContext,
+  chatJid: string,
+  fetchInFlight: { active: boolean },
+): Promise<void> {
+  if (!ctx.forceFetchSnapshot) {
+    await ctx.client.sendOrEdit(
+      chatJid,
+      null,
+      "⚠️ Fitur /fetch belum tersedia pada instance ini.",
+    );
+    return;
+  }
+
+  if (fetchInFlight.active) {
+    await ctx.client.sendOrEdit(
+      chatJid,
+      null,
+      "⏳ Fetch sedang berjalan. Tunggu sebentar.",
+    );
+    return;
+  }
+
+  fetchInFlight.active = true;
+  let loadingMsgId: string | null = null;
+  try {
+    loadingMsgId = await ctx.client.sendOrEdit(
+      chatJid,
+      null,
+      pickLoadingMessage(),
+    );
+    const result = await ctx.forceFetchSnapshot();
+    await ctx.client.sendOrEdit(
+      chatJid,
+      loadingMsgId,
+      formatFetchResult(result),
+    );
+  } catch (err) {
+    log.error("Dispatch", "/fetch failed", err);
+    // Only reply when the loading message made it out — if it didn't, the
+    // client is likely disconnected and a failure reply would fail too.
+    if (loadingMsgId !== null) {
+      await ctx.client.sendOrEdit(
+        chatJid,
+        loadingMsgId,
+        "⚠️ Gagal mengambil data dari uma.moe. Coba lagi.",
+      );
+    }
+  } finally {
+    fetchInFlight.active = false;
+  }
+}
+
+/** YYYY-MM-DD label for a snapshot, or YYYY-MM when no day has data yet. */
+function snapshotDateLabel(snapshot: Snapshot): string {
+  const member = snapshot.members[0];
+  if (!member) return "-";
+  const day = getDataDayFromSnapshot(snapshot);
+  const month = String(member.month).padStart(2, "0");
+  return day > 0
+    ? `${member.year}-${month}-${String(day).padStart(2, "0")}`
+    : `${member.year}-${month}`;
+}
+
+/**
+ * Map the /fetch result to a reply. The previous-month backfill outcome wins
+ * because at month roll the admin wants the latest real data, which lives in
+ * the previous month's snapshot. "saved" alone is not success — uma.moe can
+ * return data with no usable day yet, so the message always states the data
+ * date and flags when it lags behind the current JST day.
+ */
+function formatFetchResult(result: ForceFetchResult): string {
+  const { current, previous } = result;
+  const curSnap = current.snapshot;
+  const curDay = curSnap ? getDataDayFromSnapshot(curSnap) : null;
+  const prevSnap = previous?.snapshot ?? null;
+  const prevDay = prevSnap ? getDataDayFromSnapshot(prevSnap) : null;
+
+  if (previous) {
+    if (previous.saved && prevSnap) {
+      return `✅ Data bulan lalu diperbarui — data ${snapshotDateLabel(prevSnap)} (${prevSnap.members.length} anggota). Data bulan ini belum ada di uma.moe.`;
+    }
+    if (
+      previous.reason?.startsWith("not_newer") &&
+      prevSnap &&
+      (prevDay ?? 0) > 0
+    ) {
+      return `ℹ️ Data terbaru masih dari bulan lalu — data ${snapshotDateLabel(prevSnap)}.`;
+    }
+  }
+
+  if (current.saved && curSnap && curDay !== null && curDay > 0) {
+    if (curDay < getDataDay() - 1) {
+      return `⚠️ Data disimpan, tapi masih tertinggal — data ${snapshotDateLabel(curSnap)}.`;
+    }
+    return `✅ Data uma.moe diperbarui — data ${snapshotDateLabel(curSnap)} (${curSnap.members.length} anggota).`;
+  }
+
+  if (curSnap && curDay === 0) {
+    return "⚠️ Data bulan ini belum tersedia di uma.moe — coba lagi nanti.";
+  }
+
+  const reason = current.reason ?? previous?.reason ?? "";
+  if (reason.startsWith("not_newer")) {
+    const snap = curSnap ?? prevSnap;
+    return `ℹ️ uma.moe belum punya data baru — snapshot terbaru: ${snap ? snapshotDateLabel(snap) : "-"}.`;
+  }
+  if (reason.startsWith("empty_response")) {
+    return "⚠️ uma.moe belum punya data untuk bulan ini. Coba lagi nanti.";
+  }
+  if (reason.startsWith("circle_mismatch")) {
+    return "⚠️ ID lingkaran tidak cocok dengan konfigurasi.";
+  }
+  return "⚠️ Gagal mengambil data dari uma.moe. Coba lagi nanti.";
 }
 
 async function handlePingCommand(
@@ -365,6 +498,7 @@ async function generateAndSend(
   },
   chatJid: string,
   senderJid: string,
+  fetchInFlight: { active: boolean },
 ): Promise<void> {
   const { command, args } = parsed;
 
@@ -373,6 +507,8 @@ async function generateAndSend(
     return handleHelpCommand(ctx.client, chatJid, senderJid, ctx.config);
   if (command === "admin")
     return handleAdminReferenceCommand(ctx.client, chatJid);
+  if (command === "fetch")
+    return handleFetchCommand(ctx, chatJid, fetchInFlight);
   if (REPORT_COMMANDS.has(command))
     return handleReportCommand(ctx, parsed, chatJid);
   if (ADMIN_COMMANDS.has(command))

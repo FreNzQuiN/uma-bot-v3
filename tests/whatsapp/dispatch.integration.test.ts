@@ -9,7 +9,10 @@
  *   2. Final report (with messageId → edits the loading message)
  */
 
-import { setupCommandHandler } from "../../src/whatsapp/dispatch";
+import {
+  setupCommandHandler,
+  type ForceFetchResult,
+} from "../../src/whatsapp/dispatch";
 import {
   WhatsAppClient,
   IncomingMessage,
@@ -19,7 +22,12 @@ import { getDefaultConfig } from "../../src/config";
 import type { BotConfig, Snapshot } from "../../src/types";
 import type { IDatabase } from "../../src/db/types";
 import type { DeepPartial } from "../_helpers";
-import { makeConfig as makeConfigBase, makeMessage } from "../_helpers";
+import {
+  makeConfig as makeConfigBase,
+  makeMessage,
+  mockCurrentDate,
+  restoreDateMocks,
+} from "../_helpers";
 
 // Prevent admin command tests from writing to the actual config.yaml
 jest.mock("../../src/config", () => {
@@ -71,7 +79,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
       join_style: 0,
       policy: 0,
       created_at: "",
-      last_updated: "2026-06-12T14:00:00Z",
+      last_updated: "2026-06-13T14:00:00Z",
       monthly_rank: 100,
       monthly_point: SNAPSHOT_MONTHLY_POINT,
       last_month_rank: null,
@@ -97,7 +105,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 200, 300, 0, 0, 0, 0, 0, 0, 0, 0,
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
-        last_updated: "2026-06-12",
+        last_updated: "2026-06-13",
       },
       {
         id: 2,
@@ -111,7 +119,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 100, 150, 0, 0, 0, 0, 0, 0, 0, 0, 0,
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
-        last_updated: "2026-06-12",
+        last_updated: "2026-06-13",
       },
     ],
     club_rank: 8,
@@ -961,5 +969,355 @@ describe("setupCommandHandler", () => {
 
     expect(mockClient.sendOrEdit).toHaveBeenCalledTimes(1);
     expect(sentMessages[0].text).toContain("Command Registry");
+  });
+});
+
+describe("/fetch command", () => {
+  let mockDb: IDatabase;
+  let mockClient: jest.Mocked<WhatsAppClient>;
+  let config: BotConfig;
+  let snapshot: Snapshot;
+  let messageHandler: ((msg: IncomingMessage) => void) | null;
+  let sentMessages: { jid: string; text: string }[];
+
+  beforeEach(() => {
+    messageHandler = null;
+    sentMessages = [];
+    mockDb = makeMockDb();
+    config = makeConfig();
+    snapshot = makeSnapshot();
+
+    mockClient = {
+      onMessage: jest.fn((handler: MessageHandler) => {
+        messageHandler = handler;
+      }),
+      sendMessage: jest.fn(async (jid: string, text: string) => {
+        sentMessages.push({ jid, text });
+      }),
+      sendOrEdit: jest.fn(
+        async (jid: string, _msgId: string | null, text: string) => {
+          sentMessages.push({ jid, text });
+          return "sent-msg-id";
+        },
+      ),
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    } as unknown as jest.Mocked<WhatsAppClient>;
+  });
+
+  afterEach(() => {
+    restoreDateMocks();
+  });
+
+  function adminFetchMessage(): IncomingMessage {
+    return makeMessage({
+      key: { remoteJid: COMMAND_GROUP, id: "msg-001", participant: ADMIN_JID },
+      message: { conversation: "/fetch" },
+    });
+  }
+
+  it("silently blocks non-admin users", async () => {
+    setupCommandHandler(mockClient, config, mockDb, () => snapshot);
+
+    const msg = makeMessage({
+      key: {
+        remoteJid: COMMAND_GROUP,
+        id: "msg-001",
+        participant: NON_ADMIN_JID,
+      },
+      message: { conversation: "/fetch" },
+    });
+    await messageHandler!(msg);
+
+    expect(mockClient.sendOrEdit).not.toHaveBeenCalled();
+  });
+
+  it("replies that the feature is unavailable when no fetch callback is wired", async () => {
+    setupCommandHandler(mockClient, config, mockDb, () => snapshot);
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0].text).toContain("belum tersedia");
+  });
+
+  it("sends loading message then success reply when the snapshot is saved fresh", async () => {
+    mockCurrentDate(2026, 6, 12);
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot, saved: true },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(forceFetch).toHaveBeenCalledTimes(1);
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[0].text).toMatch(/^⏳ /);
+    expect(sentMessages[1].text).toContain("Data uma.moe diperbarui");
+    expect(sentMessages[1].text).toContain("2026-06-13");
+    expect(sentMessages[1].text).toContain("2 anggota");
+  });
+
+  it("replies that no new data exists when uma.moe returns nothing newer", async () => {
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot, saved: false, reason: "not_newer" },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[1].text).toContain("belum punya data baru");
+    expect(sentMessages[1].text).toContain("2026-06-13");
+  });
+
+  it("flags when the saved data still lags behind the current JST day", async () => {
+    mockCurrentDate(2026, 6, 12);
+    const stale = makeSnapshot();
+    stale.members = [
+      {
+        ...stale.members[0],
+        daily_fans: [
+          500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+      },
+    ];
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot: stale, saved: true },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).toContain("masih tertinggal");
+    expect(sentMessages[1].text).toContain("2026-06-01");
+  });
+
+  it("reports the previous-month backfill when the current month has no data yet", async () => {
+    const prevSnap = makeSnapshot();
+    prevSnap.members = [
+      {
+        ...prevSnap.members[0],
+        year: 2026,
+        month: 5,
+        daily_fans: new Array(31).fill(1000),
+      },
+    ];
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot: null, saved: false, reason: "empty_response" },
+      previous: { snapshot: prevSnap, saved: true },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).toContain("Data bulan lalu diperbarui");
+    expect(sentMessages[1].text).toContain("2026-05-31");
+  });
+
+  it("replaces the loading message with a failure reply when the fetch throws", async () => {
+    const forceFetch = jest.fn().mockRejectedValue(new Error("network down"));
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[0].text).toMatch(/^⏳ /);
+    expect(sentMessages[1].text).toContain("Gagal mengambil data");
+  });
+
+  it("tells the admin a fetch is already running instead of double-fetching", async () => {
+    mockCurrentDate(2026, 6, 12);
+    let resolveFetch!: (v: ForceFetchResult) => void;
+    const forceFetch = jest.fn().mockImplementation(
+      () =>
+        new Promise<ForceFetchResult>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    const first = messageHandler!(adminFetchMessage());
+    const second = messageHandler!(adminFetchMessage());
+    await second;
+
+    expect(forceFetch).toHaveBeenCalledTimes(1);
+    expect(
+      sentMessages.some((m) => m.text.includes("Fetch sedang berjalan")),
+    ).toBe(true);
+
+    resolveFetch({ current: { snapshot, saved: true } });
+    await first;
+
+    expect(forceFetch).toHaveBeenCalledTimes(1);
+    expect(sentMessages[sentMessages.length - 1].text).toContain(
+      "Data uma.moe diperbarui",
+    );
+  });
+
+  it("replies with the empty-response wording when uma.moe has no current-month data", async () => {
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot: null, saved: false, reason: "empty_response" },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).toContain("belum punya data untuk bulan ini");
+  });
+
+  it("maps circle mismatch to an Indonesian reply instead of the raw reason", async () => {
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: {
+        snapshot: null,
+        saved: false,
+        reason: "circle_mismatch: got 101",
+      },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).toContain("ID lingkaran tidak cocok");
+    expect(sentMessages[1].text).not.toContain("circle_mismatch");
+  });
+
+  it("does not present a failed backfill as a benign status message", async () => {
+    const prevSnap = makeSnapshot();
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot: null, saved: false, reason: "empty_response" },
+      previous: {
+        snapshot: prevSnap,
+        saved: false,
+        reason: "network down",
+      },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).not.toContain("Data terbaru masih");
+    expect(sentMessages[1].text).toContain("belum punya data");
+  });
+
+  it("resets the in-flight guard when the loading message fails to send", async () => {
+    mockCurrentDate(2026, 6, 12);
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot, saved: true },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    let shouldReject = true;
+    mockClient.sendOrEdit.mockImplementation(
+      async (jid: string, _msgId: string | null, text: string) => {
+        if (shouldReject) {
+          shouldReject = false;
+          throw new Error("not connected");
+        }
+        sentMessages.push({ jid, text });
+        return "sent-msg-id";
+      },
+    );
+
+    await messageHandler!(adminFetchMessage());
+    expect(forceFetch).not.toHaveBeenCalled();
+
+    await messageHandler!(adminFetchMessage());
+    expect(forceFetch).toHaveBeenCalledTimes(1);
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[1].text).toContain("Data uma.moe diperbarui");
+  });
+
+  it("/help lists /fetch for admins", async () => {
+    setupCommandHandler(mockClient, config, mockDb, () => snapshot);
+
+    const msg = makeMessage({
+      key: { remoteJid: COMMAND_GROUP, id: "msg-001", participant: ADMIN_JID },
+      message: { conversation: "/help" },
+    });
+    await messageHandler!(msg);
+
+    expect(sentMessages[0].text).toContain("/fetch");
   });
 });

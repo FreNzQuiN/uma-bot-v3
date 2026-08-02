@@ -173,20 +173,21 @@ The bot runs a local HTTP API on `127.0.0.1:3000` (configurable via `API_PORT`).
 
 ## WhatsApp Commands
 
-| Command               | Access        | Description               |
-| --------------------- | ------------- | ------------------------- |
-| `/daily [offset]`     | Command group | Daily report              |
-| `/weekly [offset]`    | Command group | Weekly report             |
-| `/monthly [offset]`   | Command group | Monthly report            |
-| `/ranks`              | Command group | Rank standings            |
-| `/bottom`             | Command group | Members needing attention |
-| `/stats`              | Command group | Club statistics           |
-| `/members`            | Command group | Member list               |
-| `/tier`               | Command group | Tier intelligence         |
-| `/compare A B`        | Command group | Compare two members       |
-| `/analyze Name`       | Command group | Deep member analysis      |
-| `/setreq [key value]` | Admin         | View/change requirements  |
-| `/config`             | Admin         | Show current config       |
-| `/status`             | Admin         | Bot status                |
-| `/catchup on\|off`    | Admin         | Toggle catch-up mode      |
-| `/alerts on\|off`     | Admin         | Toggle alerts             |
+| Command               | Access        | Description                |
+| --------------------- | ------------- | -------------------------- |
+| `/daily [offset]`     | Command group | Daily report               |
+| `/weekly [offset]`    | Command group | Weekly report              |
+| `/monthly [offset]`   | Command group | Monthly report             |
+| `/ranks`              | Command group | Rank standings             |
+| `/bottom`             | Command group | Members needing attention  |
+| `/stats`              | Command group | Club statistics            |
+| `/members`            | Command group | Member list                |
+| `/tier`               | Command group | Tier intelligence          |
+| `/compare A B`        | Command group | Compare two members        |
+| `/analyze Name`       | Command group | Deep member analysis       |
+| `/setreq [key value]` | Admin         | View/change requirements   |
+| `/config`             | Admin         | Show current config        |
+| `/status`             | Admin         | Bot status                 |
+| `/catchup on\|off`    | Admin         | Toggle catch-up mode       |
+| `/alerts on\|off`     | Admin         | Toggle alerts              |
+| `/fetch`              | Admin         | Force refresh from uma.moe |

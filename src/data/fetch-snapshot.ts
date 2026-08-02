@@ -163,20 +163,25 @@ async function fetchOnce(
  *
  * Returns the snapshot (fresh or existing) and whether a save happened.
  * Fetch failures return the existing snapshot; save errors propagate.
+ *
+ * `force: true` skips the freshness checks and retry loop — always contacts
+ * uma.moe once and returns immediately. Used by the interactive /fetch command,
+ * where a 5m→1h backoff loop would hang the reply. The fetchOnce guards
+ * (empty response, circle mismatch, not-newer) still apply, so a forced fetch
+ * can never regress a snapshot on disk.
  */
 export async function fetchAndSaveSnapshot(
   umaMoe: UmaMoeClientLike,
   circleId: number,
   year: number,
   month: number,
-  options?: { rootDir?: string },
+  options?: { rootDir?: string; force?: boolean },
 ): Promise<FetchResult> {
   const rootDir = options?.rootDir ?? process.cwd();
   const monthLabel = `${year}-${p2(month)}`;
 
-  const existing = loadMonthSnapshot(year, month, rootDir);
-
-  let needFetch = !existing;
+  let existing: Snapshot | null = loadMonthSnapshot(year, month, rootDir);
+  let needFetch = !existing || !!options?.force;
   if (existing) {
     if (existing.circle.circle_id !== circleId) {
       log.warn(
@@ -184,7 +189,9 @@ export async function fetchAndSaveSnapshot(
         `Circle ID mismatch: cached=${existing.circle.circle_id} requested=${circleId}`,
       );
       needFetch = true;
-    } else {
+      // A wrong-circle snapshot must never surface as a /fetch fallback.
+      if (options?.force) existing = null;
+    } else if (!options?.force) {
       const isCurrentMonth = isCurrentMonthFetch(year, month);
       if (isCurrentMonth) {
         needFetch = isSnapshotStale(existing);
@@ -201,7 +208,12 @@ export async function fetchAndSaveSnapshot(
 
   const isCurrentMonth = isCurrentMonthFetch(year, month);
 
-  if (existing && isCurrentMonth && isDataFreshEnough(existing)) {
+  if (
+    existing &&
+    !options?.force &&
+    isCurrentMonth &&
+    isDataFreshEnough(existing)
+  ) {
     log.debug(
       "Snapshot",
       `Existing data for ${monthLabel} is fresh enough (today/yesterday), skipping fetch`,
@@ -232,8 +244,8 @@ export async function fetchAndSaveSnapshot(
   // budget check below would never trip and the error path would loop forever.
   if (!Number.isFinite(maxWaitMs)) maxWaitMs = 0;
 
-  if (!isCurrentMonth || maxWaitMs <= 0) {
-    // Past month or data too old — single attempt, no retry
+  if (!isCurrentMonth || options?.force || maxWaitMs <= 0) {
+    // Past month, forced fetch, or data too old — single attempt, no retry
     const result = await fetchOnce(umaMoe, circleId, year, month, existing);
     if ("fetched" in result) {
       const fileDate = persistFetched(result.fetched, monthLabel, rootDir);

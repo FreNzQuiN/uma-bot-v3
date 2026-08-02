@@ -144,6 +144,118 @@ describe("fetchAndSaveSnapshot", () => {
     ).rejects.toThrow("disk full");
   });
 
+  describe("force mode", () => {
+    it("always contacts uma.moe even when the cached snapshot is fresh", async () => {
+      // dataDay 11 with JST day 12 → normal path would return "fresh" without fetching
+      const existing = makeSnapshot(2026, 6, 11);
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 12);
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(umaMoe.fetchCircleData).toHaveBeenCalledTimes(1);
+      expect(result.saved).toBe(true);
+      expect(mockedSave).toHaveBeenCalledWith(
+        fetched,
+        "2026-06-12",
+        "/tmp/test",
+      );
+    });
+
+    it("makes a single attempt without sleeping when data is behind", async () => {
+      jest.useFakeTimers();
+      try {
+        // 1h-old data → normal path would enter the retry loop and sleep 5m
+        const existing = makeSnapshot(2026, 6, 5);
+        existing.circle.last_updated = new Date(
+          Date.now() - 60 * 60_000,
+        ).toISOString();
+        mockedLoad.mockReturnValue(existing);
+        const stale = makeSnapshot(2026, 6, 6);
+        umaMoe.fetchCircleData.mockResolvedValue(stale);
+
+        const promise = fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+          rootDir: "/tmp/test",
+          force: true,
+        });
+        await jest.advanceTimersByTimeAsync(5 * 60_000);
+        await promise;
+
+        expect(umaMoe.fetchCircleData).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("does not save when uma.moe returns data older than the existing snapshot", async () => {
+      const existing = makeSnapshot(2026, 6, 12);
+      mockedLoad.mockReturnValue(existing);
+      const older = makeSnapshot(2026, 6, 11);
+      umaMoe.fetchCircleData.mockResolvedValue(older);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(false);
+      expect(result.reason).toBe("not_newer");
+      expect(result.snapshot).toBe(existing);
+      expect(mockedSave).not.toHaveBeenCalled();
+    });
+
+    it("returns the existing snapshot without saving when the fetch throws", async () => {
+      const existing = makeSnapshot(2026, 6, 11);
+      mockedLoad.mockReturnValue(existing);
+      umaMoe.fetchCircleData.mockRejectedValue(new Error("network down"));
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(false);
+      expect(result.snapshot).toBe(existing);
+      expect(result.reason).toBe("network down");
+      expect(mockedSave).not.toHaveBeenCalled();
+    });
+
+    it("never falls back to a wrong-circle existing snapshot in force mode", async () => {
+      const wrong = makeSnapshot(2026, 6, 12, 999);
+      mockedLoad.mockReturnValue(wrong);
+      umaMoe.fetchCircleData.mockRejectedValue(new Error("network down"));
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.snapshot).toBeNull();
+      expect(result.saved).toBe(false);
+      expect(result.reason).toBe("network down");
+    });
+
+    it("still propagates save failures", async () => {
+      mockedLoad.mockReturnValue(null);
+      const fetched = makeSnapshot(2026, 6, 12);
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+      mockedSave.mockImplementation(() => {
+        throw new Error("disk full");
+      });
+
+      await expect(
+        fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+          rootDir: "/tmp/test",
+          force: true,
+        }),
+      ).rejects.toThrow("disk full");
+    });
+  });
+
   it("waits 5 minutes (not hours) before the first retry when data is behind", async () => {
     jest.useFakeTimers();
     try {

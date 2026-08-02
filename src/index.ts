@@ -17,7 +17,10 @@ import { ApiServer } from "./api/server";
 import { Scheduler } from "./scheduler/scheduler";
 import { CatchUpManager } from "./scheduler/catchup";
 import { WhatsAppClient } from "./whatsapp/client";
-import { setupCommandHandler } from "./whatsapp/dispatch";
+import {
+  setupCommandHandler,
+  type ForceFetchResult,
+} from "./whatsapp/dispatch";
 
 import {
   loadLatestSnapshot,
@@ -26,6 +29,7 @@ import {
   setCachedSnapshot,
 } from "./data/snapshot";
 import { fetchAndSaveSnapshot } from "./data/fetch-snapshot";
+import { getDataDayFromSnapshot } from "./data/daily-fans";
 import { updateMemberHistory } from "./data/member-history";
 import {
   getDataDate,
@@ -163,6 +167,40 @@ async function main() {
     },
     (year: number, month: number) =>
       ensureMonthSnapshot(umaMoe, config.circleId, year, month),
+    async (): Promise<ForceFetchResult> => {
+      const { year, month } = getDataDateComponents();
+      const current = await fetchAndSaveSnapshot(
+        umaMoe,
+        getConfig().circleId,
+        year,
+        month,
+        { force: true },
+      );
+      if (current.snapshot) setCachedSnapshot(current.snapshot);
+
+      const currentDay = current.snapshot
+        ? getDataDayFromSnapshot(current.snapshot)
+        : null;
+      if (current.snapshot !== null && currentDay !== 0) return { current };
+
+      // No usable current-month data (month just rolled) — backfill the
+      // previous month so /fetch returns the latest real data, not an empty slot.
+      let prevMonth = month - 1;
+      let prevYear = year;
+      while (prevMonth <= 0) {
+        prevMonth += 12;
+        prevYear--;
+      }
+      const previous = await fetchAndSaveSnapshot(
+        umaMoe,
+        getConfig().circleId,
+        prevYear,
+        prevMonth,
+        { force: true },
+      );
+      if (previous.snapshot) setCachedSnapshot(previous.snapshot);
+      return { current, previous };
+    },
   );
   log.info("WhatsApp", "Command dispatch registered");
 
