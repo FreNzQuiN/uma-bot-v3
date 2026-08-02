@@ -82,14 +82,6 @@ export function getDisplayDay(displayTimezone: string, date?: Date): number {
   return extractInTimezone(date ?? new Date(), displayTimezone).day;
 }
 
-/** Get date components in the display timezone. Used by cron-triggered fetches to match WIB day. */
-export function getDisplayDateComponents(
-  displayTimezone: string,
-  date?: Date,
-): { year: number; month: number; day: number } {
-  return extractInTimezone(date ?? new Date(), displayTimezone);
-}
-
 /** Get JST month (1-12). */
 export function getDataMonth(date?: Date): number {
   return extractInTimezone(date ?? new Date(), DATA_TIMEZONE).month;

@@ -16,17 +16,6 @@ import { generateStatsReport } from "./stats";
 import { generateMembersReport } from "./members";
 import { generateTierReport } from "./tier";
 
-export const REPORT_TYPES = [
-  "daily",
-  "weekly",
-  "monthly",
-  "ranks",
-  "bottom",
-  "stats",
-  "members",
-  "tier",
-] as const;
-
 export async function generateReportString(
   type: string,
   snapshot: Snapshot,

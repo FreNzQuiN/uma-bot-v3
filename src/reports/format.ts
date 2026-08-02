@@ -60,7 +60,7 @@ export function buildFooter(config: BotConfig, snapshotDate?: string): string {
 
 const DATA_UPDATE_STRING = "22:00 WIB";
 
-export function buildDataLine(formattedDate: string): string {
+function buildDataLine(formattedDate: string): string {
   return `Periode data: ${formattedDate}, ${DATA_UPDATE_STRING}`;
 }
 

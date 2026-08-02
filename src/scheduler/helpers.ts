@@ -11,18 +11,6 @@ import { getTargetMonth } from "../utils/timezone";
 export const SCHEDULED_REPORT_TYPES = ["daily", "weekly", "monthly"] as const;
 export type ScheduledReportType = (typeof SCHEDULED_REPORT_TYPES)[number];
 
-export function isScheduledToday(
-  type: string,
-  dayOfMonth: number,
-  config: BotConfig,
-): boolean {
-  if (type === "daily") return true;
-  if (type === "weekly")
-    return config.schedule.weekly.days.includes(dayOfMonth);
-  if (type === "monthly") return config.schedule.monthly.day === dayOfMonth;
-  return false;
-}
-
 export function getCollidingTypes(
   dayOfMonth: number,
   config: BotConfig,

@@ -4,7 +4,7 @@
  * Based on uma.moe API response shapes and v3-spec-2.md data model.
  */
 
-export interface CircleData {
+interface CircleData {
   circle_id: number;
   name: string;
   comment: string;
@@ -207,18 +207,6 @@ export interface ScheduleRunRow {
   is_catch_up: boolean;
   target_jid: string;
   error_message: string | null;
-}
-
-export interface AlertEventRow {
-  id: number;
-  alert_type: string;
-  event_key: string;
-  member_viewer_id: string;
-  report_date: string;
-  created_at: string;
-  sent_at: string | null;
-  status: "pending" | "sent" | "suppressed";
-  message: string;
 }
 
 export interface MemberHistoryRow {

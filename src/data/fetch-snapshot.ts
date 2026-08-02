@@ -36,7 +36,7 @@ function p2(n: number): string {
 }
 
 /** Derive file path from snapshot metadata, not clock. Returns null when no member exists to derive from. */
-export function getDataDateForFile(snapshot: Snapshot): string | null {
+function getDataDateForFile(snapshot: Snapshot): string | null {
   const member = snapshot.members[0];
   if (!member) return null;
   const day = getDataDayFromSnapshot(snapshot);
@@ -45,7 +45,7 @@ export function getDataDateForFile(snapshot: Snapshot): string | null {
 }
 
 /** Current-month snapshot with dataDay === 0 or dataDay < currentJstDay - 1. */
-export function isSnapshotStale(snapshot: Snapshot): boolean {
+function isSnapshotStale(snapshot: Snapshot): boolean {
   const dataDay = getDataDayFromSnapshot(snapshot);
   if (dataDay === 0) return true;
   const currentDay = getDataDay();
@@ -64,7 +64,7 @@ function isDataFreshEnough(snapshot: Snapshot): boolean {
 }
 
 /** Past-month snapshot: true if data covers the entire month. */
-export function isSnapshotComplete(snapshot: Snapshot): boolean {
+function isSnapshotComplete(snapshot: Snapshot): boolean {
   if (snapshot.members.length === 0) return false;
   const dataDay = getDataDayFromSnapshot(snapshot);
   if (dataDay === 0) return false;
@@ -77,7 +77,7 @@ export function isSnapshotComplete(snapshot: Snapshot): boolean {
  * True if fetched snapshot has strictly more/fresher data than existing.
  * Tiebreakers: member count, then circle.last_updated.
  */
-export function isFetchedNewer(fetched: Snapshot, existing: Snapshot): boolean {
+function isFetchedNewer(fetched: Snapshot, existing: Snapshot): boolean {
   const fetchedDay = getDataDayFromSnapshot(fetched);
   const existingDay = getDataDayFromSnapshot(existing);
   if (fetchedDay > existingDay) return true;
