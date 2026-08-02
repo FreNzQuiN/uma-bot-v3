@@ -262,16 +262,13 @@ async function handleReportCommand(
 
   // Validate offset early (before sending loading message)
   if (effectiveOffset !== null) {
-    const maxOffset =
-      command === "daily"
-        ? ctx.config.commands.maxDailyOffset
-        : command === "weekly"
-          ? ctx.config.commands.maxWeeklyOffset
-          : command === "monthly"
-            ? ctx.config.commands.maxMonthlyOffset
-            : command === "analyze"
-              ? ctx.config.commands.maxAnalyzeOffset
-              : null;
+    const MAX_OFFSETS: Record<string, number> = {
+      daily: ctx.config.commands.maxDailyOffset,
+      weekly: ctx.config.commands.maxWeeklyOffset,
+      monthly: ctx.config.commands.maxMonthlyOffset,
+      analyze: ctx.config.commands.maxAnalyzeOffset,
+    };
+    const maxOffset = MAX_OFFSETS[command] ?? null;
     if (maxOffset !== null && Math.abs(effectiveOffset) > maxOffset) {
       await ctx.client.sendOrEdit(
         chatJid,
