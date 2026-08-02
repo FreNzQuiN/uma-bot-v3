@@ -218,7 +218,7 @@ export class WhatsAppClient {
       fetchLatestBaileysVersion,
       normalizeMessageContent,
     } = Baileys;
-    // @ts-ignore — no type declarations available for qrcode-terminal
+    // @ts-expect-error — no type declarations available for qrcode-terminal
     const qrcodeTerminal = await import("qrcode-terminal");
 
     const { mkdirSync, existsSync } = await import("fs");
@@ -646,7 +646,7 @@ export class WhatsAppClient {
    * When a recipient can't decrypt a message, Baileys calls getMessage to
    * re-fetch the original so it can re-encrypt with a fresh session.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   private cacheSentMessage(
     result: { key?: { id?: string | null }; message?: any } | undefined,
   ): void {

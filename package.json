@@ -20,7 +20,7 @@
     "unlink": "node -e \"const fs=require('fs');const p=process.env.WA_SESSION_DIR||'data/auth';if(fs.existsSync(p)){fs.rmSync(p,{recursive:true});console.log('Session deleted: '+p)}else{console.log('No session found at '+p)}\"",
     "clean": "node -e \"const fs=require('fs');['dist','coverage'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true});console.log('Removed '+d)}})\"",
     "postinstall": "node scripts/patch-baileys.js",
-    "lint:check": "tsc --noEmit",
+    "lint:check": "tsc --noEmit && eslint src/",
     "fetch": "ts-node --transpile-only -e \"const{loadConfig}=require('./src/config');const{UmaMoeClient}=require('./src/api/uma-moe');const{saveSnapshot}=require('./src/data/snapshot');const config=loadConfig();const client=new UmaMoeClient();const now=new Date();client.fetchCircleData(config.circleId,now.getFullYear(),now.getMonth()+1).then(s=>{const d=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));const ds=\\\"\\\"+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');saveSnapshot(s,ds);console.log('Snapshot saved for '+ds);client.closeSession()}).catch(e=>{console.error('Fetch failed:',e.message);client.closeSession()})\"",
     "docker:build": "docker build -t uma-club-bot .",
     "docker:run": "docker run -d --name uma-bot -v \"%cd%/data:/app/data\" -v \"%cd%/config.yaml:/app/config.yaml\" --env-file .env uma-club-bot",
@@ -46,14 +46,17 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.3",
     "@types/node-cron": "^3.0.11",
     "@types/sql.js": "^1.4.11",
+    "eslint": "^10.8.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.3.4",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.65.0"
   },
   "overrides": {
     "uuid": "^11.1.1",

@@ -40,6 +40,7 @@ import {
   statSync,
   readFileSync,
 } from "fs";
+import { resolve } from "path";
 import { log } from "./utils/logger";
 import { recordConfigReload, recordSchedulerRestart } from "./runtime";
 
@@ -111,7 +112,7 @@ async function main() {
   log.info("Bot", `Log level: ${config.logging.level}`);
 
   // Polling instead of fs.watch — more reliable on Windows
-  const configPath = require("path").resolve("config.yaml");
+  const configPath = resolve("config.yaml");
   let lastConfigMtime = 0;
   let lastConfigHash = "";
   let initialReadOk = false;
