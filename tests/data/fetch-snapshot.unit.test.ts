@@ -64,7 +64,7 @@ function makeSnapshot(
         year,
         month,
         daily_fans: new Array(dataDay).fill(1000),
-        last_updated: "2026-07-20T00:00:00Z",
+        last_updated: "2020-01-01T00:00:00Z",
       },
     ],
     club_rank: 8,
