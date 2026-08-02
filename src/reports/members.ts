@@ -6,22 +6,22 @@
  * Optionally shows left members with "last seen" info when DB is provided.
  */
 
-import { Snapshot, BotConfig } from '../types';
-import type { ComputedMember } from '../types';
-import type { IDatabase } from '../db/types';
-import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { buildFooter, buildDateStr, buildReportHeader } from './format';
-import { getLeftMembers } from '../data/member-history';
+import { Snapshot, BotConfig } from "../types";
+import type { ComputedMember } from "../types";
+import type { IDatabase } from "../db/types";
+import { formatNumber, sanitizeName } from "../utils/format";
+import { formatDateWIB } from "../utils/timezone";
+import { buildFooter, buildDateStr, buildReportHeader } from "./format";
+import { getLeftMembers } from "../data/member-history";
 
 export async function generateMembersReport(
   snapshot: Snapshot,
   config: BotConfig,
   computedMembers: ComputedMember[],
-  db?: IDatabase
+  db?: IDatabase,
 ): Promise<string> {
   if (!snapshot.members || snapshot.members.length === 0) {
-    return 'ℹ️ *Daftar Anggota*\nData anggota belum tersedia.';
+    return "ℹ️ *Daftar Anggota*\nData anggota belum tersedia.";
   }
 
   const statusOrder = { active: 0, stale: 1, left: 2 };
@@ -35,39 +35,40 @@ export async function generateMembersReport(
   const lines: string[] = [];
   const header = buildReportHeader(snapshot, `👥 *Daftar Anggota*`, false);
   lines.push(...header);
-  lines.push('');
+  lines.push("");
 
   for (const m of sorted) {
-    let badge = '';
-    if (m.isTransfer) badge = ' 🔄';
-    else if (m.status === 'stale') badge = ' ⚠️';
-    else if (m.status === 'left') badge = ' 🚪';
+    let badge = "";
+    if (m.isTransfer) badge = " 🔄";
+    else if (m.status === "stale") badge = " ⚠️";
+    else if (m.status === "left") badge = " 🚪";
 
-    const gainStr =
-      m.monthlyGain > 0 ? formatNumber(m.monthlyGain) : '0';
+    const gainStr = m.monthlyGain > 0 ? formatNumber(m.monthlyGain) : "0";
     const transferInfo = m.previousCircleName
       ? ` (dari ${m.previousCircleName})`
-      : '';
+      : "";
 
     lines.push(
-      `• *${sanitizeName(m.trainerName)}*${badge} — ${gainStr}${transferInfo}`
+      `• *${sanitizeName(m.trainerName)}*${badge} — ${gainStr}${transferInfo}`,
     );
   }
 
   if (db) {
     const leftMembers = await getLeftMembers(snapshot, db);
     if (leftMembers.length > 0) {
-      lines.push('');
-      lines.push('*🚪 Anggota yang sudah keluar:*');
-      lines.push('');
+      lines.push("");
+      lines.push("*🚪 Anggota yang sudah keluar:*");
+      lines.push("");
       for (const lm of leftMembers) {
         const lastSeen = formatDateWIB(lm.last_seen);
-        lines.push(`• ${sanitizeName(lm.trainer_name)} (terakhir: ${lastSeen})`);
+        lines.push(
+          `• ${sanitizeName(lm.trainer_name)} (terakhir: ${lastSeen})`,
+        );
       }
     }
   }
 
-  lines.push('');
+  lines.push("");
   lines.push(buildFooter(config, buildDateStr(snapshot)));
-  return lines.join('\n');
+  return lines.join("\n");
 }

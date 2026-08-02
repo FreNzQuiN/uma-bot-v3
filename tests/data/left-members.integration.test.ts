@@ -5,14 +5,17 @@
  * Tests updateMemberHistory and getLeftMembers.
  */
 
-import { updateMemberHistory, getLeftMembers } from '../../src/data/member-history';
-import { SqliteDatabase } from '../../src/db/database';
-import type { Snapshot, MemberData } from '../../src/types';
+import {
+  updateMemberHistory,
+  getLeftMembers,
+} from "../../src/data/member-history";
+import { SqliteDatabase } from "../../src/db/database";
+import type { Snapshot, MemberData } from "../../src/types";
 
 let db: SqliteDatabase;
 
 beforeEach(async () => {
-  db = new SqliteDatabase(':memory:');
+  db = new SqliteDatabase(":memory:");
   await db.initialize();
 });
 
@@ -20,45 +23,48 @@ afterEach(async () => {
   await db.close();
 });
 
-
 function makeMember(overrides: Partial<MemberData> = {}): MemberData {
   return {
     id: 1,
     circle_id: 100,
     viewer_id: 1001,
-    trainer_name: 'Alice',
+    trainer_name: "Alice",
     shame_score: null,
     year: 2026,
     month: 6,
-    daily_fans: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 200, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    last_updated: '2026-06-12',
+    daily_fans: [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 200, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    last_updated: "2026-06-12",
     ...overrides,
   };
 }
 
 function makeSnapshot(memberOverrides?: Partial<MemberData>[]): Snapshot {
   const defaultMembers: MemberData[] = [
-    makeMember({ viewer_id: 1001, trainer_name: 'Alice' }),
-    makeMember({ viewer_id: 1002, trainer_name: 'Bob', id: 2 }),
-    makeMember({ viewer_id: 1003, trainer_name: 'Charlie', id: 3 }),
+    makeMember({ viewer_id: 1001, trainer_name: "Alice" }),
+    makeMember({ viewer_id: 1002, trainer_name: "Bob", id: 2 }),
+    makeMember({ viewer_id: 1003, trainer_name: "Charlie", id: 3 }),
   ];
 
-  const members = memberOverrides !== undefined
-    ? memberOverrides.map((o) => makeMember(o))
-    : defaultMembers;
+  const members =
+    memberOverrides !== undefined
+      ? memberOverrides.map((o) => makeMember(o))
+      : defaultMembers;
 
   return {
     circle: {
       circle_id: 100,
-      name: 'TestClub',
-      comment: '',
+      name: "TestClub",
+      comment: "",
       leader_viewer_id: 1,
-      leader_name: 'Leader',
+      leader_name: "Leader",
       member_count: members.length,
       join_style: 0,
       policy: 0,
-      created_at: '',
-      last_updated: '2026-06-12T14:00:00Z',
+      created_at: "",
+      last_updated: "2026-06-12T14:00:00Z",
       monthly_rank: 100,
       monthly_point: 1000000,
       last_month_rank: null,
@@ -80,65 +86,74 @@ function makeSnapshot(memberOverrides?: Partial<MemberData>[]): Snapshot {
   };
 }
 
-
-describe('updateMemberHistory', () => {
-  it('inserts all snapshot members into member_history', async () => {
+describe("updateMemberHistory", () => {
+  it("inserts all snapshot members into member_history", async () => {
     const snapshot = makeSnapshot();
     await updateMemberHistory(snapshot, db);
 
     const members = await db.getMembers(100);
     expect(members).toHaveLength(3);
-    expect(members.map((m: any) => m.trainer_name).sort()).toEqual(['Alice', 'Bob', 'Charlie']);
+    expect(members.map((m: any) => m.trainer_name).sort()).toEqual([
+      "Alice",
+      "Bob",
+      "Charlie",
+    ]);
   });
 
-  it('sets status to active for all current members', async () => {
+  it("sets status to active for all current members", async () => {
     const snapshot = makeSnapshot();
     await updateMemberHistory(snapshot, db);
 
     const members = await db.getMembers(100);
     for (const member of members) {
-      expect(member.status).toBe('active');
+      expect(member.status).toBe("active");
     }
   });
 
-  it('marks missing members as left on re-run', async () => {
+  it("marks missing members as left on re-run", async () => {
     // First run: Alice, Bob, Charlie
     const snapshot1 = makeSnapshot();
     await updateMemberHistory(snapshot1, db);
 
     // Second run: only Alice, Bob (Charlie not present)
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
     ]);
     await updateMemberHistory(snapshot2, db);
 
     // Charlie should be marked as 'left' (still in table, not deleted)
     const charlie = await db.getMember(1003);
     expect(charlie).not.toBeNull();
-    expect(charlie!.status).toBe('left');
+    expect(charlie!.status).toBe("left");
 
     // Alice and Bob should still be active
     const alice = await db.getMember(1001);
-    expect(alice!.status).toBe('active');
+    expect(alice!.status).toBe("active");
     const bob = await db.getMember(1002);
-    expect(bob!.status).toBe('active');
+    expect(bob!.status).toBe("active");
   });
 
-  it('stores transfer information when present', async () => {
+  it("stores transfer information when present", async () => {
     const snapshot = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'NewGuy', id: 2, previous_circle_id: 200, previous_circle_name: 'OldClub' },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      {
+        viewer_id: 1002,
+        trainer_name: "NewGuy",
+        id: 2,
+        previous_circle_id: 200,
+        previous_circle_name: "OldClub",
+      },
     ]);
     await updateMemberHistory(snapshot, db);
 
     const member = await db.getMember(1002);
     expect(member).not.toBeNull();
-    expect(member!.previous_circle_name).toBe('OldClub');
+    expect(member!.previous_circle_name).toBe("OldClub");
     expect(member!.previous_circle_id).toBe(200);
   });
 
-  it('marks all members as left when snapshot is empty', async () => {
+  it("marks all members as left when snapshot is empty", async () => {
     // First run: insert 3 members
     const snapshot1 = makeSnapshot();
     await updateMemberHistory(snapshot1, db);
@@ -151,13 +166,13 @@ describe('updateMemberHistory', () => {
     const members = await db.getMembers(100);
     expect(members).toHaveLength(3);
     for (const m of members) {
-      expect(m.status).toBe('left');
+      expect(m.status).toBe("left");
     }
   });
 
-  it('uses snapshot circle_id for member_history', async () => {
+  it("uses snapshot circle_id for member_history", async () => {
     const snapshot = makeSnapshot([
-      { viewer_id: 5001, trainer_name: 'TestMember', circle_id: 999 },
+      { viewer_id: 5001, trainer_name: "TestMember", circle_id: 999 },
     ]);
     await updateMemberHistory(snapshot, db);
 
@@ -166,10 +181,10 @@ describe('updateMemberHistory', () => {
     expect(member!.circle_id).toBe(999);
   });
 
-  it('preserves first_seen on subsequent updates', async () => {
+  it("preserves first_seen on subsequent updates", async () => {
     // First run
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
+      { viewer_id: 1001, trainer_name: "Alice" },
     ]);
     await updateMemberHistory(snapshot1, db);
 
@@ -178,7 +193,7 @@ describe('updateMemberHistory', () => {
 
     // Second run — first_seen should NOT change
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
+      { viewer_id: 1001, trainer_name: "Alice" },
     ]);
     await updateMemberHistory(snapshot2, db);
 
@@ -187,89 +202,86 @@ describe('updateMemberHistory', () => {
   });
 });
 
-
-describe('getLeftMembers', () => {
-  it('detects members who were in history but not in current snapshot', async () => {
+describe("getLeftMembers", () => {
+  it("detects members who were in history but not in current snapshot", async () => {
     // Step 1: Insert 3 members via snapshot
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
-      { viewer_id: 1003, trainer_name: 'Charlie', id: 3 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
+      { viewer_id: 1003, trainer_name: "Charlie", id: 3 },
     ]);
     await updateMemberHistory(snapshot1, db);
 
     // Step 2: Current snapshot has only Alice and Bob
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
     ]);
 
     const left = await getLeftMembers(snapshot2, db);
     expect(left).toHaveLength(1);
     expect(left[0].viewer_id).toBe(1003);
-    expect(left[0].trainer_name).toBe('Charlie');
+    expect(left[0].trainer_name).toBe("Charlie");
   });
 
-  it('returns empty array when no members left', async () => {
+  it("returns empty array when no members left", async () => {
     // Step 1: Insert 2 members
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
     ]);
     await updateMemberHistory(snapshot1, db);
 
     // Step 2: Same members present
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
     ]);
 
     const left = await getLeftMembers(snapshot2, db);
     expect(left).toHaveLength(0);
   });
 
-  it('returns empty array when history is empty', async () => {
-    const snapshot = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-    ]);
+  it("returns empty array when history is empty", async () => {
+    const snapshot = makeSnapshot([{ viewer_id: 1001, trainer_name: "Alice" }]);
 
     const left = await getLeftMembers(snapshot, db);
     expect(left).toHaveLength(0);
   });
 
-  it('detects multiple left members', async () => {
+  it("detects multiple left members", async () => {
     // Step 1: Insert 5 members
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
-      { viewer_id: 1003, trainer_name: 'Charlie', id: 3 },
-      { viewer_id: 1004, trainer_name: 'Diana', id: 4 },
-      { viewer_id: 1005, trainer_name: 'Eve', id: 5 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
+      { viewer_id: 1003, trainer_name: "Charlie", id: 3 },
+      { viewer_id: 1004, trainer_name: "Diana", id: 4 },
+      { viewer_id: 1005, trainer_name: "Eve", id: 5 },
     ]);
     await updateMemberHistory(snapshot1, db);
 
     // Step 2: Only Alice remains
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
+      { viewer_id: 1001, trainer_name: "Alice" },
     ]);
 
     const left = await getLeftMembers(snapshot2, db);
     expect(left).toHaveLength(4);
     const leftNames = left.map((m: any) => m.trainer_name).sort();
-    expect(leftNames).toEqual(['Bob', 'Charlie', 'Diana', 'Eve']);
+    expect(leftNames).toEqual(["Bob", "Charlie", "Diana", "Eve"]);
   });
 
-  it('handles snapshot with different circle_id', async () => {
+  it("handles snapshot with different circle_id", async () => {
     // Step 1: Insert members for circle 100
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
     ]);
     await updateMemberHistory(snapshot1, db);
 
     // Step 2: Current snapshot for circle 200 — no history for circle 200
     const snapshot2 = makeSnapshot([
-      { viewer_id: 2001, trainer_name: 'Xavier', circle_id: 200 },
+      { viewer_id: 2001, trainer_name: "Xavier", circle_id: 200 },
     ]);
     // Override the snapshot's circle_id to 200
     snapshot2.circle = { ...snapshot2.circle, circle_id: 200 };
@@ -278,59 +290,59 @@ describe('getLeftMembers', () => {
     expect(left).toHaveLength(0);
   });
 
-  it('does not detect as left when member still exists', async () => {
+  it("does not detect as left when member still exists", async () => {
     // Step 1: Insert members
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
     ]);
     await updateMemberHistory(snapshot1, db);
 
     // Step 2: Same members present (just in different order)
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
-      { viewer_id: 1001, trainer_name: 'Alice' },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
     ]);
 
     const left = await getLeftMembers(snapshot2, db);
     expect(left).toHaveLength(0);
   });
 
-  it('detects left member alongside new member', async () => {
+  it("detects left member alongside new member", async () => {
     // Step 1: Alice, Bob
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: 'Bob', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "Bob", id: 2 },
     ]);
     await updateMemberHistory(snapshot1, db);
 
     // Step 2: Alice, Charlie (Bob left, Charlie joined)
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 3001, trainer_name: 'Charlie', id: 3 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 3001, trainer_name: "Charlie", id: 3 },
     ]);
 
     const left = await getLeftMembers(snapshot2, db);
     expect(left).toHaveLength(1);
     expect(left[0].viewer_id).toBe(1002);
-    expect(left[0].trainer_name).toBe('Bob');
+    expect(left[0].trainer_name).toBe("Bob");
   });
 
-  it('handles Unicode member names in left detection', async () => {
+  it("handles Unicode member names in left detection", async () => {
     // Step 1: Insert with Unicode name
     const snapshot1 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
-      { viewer_id: 1002, trainer_name: '\u30b9\u30bf\u30a4\u30eb', id: 2 },
+      { viewer_id: 1001, trainer_name: "Alice" },
+      { viewer_id: 1002, trainer_name: "\u30b9\u30bf\u30a4\u30eb", id: 2 },
     ]);
     await updateMemberHistory(snapshot1, db);
 
     // Step 2: Only Alice
     const snapshot2 = makeSnapshot([
-      { viewer_id: 1001, trainer_name: 'Alice' },
+      { viewer_id: 1001, trainer_name: "Alice" },
     ]);
 
     const left = await getLeftMembers(snapshot2, db);
     expect(left).toHaveLength(1);
-    expect(left[0].trainer_name).toBe('\u30b9\u30bf\u30a4\u30eb');
+    expect(left[0].trainer_name).toBe("\u30b9\u30bf\u30a4\u30eb");
   });
 });

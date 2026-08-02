@@ -60,7 +60,7 @@ export interface Snapshot {
   yesterday_fans_to_lower_tier: number;
 }
 
-export type MemberStatus = 'active' | 'stale' | 'left';
+export type MemberStatus = "active" | "stale" | "left";
 
 export interface ComputedMember {
   viewerId: number;
@@ -69,13 +69,13 @@ export interface ComputedMember {
   isTransfer: boolean;
   previousCircleName?: string;
   dailyFans: number[];
-  latestPositiveDay: number;    // 1-indexed day number, 0 = no data
+  latestPositiveDay: number; // 1-indexed day number, 0 = no data
   latestPositiveValue: number;
-  firstPositiveDay: number;     // 1-indexed day number, 0 = no data
+  firstPositiveDay: number; // 1-indexed day number, 0 = no data
   firstPositiveValue: number;
   monthlyGain: number;
   latestKnownGain: number;
-  weeklyGains: number[];        // gains per week block
+  weeklyGains: number[]; // gains per week block
 }
 
 export interface RankedMember {
@@ -95,8 +95,8 @@ export interface TierData {
   requiredPace: number;
   currentPace: number;
   daysLeft: number;
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
-  projectedOutcome: 'promote' | 'stay' | 'demotion_risk' | 'unknown';
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  projectedOutcome: "promote" | "stay" | "demotion_risk" | "unknown";
 }
 
 export interface BotConfig {
@@ -139,7 +139,7 @@ export interface BotConfig {
 
   alerts: {
     enabled: boolean;
-    defaultRecipients: 'admin' | 'group';
+    defaultRecipients: "admin" | "group";
     performanceDrop: {
       enabled: boolean;
       thresholdPercent: number;
@@ -172,7 +172,7 @@ export interface BotConfig {
   };
 
   logging: {
-    level: 'debug' | 'info' | 'warn' | 'error';
+    level: "debug" | "info" | "warn" | "error";
     logFile: string;
     maxSizeMB: number;
     maxFiles: number;
@@ -180,7 +180,7 @@ export interface BotConfig {
   };
 
   database: {
-    backend: 'sqlite' | 'mysql';
+    backend: "sqlite" | "mysql";
     sqlite: {
       path: string;
       autoSaveMs: number;
@@ -203,7 +203,7 @@ export interface ScheduleRunRow {
   report_date: string;
   scheduled_at: string;
   sent_at: string | null;
-  status: 'pending' | 'sent' | 'failed' | 'skipped';
+  status: "pending" | "sent" | "failed" | "skipped";
   is_catch_up: boolean;
   target_jid: string;
   error_message: string | null;
@@ -217,7 +217,7 @@ export interface AlertEventRow {
   report_date: string;
   created_at: string;
   sent_at: string | null;
-  status: 'pending' | 'sent' | 'suppressed';
+  status: "pending" | "sent" | "suppressed";
   message: string;
 }
 
@@ -229,7 +229,7 @@ export interface MemberHistoryRow {
   last_seen: string;
   previous_circle_id: number | null;
   previous_circle_name: string | null;
-  status: 'active' | 'stale' | 'left';
+  status: "active" | "stale" | "left";
 }
 
 export interface RankHistoryRow {
@@ -243,17 +243,17 @@ export interface RankHistoryRow {
 }
 
 export const CLUB_TIERS: Record<number, string> = {
-  11: 'SS',
-  10: 'S+',
-  9: 'S',
-  8: 'A+',
-  7: 'A',
-  6: 'B+',
-  5: 'B',
-  4: 'C+',
-  3: 'C',
-  2: 'D+',
-  1: 'D',
+  11: "SS",
+  10: "S+",
+  9: "S",
+  8: "A+",
+  7: "A",
+  6: "B+",
+  5: "B",
+  4: "C+",
+  3: "C",
+  2: "D+",
+  1: "D",
 };
 
 /** Week block definitions (1-indexed day ranges) */

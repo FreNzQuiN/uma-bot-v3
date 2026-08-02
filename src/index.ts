@@ -9,36 +9,55 @@
  * 5. Once connected → run catch-up + start scheduler
  */
 
-import { loadConfig } from './config';
-import type { BotConfig, Snapshot } from './types';
-import { createDatabase } from './db/factory';
-import { UmaMoeClient } from './api/uma-moe';
-import { ApiServer } from './api/server';
-import { Scheduler } from './scheduler/scheduler';
-import { CatchUpManager } from './scheduler/catchup';
-import { WhatsAppClient } from './whatsapp/client';
-import { setupCommandHandler } from './whatsapp/dispatch';
+import { loadConfig } from "./config";
+import type { BotConfig, Snapshot } from "./types";
+import { createDatabase } from "./db/factory";
+import { UmaMoeClient } from "./api/uma-moe";
+import { ApiServer } from "./api/server";
+import { Scheduler } from "./scheduler/scheduler";
+import { CatchUpManager } from "./scheduler/catchup";
+import { WhatsAppClient } from "./whatsapp/client";
+import { setupCommandHandler } from "./whatsapp/dispatch";
 
-import { loadLatestSnapshot, ensureMonthSnapshot, getCachedSnapshot, setCachedSnapshot } from './data/snapshot';
-import { fetchAndSaveSnapshot } from './data/fetch-snapshot';
-import { updateMemberHistory } from './data/member-history';
-import { getDataDate, getDataDateComponents, getTargetMonth } from './utils/timezone';
-import { writeFileSync, unlinkSync, mkdirSync, existsSync, statSync, readFileSync } from 'fs';
-import { log } from './utils/logger';
-import { recordConfigReload, recordSchedulerRestart } from './runtime';
+import {
+  loadLatestSnapshot,
+  ensureMonthSnapshot,
+  getCachedSnapshot,
+  setCachedSnapshot,
+} from "./data/snapshot";
+import { fetchAndSaveSnapshot } from "./data/fetch-snapshot";
+import { updateMemberHistory } from "./data/member-history";
+import {
+  getDataDate,
+  getDataDateComponents,
+  getTargetMonth,
+} from "./utils/timezone";
+import {
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+  existsSync,
+  statSync,
+  readFileSync,
+} from "fs";
+import { log } from "./utils/logger";
+import { recordConfigReload, recordSchedulerRestart } from "./runtime";
 
-import { ReportOrchestrator } from './orchestrator/report-orchestrator';
+import { ReportOrchestrator } from "./orchestrator/report-orchestrator";
 
-const PID_FILE = 'data/bot.pid';
+const PID_FILE = "data/bot.pid";
 
 let emergencyCleanup: (() => Promise<void>) | null = null;
 
-process.on('unhandledRejection', (reason) => {
-  log.error('Bot', `Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
+process.on("unhandledRejection", (reason) => {
+  log.error(
+    "Bot",
+    `Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`,
+  );
 });
 
-process.on('uncaughtException', (err) => {
-  log.error('Bot', `Uncaught exception: ${err.message}`, err);
+process.on("uncaughtException", (err) => {
+  log.error("Bot", `Uncaught exception: ${err.message}`, err);
   if (emergencyCleanup) emergencyCleanup().catch(() => {});
   setTimeout(() => process.exit(1), 6_000);
 });
@@ -47,52 +66,61 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === null || b === null) return false;
   if (typeof a !== typeof b) return false;
-  if (typeof a !== 'object') return false;
+  if (typeof a !== "object") return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   const keysA = Object.keys(a as Record<string, unknown>);
   const keysB = Object.keys(b as Record<string, unknown>);
   if (keysA.length !== keysB.length) return false;
-  return keysA.every(key => deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]));
+  return keysA.every((key) =>
+    deepEqual(
+      (a as Record<string, unknown>)[key],
+      (b as Record<string, unknown>)[key],
+    ),
+  );
 }
 
-function configChanged(oldCfg: BotConfig, newCfg: BotConfig): { changed: boolean; scheduleChanged: boolean } {
+function configChanged(
+  oldCfg: BotConfig,
+  newCfg: BotConfig,
+): { changed: boolean; scheduleChanged: boolean } {
   const changed = JSON.stringify(oldCfg) !== JSON.stringify(newCfg);
   if (!changed) return { changed: false, scheduleChanged: false };
 
-  const scheduleChanged = JSON.stringify(oldCfg.schedule) !== JSON.stringify(newCfg.schedule);
+  const scheduleChanged =
+    JSON.stringify(oldCfg.schedule) !== JSON.stringify(newCfg.schedule);
   return { changed: true, scheduleChanged };
 }
 
 async function main() {
   try {
-    if (!existsSync('data')) mkdirSync('data', { recursive: true });
-    writeFileSync(PID_FILE, String(process.pid), 'utf-8');
+    if (!existsSync("data")) mkdirSync("data", { recursive: true });
+    writeFileSync(PID_FILE, String(process.pid), "utf-8");
   } catch (err) {
-    log.warn('Bot', 'Failed to write PID file', err);
+    log.warn("Bot", "Failed to write PID file", err);
   }
-  log.info('Bot', 'Uma Club Bot v3 starting...');
+  log.info("Bot", "Uma Club Bot v3 starting...");
 
   let config = loadConfig();
   log.configure({ ...config.logging, timezone: config.timezone });
 
   const db = await createDatabase(config.database);
-  log.info('Bot', `Database initialized`);
+  log.info("Bot", `Database initialized`);
 
-  log.info('Bot', `Circle ID: ${config.circleId}`);
-  log.info('Bot', `Timezone: ${config.timezone}`);
-  log.info('Bot', `Log level: ${config.logging.level}`);
+  log.info("Bot", `Circle ID: ${config.circleId}`);
+  log.info("Bot", `Timezone: ${config.timezone}`);
+  log.info("Bot", `Log level: ${config.logging.level}`);
 
   // Polling instead of fs.watch — more reliable on Windows
-  const configPath = require('path').resolve('config.yaml');
+  const configPath = require("path").resolve("config.yaml");
   let lastConfigMtime = 0;
-  let lastConfigHash = '';
+  let lastConfigHash = "";
   let initialReadOk = false;
   try {
     lastConfigMtime = statSync(configPath).mtimeMs;
-    lastConfigHash = readFileSync(configPath, 'utf-8');
+    lastConfigHash = readFileSync(configPath, "utf-8");
     initialReadOk = true;
   } catch (err) {
-    log.warn('Config', 'Could not stat config.yaml at startup', err);
+    log.warn("Config", "Could not stat config.yaml at startup", err);
   }
 
   const umaMoe = new UmaMoeClient();
@@ -100,7 +128,7 @@ async function main() {
   const getSnapshot = (): Snapshot | null => {
     const cached = getCachedSnapshot();
     if (cached) return cached;
-    log.debug('Snapshot', 'Cache miss — reading from disk');
+    log.debug("Snapshot", "Cache miss — reading from disk");
     const snapshot = loadLatestSnapshot();
     if (snapshot) setCachedSnapshot(snapshot);
     return snapshot;
@@ -109,19 +137,33 @@ async function main() {
 
   const waClient = new WhatsAppClient(getConfig);
 
-  const orchestrator = new ReportOrchestrator({ getConfig, getSnapshot, umaMoe, db, waClient });
+  const orchestrator = new ReportOrchestrator({
+    getConfig,
+    getSnapshot,
+    umaMoe,
+    db,
+    waClient,
+  });
 
-  setupCommandHandler(waClient, getConfig, db, getSnapshot, (updatedConfig) => {
-    config = updatedConfig;
-  }, (year: number, month: number) => ensureMonthSnapshot(umaMoe, config.circleId, year, month));
-  log.info('WhatsApp', 'Command dispatch registered');
+  setupCommandHandler(
+    waClient,
+    getConfig,
+    db,
+    getSnapshot,
+    (updatedConfig) => {
+      config = updatedConfig;
+    },
+    (year: number, month: number) =>
+      ensureMonthSnapshot(umaMoe, config.circleId, year, month),
+  );
+  log.info("WhatsApp", "Command dispatch registered");
 
   let scheduler: Scheduler | undefined;
 
   setInterval(() => {
     try {
       const currentMtime = statSync(configPath).mtimeMs;
-      const currentContent = readFileSync(configPath, 'utf-8');
+      const currentContent = readFileSync(configPath, "utf-8");
       const mtimeChanged = currentMtime !== lastConfigMtime;
       const contentChanged = currentContent !== lastConfigHash;
 
@@ -132,7 +174,10 @@ async function main() {
         // First read after initial failure — don't trigger false reload
         if (!initialReadOk) {
           initialReadOk = true;
-          log.info('Config', 'config.yaml is now accessible (initial read was deferred)');
+          log.info(
+            "Config",
+            "config.yaml is now accessible (initial read was deferred)",
+          );
           return;
         }
 
@@ -143,30 +188,40 @@ async function main() {
 
           const diff = configChanged(oldConfig, config);
           if (!diff.changed) {
-            log.debug('Config', 'config.yaml touched but content unchanged (mtime-only change)');
+            log.debug(
+              "Config",
+              "config.yaml touched but content unchanged (mtime-only change)",
+            );
             return;
           }
 
-          log.info('Config', 'Reloaded from config.yaml');
+          log.info("Config", "Reloaded from config.yaml");
           const changedFields: string[] = [];
           for (const key of Object.keys(config) as (keyof BotConfig)[]) {
-            const oldVal = JSON.stringify((oldConfig as unknown as Record<string, unknown>)[key]);
-            const newVal = JSON.stringify((config as unknown as Record<string, unknown>)[key]);
+            const oldVal = JSON.stringify(
+              (oldConfig as unknown as Record<string, unknown>)[key],
+            );
+            const newVal = JSON.stringify(
+              (config as unknown as Record<string, unknown>)[key],
+            );
             if (oldVal !== newVal) changedFields.push(key);
           }
           if (changedFields.length > 0) {
-            log.info('Config', `Changed fields: ${changedFields.join(', ')}`);
+            log.info("Config", `Changed fields: ${changedFields.join(", ")}`);
           }
           recordConfigReload(changedFields);
 
           if (diff.scheduleChanged) {
-            log.info('Config', 'Schedule changed — restarting scheduler');
+            log.info("Config", "Schedule changed — restarting scheduler");
           } else {
-            log.info('Config', 'Config reloaded from config.yaml');
+            log.info("Config", "Config reloaded from config.yaml");
           }
 
           if (!deepEqual(oldConfig.database, config.database)) {
-            log.warn('Config', 'Database config changed — restart required to apply new database settings');
+            log.warn(
+              "Config",
+              "Database config changed — restart required to apply new database settings",
+            );
           }
 
           if (scheduler) {
@@ -175,20 +230,29 @@ async function main() {
             recordSchedulerRestart();
           }
         } catch (err) {
-          log.error('Config', 'Failed to reload config.yaml', err);
+          log.error("Config", "Failed to reload config.yaml", err);
         }
       }
     } catch (err) {
-      log.warn('Config', 'Config watch poll failed (file may be locked by another process)', err);
+      log.warn(
+        "Config",
+        "Config watch poll failed (file may be locked by another process)",
+        err,
+      );
     }
   }, 5000);
-  log.info('Config', 'Watching config.yaml for changes (polling every 5s)');
+  log.info("Config", "Watching config.yaml for changes (polling every 5s)");
 
   const { year: currentYear, month: currentMonth } = getDataDateComponents();
   const todayStr = getDataDate();
 
   // Current month
-  const currentResult = await fetchAndSaveSnapshot(umaMoe, config.circleId, currentYear, currentMonth);
+  const currentResult = await fetchAndSaveSnapshot(
+    umaMoe,
+    config.circleId,
+    currentYear,
+    currentMonth,
+  );
   if (currentResult.snapshot) setCachedSnapshot(currentResult.snapshot);
 
   // Past months
@@ -196,21 +260,25 @@ async function main() {
     try {
       let prevMonth = currentMonth - offset;
       let prevYear = currentYear;
-      while (prevMonth <= 0) { prevMonth += 12; prevYear--; }
+      while (prevMonth <= 0) {
+        prevMonth += 12;
+        prevYear--;
+      }
       await fetchAndSaveSnapshot(umaMoe, config.circleId, prevYear, prevMonth);
     } catch (error) {
-      log.warn('Data', `Failed to pre-fetch month -${offset}`, error);
+      log.warn("Data", `Failed to pre-fetch month -${offset}`, error);
     }
   }
 
   // Load latest for member history + rank history
   const latestSnapshot = loadLatestSnapshot();
-  if (latestSnapshot && latestSnapshot.members.length > 0) setCachedSnapshot(latestSnapshot);
+  if (latestSnapshot && latestSnapshot.members.length > 0)
+    setCachedSnapshot(latestSnapshot);
   if (latestSnapshot) {
     try {
       await updateMemberHistory(latestSnapshot, db);
       await db.saveRankHistory({
-        date: latestSnapshot.circle.last_updated?.split('T')[0] ?? todayStr,
+        date: latestSnapshot.circle.last_updated?.split("T")[0] ?? todayStr,
         circle_id: latestSnapshot.circle.circle_id,
         monthly_rank: latestSnapshot.circle.monthly_rank,
         monthly_point: latestSnapshot.circle.monthly_point,
@@ -218,95 +286,144 @@ async function main() {
         fans_to_next_tier: latestSnapshot.fans_to_next_tier,
         fans_to_lower_tier: latestSnapshot.fans_to_lower_tier,
       });
-      log.debug('Data', 'Member history and rank history updated');
+      log.debug("Data", "Member history and rank history updated");
     } catch (err) {
-      log.warn('Data', 'Failed to update member/rank history', err);
+      log.warn("Data", "Failed to update member/rank history", err);
     }
   }
 
-  const apiPortRaw = parseInt(process.env.API_PORT ?? '3000', 10);
-  const apiPort = (apiPortRaw >= 1 && apiPortRaw <= 65535) ? apiPortRaw : 3000;
-  const api = new ApiServer(apiPort, getSnapshot, getConfig, {
-    isConnected: () => waClient.isConnected(),
-    getGroups: () => waClient.getGroups(),
-    getChats: () => waClient.getChats(),
-  }, db);
+  const apiPortRaw = parseInt(process.env.API_PORT ?? "3000", 10);
+  const apiPort = apiPortRaw >= 1 && apiPortRaw <= 65535 ? apiPortRaw : 3000;
+  const api = new ApiServer(
+    apiPort,
+    getSnapshot,
+    getConfig,
+    {
+      isConnected: () => waClient.isConnected(),
+      getGroups: () => waClient.getGroups(),
+      getChats: () => waClient.getChats(),
+    },
+    db,
+  );
   await api.start();
 
   const onDataFetch = async () => {
     try {
       const { year, month } = getDataDateComponents();
-      const result = await fetchAndSaveSnapshot(umaMoe, getConfig().circleId, year, month);
+      const result = await fetchAndSaveSnapshot(
+        umaMoe,
+        getConfig().circleId,
+        year,
+        month,
+      );
       if (result.snapshot) {
         setCachedSnapshot(result.snapshot);
       }
-      log.info('Data', `Scheduled data fetch: ${result.saved ? 'saved' : result.reason}`);
+      log.info(
+        "Data",
+        `Scheduled data fetch: ${result.saved ? "saved" : result.reason}`,
+      );
     } catch (error) {
-      log.error('Data', 'Scheduled data fetch failed', error);
+      log.error("Data", "Scheduled data fetch failed", error);
     }
   };
 
-  scheduler = new Scheduler(getConfig, db, (type, options) => orchestrator.sendReport(type, options), (types) => orchestrator.sendScheduledCombinedReport(types), onDataFetch);
+  scheduler = new Scheduler(
+    getConfig,
+    db,
+    (type, options) => orchestrator.sendReport(type, options),
+    (types) => orchestrator.sendScheduledCombinedReport(types),
+    onDataFetch,
+  );
   scheduler.start();
-  log.info('Scheduler', `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(',')}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`);
+  log.info(
+    "Scheduler",
+    `Started (daily: ${config.schedule.daily.time}, weekly: ${config.schedule.weekly.time} days ${config.schedule.weekly.days.join(",")}, monthly: ${config.schedule.monthly.time} day ${config.schedule.monthly.day})`,
+  );
 
   // Retries forever on network errors; rejects only for loggedOut/badSession
-  waClient.connect().then(async () => {
-    log.info('WhatsApp', 'Connected — running catch-up');
+  waClient
+    .connect()
+    .then(async () => {
+      log.info("WhatsApp", "Connected — running catch-up");
 
-    const catchUp = new CatchUpManager(db, getConfig);
-    const missed = await catchUp.detectMissedReports();
+      const catchUp = new CatchUpManager(db, getConfig);
+      const missed = await catchUp.detectMissedReports();
 
-    if (getConfig().catchUp.enabled) {
-      if (missed.length > 0) {
-        log.info('CatchUp', `Detected ${missed.length} missed reports: ${missed.join(', ')}`);
+      if (getConfig().catchUp.enabled) {
+        if (missed.length > 0) {
+          log.info(
+            "CatchUp",
+            `Detected ${missed.length} missed reports: ${missed.join(", ")}`,
+          );
 
-        const sendReportCollectingAlerts = async (type: string, options?: { isCatchUp?: boolean; offset?: number }) => {
-          return orchestrator.sendReport(type, { ...options, collectAlerts: true });
-        };
+          const sendReportCollectingAlerts = async (
+            type: string,
+            options?: { isCatchUp?: boolean; offset?: number },
+          ) => {
+            return orchestrator.sendReport(type, {
+              ...options,
+              collectAlerts: true,
+            });
+          };
 
-        const result = await catchUp.executeCatchUp(sendReportCollectingAlerts, (types) => orchestrator.sendCombinedCatchUp(types));
-        log.info('CatchUp', `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
+          const result = await catchUp.executeCatchUp(
+            sendReportCollectingAlerts,
+            (types) => orchestrator.sendCombinedCatchUp(types),
+          );
+          log.info(
+            "CatchUp",
+            `Complete: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`,
+          );
 
-        if (result.alerts.length > 0) {
-          const alerts = result.alerts as import('./alerts/alerts').Alert[];
-          await orchestrator.deliverAlerts(alerts, true);
-          await orchestrator.markAlertsByEventKeys(alerts.map((a) => a.eventKey));
+          if (result.alerts.length > 0) {
+            const alerts = result.alerts as import("./alerts/alerts").Alert[];
+            await orchestrator.deliverAlerts(alerts, true);
+            await orchestrator.markAlertsByEventKeys(
+              alerts.map((a) => a.eventKey),
+            );
+          }
+        } else {
+          log.debug("CatchUp", "No missed reports detected");
         }
-      } else {
-        log.debug('CatchUp', 'No missed reports detected');
+      } else if (missed.length > 0) {
+        // Catch-up disabled — record skipped so future detection won't re-trigger
+        await catchUp.recordSkippedReports(missed);
       }
-    } else if (missed.length > 0) {
-      // Catch-up disabled — record skipped so future detection won't re-trigger
-      await catchUp.recordSkippedReports(missed);
-    }
-  }).catch((err) => {
-    // Unexpected error — loggedOut/badSession now self-heal via auto-reconnect
-    log.error('WhatsApp', 'Unexpected connection error', err);
-  });
+    })
+    .catch((err) => {
+      // Unexpected error — loggedOut/badSession now self-heal via auto-reconnect
+      log.error("WhatsApp", "Unexpected connection error", err);
+    });
 
   const cleanup = async () => {
-    log.info('Bot', 'Shutting down...');
+    log.info("Bot", "Shutting down...");
     scheduler?.stop();
     try {
       await umaMoe.closeSession();
-      log.debug('Bot', 'Playwright browser session closed');
+      log.debug("Bot", "Playwright browser session closed");
     } catch (err) {
-      log.warn('Bot', 'Failed to close Playwright session', err);
+      log.warn("Bot", "Failed to close Playwright session", err);
     }
     waClient?.disconnect();
     await db.close();
-    try { unlinkSync(PID_FILE); } catch {}
+    try {
+      unlinkSync(PID_FILE);
+    } catch {}
     process.exit(0);
   };
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
-  process.on('exit', () => { try { unlinkSync(PID_FILE); } catch {} });
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+  process.on("exit", () => {
+    try {
+      unlinkSync(PID_FILE);
+    } catch {}
+  });
 
-  log.info('Bot', 'Uma Club Bot v3 ready');
+  log.info("Bot", "Uma Club Bot v3 ready");
 }
 
 main().catch((error) => {
-  log.error('Bot', 'Fatal error', error);
+  log.error("Bot", "Fatal error", error);
   process.exit(1);
 });

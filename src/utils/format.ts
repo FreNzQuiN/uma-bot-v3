@@ -16,13 +16,13 @@
 export function formatNumber(n: number): string {
   const abs = Math.abs(n);
   if (abs >= 1_000_000_000) {
-    return (n / 1_000_000_000).toFixed(1) + 'B';
+    return (n / 1_000_000_000).toFixed(1) + "B";
   }
   if (abs >= 1_000_000) {
-    return (n / 1_000_000).toFixed(1) + 'M';
+    return (n / 1_000_000).toFixed(1) + "M";
   }
   if (abs >= 1_000) {
-    return (n / 1_000).toFixed(1) + 'K';
+    return (n / 1_000).toFixed(1) + "K";
   }
   return String(n);
 }
@@ -32,10 +32,7 @@ export function formatNumber(n: number): string {
  * Escapes WhatsApp formatting characters (*, _, ~) to prevent injection.
  */
 export function sanitizeName(name: string): string {
-  return name
-    .replace(/\*/g, '')
-    .replace(/_/g, ' ')
-    .replace(/~/g, '-');
+  return name.replace(/\*/g, "").replace(/_/g, " ").replace(/~/g, "-");
 }
 
 /**
@@ -48,7 +45,11 @@ export function sanitizeName(name: string): string {
  *
  * The marker overhead is estimated at 20 chars (covers "Part XX/XX\n").
  */
-export function splitMessage(text: string, maxLength: number, splitAtNewline = true): string[] {
+export function splitMessage(
+  text: string,
+  maxLength: number,
+  splitAtNewline = true,
+): string[] {
   const FIXED_MARKER_OVERHEAD = 20;
   if (text.length <= maxLength) {
     return [text];
@@ -58,7 +59,9 @@ export function splitMessage(text: string, maxLength: number, splitAtNewline = t
     const parts: string[] = [];
     let remaining = text;
     while (remaining.length > maxLength) {
-      const markerLen = `Part ${Math.ceil(remaining.length / maxLength) + 1}/${Math.ceil(remaining.length / maxLength)}\n`.length;
+      const markerLen =
+        `Part ${Math.ceil(remaining.length / maxLength) + 1}/${Math.ceil(remaining.length / maxLength)}\n`
+          .length;
       const effectiveMax = Math.max(1, maxLength - markerLen);
       parts.push(remaining.slice(0, effectiveMax));
       remaining = remaining.slice(effectiveMax);
@@ -67,12 +70,12 @@ export function splitMessage(text: string, maxLength: number, splitAtNewline = t
     return parts.map((part, i) => `Part ${i + 1}/${parts.length}\n${part}`);
   }
 
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   const parts: string[] = [];
-  let current = '';
+  let current = "";
 
   for (const line of lines) {
-    const candidate = current ? current + '\n' + line : line;
+    const candidate = current ? current + "\n" + line : line;
 
     const effectiveMax = Math.max(1, maxLength - FIXED_MARKER_OVERHEAD);
 

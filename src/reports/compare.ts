@@ -4,20 +4,20 @@
  * Compares two members side by side on various metrics.
  */
 
-import type { Snapshot, BotConfig, ComputedMember } from '../types';
-import { getDataDayFromSnapshot } from '../data/snapshot';
-import { getWeekForDay } from './weekly';
-import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { buildDateStr, buildFooter } from './format';
-import { computeRollingAverage } from '../data/daily-fans';
+import type { Snapshot, BotConfig, ComputedMember } from "../types";
+import { getDataDayFromSnapshot } from "../data/snapshot";
+import { getWeekForDay } from "./weekly";
+import { formatNumber, sanitizeName } from "../utils/format";
+import { formatDateWIB } from "../utils/timezone";
+import { buildDateStr, buildFooter } from "./format";
+import { computeRollingAverage } from "../data/daily-fans";
 
 export function generateCompareReport(
   snapshot: Snapshot,
   config: BotConfig,
   computedMembers: ComputedMember[],
   nameA: string,
-  nameB: string
+  nameB: string,
 ): string {
   const latestDataDay = getDataDayFromSnapshot(snapshot);
 
@@ -34,16 +34,26 @@ export function generateCompareReport(
     return `❌ "${nameB}" tidak ditemukan. Cek ejaan nama.`;
   }
 
-  const avgA = computeRollingAverage(memberA.dailyFans, latestDataDay, 7, config.requirements.includeTransferDataInCalculation);
-  const avgB = computeRollingAverage(memberB.dailyFans, latestDataDay, 7, config.requirements.includeTransferDataInCalculation);
+  const avgA = computeRollingAverage(
+    memberA.dailyFans,
+    latestDataDay,
+    7,
+    config.requirements.includeTransferDataInCalculation,
+  );
+  const avgB = computeRollingAverage(
+    memberB.dailyFans,
+    latestDataDay,
+    7,
+    config.requirements.includeTransferDataInCalculation,
+  );
 
   // Show current week's gain only (not total of all weeks)
   const currentWeekNum = getWeekForDay(latestDataDay);
   const weeklyGainA = memberA.weeklyGains[currentWeekNum - 1] ?? 0;
   const weeklyGainB = memberB.weeklyGains[currentWeekNum - 1] ?? 0;
 
-  const badgeA = memberA.isTransfer ? ' 🔄' : '';
-  const badgeB = memberB.isTransfer ? ' 🔄' : '';
+  const badgeA = memberA.isTransfer ? " 🔄" : "";
+  const badgeB = memberB.isTransfer ? " 🔄" : "";
   const boldA = `*${sanitizeName(memberA.trainerName)}*${badgeA}`;
   const boldB = `*${sanitizeName(memberB.trainerName)}*${badgeB}`;
 
@@ -51,48 +61,56 @@ export function generateCompareReport(
   const formattedDate = formatDateWIB(dateStr);
 
   const lines: string[] = [];
-  lines.push(`⚔️ *Compare: ${sanitizeName(memberA.trainerName)} vs ${sanitizeName(memberB.trainerName)} — ${formattedDate}*`);
-  lines.push('');
+  lines.push(
+    `⚔️ *Compare: ${sanitizeName(memberA.trainerName)} vs ${sanitizeName(memberB.trainerName)} — ${formattedDate}*`,
+  );
+  lines.push("");
   lines.push(`*Monthly Gain*`);
   lines.push(`• ${boldA}: ${formatNumber(memberA.monthlyGain)}`);
   lines.push(`• ${boldB}: ${formatNumber(memberB.monthlyGain)}`);
-  lines.push('');
+  lines.push("");
   lines.push(`*Daily Terakhir*`);
   lines.push(`• ${boldA}: ${formatNumber(memberA.latestKnownGain)}`);
   lines.push(`• ${boldB}: ${formatNumber(memberB.latestKnownGain)}`);
-  lines.push('');
+  lines.push("");
   lines.push(`*Rata-rata 7 Hari*`);
   lines.push(`• ${boldA}: ${formatNumber(avgA)}`);
   lines.push(`• ${boldB}: ${formatNumber(avgB)}`);
-  lines.push('');
+  lines.push("");
   lines.push(`*Gain Minggu ${currentWeekNum}*`);
   lines.push(`• ${boldA}: ${formatNumber(weeklyGainA)}`);
   lines.push(`• ${boldB}: ${formatNumber(weeklyGainB)}`);
-  lines.push('');
+  lines.push("");
 
   const monthlyReq = config.requirements.monthlyFans;
   if (monthlyReq > 0) {
-    const reqA = memberA.monthlyGain >= monthlyReq
-      ? `✅ ${formatNumber(memberA.monthlyGain)} / ${formatNumber(monthlyReq)}`
-      : `❌ kurang ${formatNumber(monthlyReq - memberA.monthlyGain)}`;
-    const reqB = memberB.monthlyGain >= monthlyReq
-      ? `✅ ${formatNumber(memberB.monthlyGain)} / ${formatNumber(monthlyReq)}`
-      : `❌ kurang ${formatNumber(monthlyReq - memberB.monthlyGain)}`;
+    const reqA =
+      memberA.monthlyGain >= monthlyReq
+        ? `✅ ${formatNumber(memberA.monthlyGain)} / ${formatNumber(monthlyReq)}`
+        : `❌ kurang ${formatNumber(monthlyReq - memberA.monthlyGain)}`;
+    const reqB =
+      memberB.monthlyGain >= monthlyReq
+        ? `✅ ${formatNumber(memberB.monthlyGain)} / ${formatNumber(monthlyReq)}`
+        : `❌ kurang ${formatNumber(monthlyReq - memberB.monthlyGain)}`;
     lines.push(`*Requirement (${formatNumber(monthlyReq)}/bulan)*`);
     lines.push(`• ${boldA}: ${reqA}`);
     lines.push(`• ${boldB}: ${reqB}`);
-    lines.push('');
+    lines.push("");
   }
 
   if (memberA.monthlyGain > memberB.monthlyGain) {
-    lines.push(`🏆 *${sanitizeName(memberA.trainerName)}* unggul di monthly gain`);
+    lines.push(
+      `🏆 *${sanitizeName(memberA.trainerName)}* unggul di monthly gain`,
+    );
   } else if (memberB.monthlyGain > memberA.monthlyGain) {
-    lines.push(`🏆 *${sanitizeName(memberB.trainerName)}* unggul di monthly gain`);
+    lines.push(
+      `🏆 *${sanitizeName(memberB.trainerName)}* unggul di monthly gain`,
+    );
   } else {
-    lines.push('🤝 *Seri* di monthly gain');
+    lines.push("🤝 *Seri* di monthly gain");
   }
 
-  lines.push('');
+  lines.push("");
   lines.push(buildFooter(config, buildDateStr(snapshot)));
-  return lines.join('\n');
+  return lines.join("\n");
 }

@@ -5,17 +5,25 @@
  * Implements IDatabase for pluggable backend support.
  */
 
-import type { ScheduleRunRow, MemberHistoryRow, RankHistoryRow } from '../types';
+import type {
+  ScheduleRunRow,
+  MemberHistoryRow,
+  RankHistoryRow,
+} from "../types";
 import type {
   IDatabase,
   ScheduleRunInsert,
   AlertEventInsert,
   MemberHistoryInsert,
   RankHistoryInsert,
-} from './types';
-import { mapScheduleRunRow, mapMemberHistoryRow, mapRankHistoryRow } from './mappers';
-import mysql from 'mysql2/promise';
-import { log } from '../utils/logger';
+} from "./types";
+import {
+  mapScheduleRunRow,
+  mapMemberHistoryRow,
+  mapRankHistoryRow,
+} from "./mappers";
+import mysql from "mysql2/promise";
+import { log } from "../utils/logger";
 
 export interface MysqlConfig {
   host: string;
@@ -65,7 +73,10 @@ export class MysqlDatabase implements IDatabase {
     conn.release();
 
     await this.createTables();
-    log.info('DB', `MySQL connected at ${this.config.host}:${this.config.port}/${this.config.database}`);
+    log.info(
+      "DB",
+      `MySQL connected at ${this.config.host}:${this.config.port}/${this.config.database}`,
+    );
   }
 
   private getConn(): mysql.PoolConnection | mysql.Pool {
@@ -73,19 +84,27 @@ export class MysqlDatabase implements IDatabase {
   }
 
   private async checkVersion(conn: mysql.PoolConnection): Promise<void> {
-    const [rows] = await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() as version');
+    const [rows] = await conn.query<mysql.RowDataPacket[]>(
+      "SELECT VERSION() as version",
+    );
     const versionStr = rows[0].version as string;
 
     // Handle TiDB version strings like "5.7.25-TiDB-v7.1.0" — TiDB is MySQL 8.0+ compatible
-    if (versionStr.toLowerCase().includes('tidb')) {
+    if (versionStr.toLowerCase().includes("tidb")) {
       this.isTiDB = true;
-      log.info('DB', `TiDB detected: ${versionStr} — using TiDB-compatible SQL syntax`);
+      log.info(
+        "DB",
+        `TiDB detected: ${versionStr} — using TiDB-compatible SQL syntax`,
+      );
       return;
     }
 
     const match = versionStr.match(/^(\d+)\.(\d+)\.(\d+)/);
     if (!match) {
-      log.warn('DB', `Could not parse MySQL version "${versionStr}" — proceeding without version check`);
+      log.warn(
+        "DB",
+        `Could not parse MySQL version "${versionStr}" — proceeding without version check`,
+      );
       return;
     }
 
@@ -103,8 +122,8 @@ export class MysqlDatabase implements IDatabase {
     if (isUnsupported) {
       throw new Error(
         `MySQL ${versionStr} detected. Minimum required: ${min.major}.${min.minor}.${min.patch}.\n` +
-        `Reason: CREATE INDEX IF NOT EXISTS requires MySQL ${min.major}.${min.minor}.${min.patch}+.\n` +
-        `Fix: Upgrade MySQL to ${min.major}.${min.minor}.${min.patch}+ or switch to database.backend: sqlite in config.yaml`
+          `Reason: CREATE INDEX IF NOT EXISTS requires MySQL ${min.major}.${min.minor}.${min.patch}+.\n` +
+          `Fix: Upgrade MySQL to ${min.major}.${min.minor}.${min.patch}+ or switch to database.backend: sqlite in config.yaml`,
       );
     }
   }
@@ -113,13 +132,16 @@ export class MysqlDatabase implements IDatabase {
    * Create index without using CREATE INDEX IF NOT EXISTS (requires MySQL 8.0.31+).
    * Instead, catches ER_DUP_KEYNAME (1061) which means the index already exists.
    */
-  private async createIndexSafe(conn: mysql.PoolConnection | mysql.Pool, sql: string): Promise<void> {
+  private async createIndexSafe(
+    conn: mysql.PoolConnection | mysql.Pool,
+    sql: string,
+  ): Promise<void> {
     try {
       await conn.query(sql);
     } catch (err: unknown) {
       // ER_DUP_KEYNAME = 1061 — index already exists, safe to ignore
       const mysqlErr = err as { code?: string; errno?: number };
-      if (mysqlErr.errno === 1061 || mysqlErr.code === 'ER_DUP_KEYNAME') {
+      if (mysqlErr.errno === 1061 || mysqlErr.code === "ER_DUP_KEYNAME") {
         return;
       }
       throw err;
@@ -183,16 +205,27 @@ export class MysqlDatabase implements IDatabase {
       )
     `);
 
-    await this.createIndexSafe(conn, 'CREATE INDEX idx_member_history_circle_id ON member_history(circle_id)');
-    await this.createIndexSafe(conn, 'CREATE INDEX idx_rank_history_circle_date ON rank_history(circle_id, date DESC)');
-    await this.createIndexSafe(conn, 'CREATE INDEX idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)');
+    await this.createIndexSafe(
+      conn,
+      "CREATE INDEX idx_member_history_circle_id ON member_history(circle_id)",
+    );
+    await this.createIndexSafe(
+      conn,
+      "CREATE INDEX idx_rank_history_circle_date ON rank_history(circle_id, date DESC)",
+    );
+    await this.createIndexSafe(
+      conn,
+      "CREATE INDEX idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)",
+    );
   }
 
-async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
+  async getLastSuccessfulRun(
+    reportType: string,
+  ): Promise<ScheduleRunRow | null> {
     const conn = this.getConn();
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      'SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1',
-      [reportType, 'sent']
+      "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1",
+      [reportType, "sent"],
     );
     if (rows.length === 0) return null;
     return mapScheduleRunRow(rows[0] as Record<string, unknown>);
@@ -201,8 +234,8 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
   async getLastRun(reportType: string): Promise<ScheduleRunRow | null> {
     const conn = this.getConn();
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      'SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1',
-      [reportType, 'sent', 'skipped']
+      "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1",
+      [reportType, "sent", "skipped"],
     );
     if (rows.length === 0) return null;
     return mapScheduleRunRow(rows[0] as Record<string, unknown>);
@@ -223,24 +256,30 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
         run.is_catch_up ? 1 : 0,
         run.target_jid,
         run.error_message ?? null,
-      ]
+      ],
     );
-    const [rows] = await conn.query<mysql.RowDataPacket[]>('SELECT LAST_INSERT_ID() as id');
+    const [rows] = await conn.query<mysql.RowDataPacket[]>(
+      "SELECT LAST_INSERT_ID() as id",
+    );
     return rows[0].id as number;
   }
 
-  async updateRunStatus(id: number, status: string, errorMessage?: string): Promise<void> {
+  async updateRunStatus(
+    id: number,
+    status: string,
+    errorMessage?: string,
+  ): Promise<void> {
     const conn = this.getConn();
-    if (status === 'sent') {
+    if (status === "sent") {
       const now = new Date().toISOString();
       await conn.query(
-        'UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?',
-        [status, now, errorMessage ?? null, id]
+        "UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?",
+        [status, now, errorMessage ?? null, id],
       );
     } else {
       await conn.query(
-        'UPDATE schedule_runs SET status = ?, error_message = ? WHERE id = ?',
-        [status, errorMessage ?? null, id]
+        "UPDATE schedule_runs SET status = ?, error_message = ? WHERE id = ?",
+        [status, errorMessage ?? null, id],
       );
     }
   }
@@ -248,10 +287,10 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
   async getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>> {
     if (eventKeys.length === 0) return new Set();
     const conn = this.getConn();
-    const placeholders = eventKeys.map(() => '?').join(',');
+    const placeholders = eventKeys.map(() => "?").join(",");
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
       `SELECT event_key FROM alert_events WHERE event_key IN (${placeholders}) AND status IN (?, ?)`,
-      [...eventKeys, 'sent', 'suppressed']
+      [...eventKeys, "sent", "suppressed"],
     );
     return new Set(rows.map((row) => row.event_key as string));
   }
@@ -270,20 +309,22 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
         alert.member_viewer_id,
         alert.report_date,
         alert.created_at,
-        alert.status ?? 'pending',
+        alert.status ?? "pending",
         alert.message,
-      ]
+      ],
     );
 
     // LAST_INSERT_ID() returns 0 if INSERT IGNORE skipped (duplicate)
-    const [rows] = await conn.query<mysql.RowDataPacket[]>('SELECT LAST_INSERT_ID() as id');
+    const [rows] = await conn.query<mysql.RowDataPacket[]>(
+      "SELECT LAST_INSERT_ID() as id",
+    );
     const lastId = rows[0].id as number;
     if (lastId > 0) return lastId;
 
     // Duplicate — fetch existing ID
     const [existing] = await conn.query<mysql.RowDataPacket[]>(
-      'SELECT id FROM alert_events WHERE event_key = ?',
-      [alert.event_key]
+      "SELECT id FROM alert_events WHERE event_key = ?",
+      [alert.event_key],
     );
     return existing[0].id as number;
   }
@@ -292,8 +333,8 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     const conn = this.getConn();
     const now = new Date().toISOString();
     await conn.query(
-      'UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?',
-      ['sent', now, id]
+      "UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?",
+      ["sent", now, id],
     );
   }
 
@@ -312,10 +353,10 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     if (ids.length === 0) return;
     const conn = this.getConn();
     const now = new Date().toISOString();
-    const placeholders = ids.map(() => '?').join(',');
+    const placeholders = ids.map(() => "?").join(",");
     await conn.query(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE id IN (${placeholders})`,
-      ['sent', now, ...ids]
+      ["sent", now, ...ids],
     );
   }
 
@@ -323,10 +364,10 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     if (eventKeys.length === 0) return;
     const conn = this.getConn();
     const now = new Date().toISOString();
-    const placeholders = eventKeys.map(() => '?').join(',');
+    const placeholders = eventKeys.map(() => "?").join(",");
     await conn.query(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE event_key IN (${placeholders})`,
-      ['sent', now, ...eventKeys]
+      ["sent", now, ...eventKeys],
     );
   }
 
@@ -340,7 +381,7 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
       member.last_seen,
       member.previous_circle_id ?? null,
       member.previous_circle_name ?? null,
-      member.status ?? 'active',
+      member.status ?? "active",
     ];
 
     // TiDB requires VALUES() syntax; standard MySQL 8.0.20+ uses AS new_vals alias.
@@ -382,23 +423,25 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
   async getMembers(circleId: number): Promise<MemberHistoryRow[]> {
     const conn = this.getConn();
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE circle_id = ? ORDER BY trainer_name',
-      [circleId]
+      "SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE circle_id = ? ORDER BY trainer_name",
+      [circleId],
     );
-    return rows.map((row) => mapMemberHistoryRow(row as Record<string, unknown>));
+    return rows.map((row) =>
+      mapMemberHistoryRow(row as Record<string, unknown>),
+    );
   }
 
   async getMember(viewerId: number): Promise<MemberHistoryRow | null> {
     const conn = this.getConn();
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
-      'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE viewer_id = ?',
-      [viewerId]
+      "SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE viewer_id = ?",
+      [viewerId],
     );
     if (rows.length === 0) return null;
     return mapMemberHistoryRow(rows[0] as Record<string, unknown>);
   }
 
-async saveRankHistory(row: RankHistoryInsert): Promise<void> {
+  async saveRankHistory(row: RankHistoryInsert): Promise<void> {
     const conn = this.getConn();
     await conn.query(
       `REPLACE INTO rank_history
@@ -412,23 +455,26 @@ async saveRankHistory(row: RankHistoryInsert): Promise<void> {
         row.club_rank,
         row.fans_to_next_tier,
         row.fans_to_lower_tier,
-      ]
+      ],
     );
   }
 
-  async getRankHistory(circleId: number, days: number): Promise<RankHistoryRow[]> {
+  async getRankHistory(
+    circleId: number,
+    days: number,
+  ): Promise<RankHistoryRow[]> {
     const conn = this.getConn();
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
       `SELECT date, circle_id, monthly_rank, monthly_point, club_rank, fans_to_next_tier, fans_to_lower_tier FROM rank_history
        WHERE circle_id = ?
        ORDER BY date DESC
        LIMIT ?`,
-      [circleId, days]
+      [circleId, days],
     );
     return rows.map((row) => mapRankHistoryRow(row as Record<string, unknown>));
   }
 
-async transaction<T>(fn: () => Promise<T>): Promise<T> {
+  async transaction<T>(fn: () => Promise<T>): Promise<T> {
     const conn = await this.pool!.getConnection();
     this.transactionConn = conn;
     try {
@@ -440,7 +486,10 @@ async transaction<T>(fn: () => Promise<T>): Promise<T> {
       try {
         await conn.rollback();
       } catch (rollbackErr) {
-        log.error('DB', `Rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+        log.error(
+          "DB",
+          `Rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`,
+        );
       }
       throw err;
     } finally {
@@ -449,7 +498,7 @@ async transaction<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
 
-async save(): Promise<void> {
+  async save(): Promise<void> {
     // No-op: MySQL auto-persists
   }
 

@@ -7,28 +7,28 @@
  * - Command type (admin-only vs report commands)
  */
 
-import type { BotConfig } from '../types';
+import type { BotConfig } from "../types";
 
 export const ADMIN_COMMANDS = new Set([
-  'setreq',
-  'config',
-  'status',
-  'catchup',
-  'alerts',
-  'schedule',
-  'debug',
-  'admin',
+  "setreq",
+  "config",
+  "status",
+  "catchup",
+  "alerts",
+  "schedule",
+  "debug",
+  "admin",
 ]);
 
 export const ADMIN_COMMAND_HELP: Record<string, string> = {
-  setreq: '`/setreq` — Lihat/atur requirement',
-  config: '`/config` — Lihat konfigurasi',
-  status: '`/status` — Status bot',
-  catchup: '`/catchup on|off` — Toggle catch-up',
-  alerts: '`/alerts on|off` — Toggle alerts',
-  schedule: '`/schedule` — Pengaturan jadwal',
-  debug: '`/debug` — Info debug bot',
-  admin: '`/admin` — Info perintah admin',
+  setreq: "`/setreq` — Lihat/atur requirement",
+  config: "`/config` — Lihat konfigurasi",
+  status: "`/status` — Status bot",
+  catchup: "`/catchup on|off` — Toggle catch-up",
+  alerts: "`/alerts on|off` — Toggle alerts",
+  schedule: "`/schedule` — Pengaturan jadwal",
+  debug: "`/debug` — Info debug bot",
+  admin: "`/admin` — Info perintah admin",
 };
 
 export function isAdmin(senderJid: string, config: BotConfig): boolean {
@@ -39,7 +39,10 @@ export function isCommandGroup(chatJid: string, config: BotConfig): boolean {
   return config.groups.command.includes(chatJid);
 }
 
-export function isAnnouncementGroup(chatJid: string, config: BotConfig): boolean {
+export function isAnnouncementGroup(
+  chatJid: string,
+  config: BotConfig,
+): boolean {
   return config.groups.announcement.includes(chatJid);
 }
 
@@ -59,7 +62,7 @@ export function canUseCommand(
   command: string,
   senderJid: string,
   chatJid: string,
-  config: BotConfig
+  config: BotConfig,
 ): boolean {
   // Help and ping follow standard access control (command groups / admin DMs only).
   // No bypass. Unconfigured groups must silently ignore all commands.
@@ -71,13 +74,13 @@ export function canUseCommand(
   if (ADMIN_COMMANDS.has(command)) {
     if (!senderIsAdmin) return false;
     if (chatIsCmdGroup) return true;
-    const isPrivateChat = !chatJid.endsWith('@g.us');
+    const isPrivateChat = !chatJid.endsWith("@g.us");
     return isPrivateChat;
   }
 
   if (senderIsAdmin) {
     if (chatIsCmdGroup) return true;
-    const isPrivateChat = !chatJid.endsWith('@g.us');
+    const isPrivateChat = !chatJid.endsWith("@g.us");
     return isPrivateChat;
   }
 

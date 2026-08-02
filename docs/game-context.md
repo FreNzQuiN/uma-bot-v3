@@ -23,18 +23,18 @@ The primary metric. Players earn fans by training, racing, and participating in 
 Ranked by total monthly fan count. The ranking determines their tier:
 
 | Tier | Ranking Position |
-|------|-----------------|
-| SS | 1-10 |
-| S+ | 11-30 |
-| S | 31-100 |
-| A+ | 101-500 |
-| A | 501-1000 |
-| B+ | 1001-3000 |
-| B | 3001-5000 |
-| C+ | 5001-7000 |
-| C | 7001-10000 |
-| D+ | 10001+ |
-| D | Unranked |
+| ---- | ---------------- |
+| SS   | 1-10             |
+| S+   | 11-30            |
+| S    | 31-100           |
+| A+   | 101-500          |
+| A    | 501-1000         |
+| B+   | 1001-3000        |
+| B    | 3001-5000        |
+| C+   | 5001-7000        |
+| C    | 7001-10000       |
+| D+   | 10001+           |
+| D    | Unranked         |
 
 Each tier has promotion and demotion thresholds. The API provides `fans_to_next_tier` and `fans_to_lower_tier`.
 
@@ -49,6 +49,7 @@ Circle leaders set monthly fan requirements. Members who don't meet them may be 
 ## What Data Is Available?
 
 uma.moe is a third-party platform that scrapes game data once daily at 00:00 JST (22:00 WIB). It provides:
+
 - Circle metadata (name, rank, tier, member count)
 - Per-member cumulative daily fans (32-element array)
 - Transfer history (which club a member came from)

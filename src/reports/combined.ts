@@ -9,13 +9,13 @@
  * at the end to avoid duplication.
  */
 
-import type { BotConfig, Snapshot, ComputedMember } from '../types';
-import { generateDailyReport } from './daily';
-import { generateWeeklyReport } from './weekly';
-import { generateMonthlyReport } from './monthly';
-import { buildFooter, buildDateStr } from './format';
+import type { BotConfig, Snapshot, ComputedMember } from "../types";
+import { generateDailyReport } from "./daily";
+import { generateWeeklyReport } from "./weekly";
+import { generateMonthlyReport } from "./monthly";
+import { buildFooter, buildDateStr } from "./format";
 
-const FOOTER_MARKER = '⸻';
+const FOOTER_MARKER = "⸻";
 
 /**
  * Strip the sync footer from a report string.
@@ -31,19 +31,29 @@ export function generateCombinedReport(
   types: string[],
   snapshot: Snapshot,
   config: BotConfig,
-  computedMembers: ComputedMember[]
+  computedMembers: ComputedMember[],
 ): string {
   const parts: string[] = [];
   for (const type of types) {
     let report: string | undefined;
     switch (type) {
-      case 'daily':
-        report = generateDailyReport(snapshot, config, computedMembers, undefined);
+      case "daily":
+        report = generateDailyReport(
+          snapshot,
+          config,
+          computedMembers,
+          undefined,
+        );
         break;
-      case 'weekly':
-        report = generateWeeklyReport(snapshot, config, computedMembers, undefined);
+      case "weekly":
+        report = generateWeeklyReport(
+          snapshot,
+          config,
+          computedMembers,
+          undefined,
+        );
         break;
-      case 'monthly':
+      case "monthly":
         // Monthly in combined reports always uses offset=-1 (previous month)
         report = generateMonthlyReport(snapshot, config, computedMembers, -1);
         break;
@@ -52,8 +62,8 @@ export function generateCombinedReport(
       parts.push(stripFooter(report));
     }
   }
-  if (parts.length === 0) return '';
+  if (parts.length === 0) return "";
 
   parts.push(buildFooter(config, buildDateStr(snapshot)));
-  return parts.join('\n\n');
+  return parts.join("\n\n");
 }

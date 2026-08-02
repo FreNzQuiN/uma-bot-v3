@@ -35,11 +35,14 @@ const stats: RuntimeStats = {
   lastDisconnectReason: null,
   lastDisconnectTime: null,
   lastDisconnectError: null,
-  connectionState: 'disconnected',
+  connectionState: "disconnected",
 };
 
 export function getRuntimeStats(): Readonly<RuntimeStats> {
-  return { ...stats, lastConfigChangeFields: [...stats.lastConfigChangeFields] };
+  return {
+    ...stats,
+    lastConfigChangeFields: [...stats.lastConfigChangeFields],
+  };
 }
 
 export function recordReconnect(): void {

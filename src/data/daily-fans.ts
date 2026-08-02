@@ -10,20 +10,20 @@
  * - Negative = transfer indicator (not negative performance)
  */
 
-import { Snapshot, WEEK_BLOCKS, TierData, CLUB_TIERS } from '../types';
+import { Snapshot, WEEK_BLOCKS, TierData, CLUB_TIERS } from "../types";
 
 /** Negative values are transfer markers, zero means no data. */
 function isPositive(value: number | undefined): boolean {
-  return typeof value === 'number' && value > 0;
+  return typeof value === "number" && value > 0;
 }
 
 function hasValue(v: number | undefined, includeTransfer: boolean): boolean {
-  if (typeof v !== 'number') return false;
+  if (typeof v !== "number") return false;
   return v > 0 || (includeTransfer && v < 0);
 }
 
 function effectiveValue(v: number, includeTransfer: boolean): number {
-  return (includeTransfer && v < 0) ? Math.abs(v) : v;
+  return includeTransfer && v < 0 ? Math.abs(v) : v;
 }
 
 /**
@@ -63,7 +63,11 @@ export function getFirstPositiveDay(dailyFans: number[]): number {
  * Current positive but previous is 0, missing, or negative → return 0 (baseline).
  * Both zero or any non-positive combination → return 0.
  */
-export function getDailyGain(dailyFans: number[], day: number, includeTransfer: boolean = false): number {
+export function getDailyGain(
+  dailyFans: number[],
+  day: number,
+  includeTransfer: boolean = false,
+): number {
   if (day < 1 || day > dailyFans.length) {
     return 0;
   }
@@ -82,7 +86,7 @@ export function getDailyGain(dailyFans: number[], day: number, includeTransfer: 
   if (isPositive(previous)) {
     return effectiveCurrent - previous;
   }
-  if (includeTransfer && typeof previous === 'number' && previous < 0) {
+  if (includeTransfer && typeof previous === "number" && previous < 0) {
     return effectiveCurrent - Math.abs(previous);
   }
 
@@ -93,7 +97,11 @@ export function getDailyGain(dailyFans: number[], day: number, includeTransfer: 
  * Gain = last positive value in block - first positive value in block.
  * Returns 0 if no positive values or only one positive value in the block.
  */
-export function getWeeklyGain(dailyFans: number[], weekNumber: number, includeTransfer: boolean = false): number {
+export function getWeeklyGain(
+  dailyFans: number[],
+  weekNumber: number,
+  includeTransfer: boolean = false,
+): number {
   const block = WEEK_BLOCKS.find((b) => b.week === weekNumber);
   if (!block) {
     return 0;
@@ -134,7 +142,10 @@ export function getWeeklyGain(dailyFans: number[], weekNumber: number, includeTr
 }
 
 /** Returns 0 if no positive values or only one (baseline only). */
-export function getMonthlyGain(dailyFans: number[], includeTransfer: boolean = false): number {
+export function getMonthlyGain(
+  dailyFans: number[],
+  includeTransfer: boolean = false,
+): number {
   let firstDay = 0;
   let firstValue = 0;
   for (let i = 0; i < dailyFans.length; i++) {
@@ -193,7 +204,7 @@ export function computeRollingAverage(
   dailyFans: number[],
   latestDataDay: number,
   days: number,
-  includeTransfer: boolean = false
+  includeTransfer: boolean = false,
 ): number {
   if (days <= 0 || latestDataDay <= 0 || dailyFans.length === 0) {
     return 0;
@@ -221,11 +232,19 @@ export function computeRollingAverage(
 /**
  * Count the number of days where gain > 0 (consecutive positive differences).
  */
-export function countActiveDays(dailyFans: number[], latestDataDay?: number, includeTransfer: boolean = false): number {
+export function countActiveDays(
+  dailyFans: number[],
+  latestDataDay?: number,
+  includeTransfer: boolean = false,
+): number {
   // Cap at 31 to avoid scanning the unused padding element at index 31
   const maxDay = latestDataDay ?? Math.min(dailyFans.length, 31);
   let count = 0;
-  if (maxDay >= 1 && dailyFans.length >= 1 && hasValue(dailyFans[0], includeTransfer)) {
+  if (
+    maxDay >= 1 &&
+    dailyFans.length >= 1 &&
+    hasValue(dailyFans[0], includeTransfer)
+  ) {
     count++;
   }
   for (let day = 2; day <= maxDay; day++) {
@@ -240,7 +259,7 @@ export function countActiveDays(dailyFans: number[], latestDataDay?: number, inc
 /** Resets the counter on any day with positive gain. */
 export function countConsecutiveZeroDaysAtEnd(
   dailyFans: number[],
-  latestDataDay: number
+  latestDataDay: number,
 ): number {
   let count = 0;
   for (let day = latestDataDay; day >= 2; day--) {
@@ -260,7 +279,7 @@ export function countConsecutiveZeroDaysAtEnd(
 export function isStaleForReport(
   dailyFans: number[],
   latestDataDay: number,
-  threshold: number
+  threshold: number,
 ): boolean {
   if (threshold <= 0) return false;
   return countConsecutiveZeroDaysAtEnd(dailyFans, latestDataDay) >= threshold;
@@ -285,9 +304,14 @@ export function computeTierData(snapshot: Snapshot): TierData {
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;
 
   const dataDay = getDataDayFromSnapshot(snapshot);
-  const daysInMonth = snapshot.members.length > 0
-    ? new Date(snapshot.members[0].year, snapshot.members[0].month, 0).getDate()
-    : 30;
+  const daysInMonth =
+    snapshot.members.length > 0
+      ? new Date(
+          snapshot.members[0].year,
+          snapshot.members[0].month,
+          0,
+        ).getDate()
+      : 30;
   const daysLeft = Math.max(0, daysInMonth - dataDay);
 
   // Current pace: total fans accumulated / days elapsed
@@ -302,34 +326,34 @@ export function computeTierData(snapshot: Snapshot): TierData {
   // LOW = buffer >= 7 days of current pace
   // MEDIUM = buffer >= 3 and < 7 days of current pace
   // HIGH = buffer < 3 days of current pace
-  let riskLevel: TierData['riskLevel'] = 'LOW';
-  let projectedOutcome: TierData['projectedOutcome'] = 'unknown';
+  let riskLevel: TierData["riskLevel"] = "LOW";
+  let projectedOutcome: TierData["projectedOutcome"] = "unknown";
 
   if (fans_to_lower_tier > 0 && currentPace > 0) {
     const bufferDays = fans_to_lower_tier / currentPace;
     if (bufferDays < 3) {
-      riskLevel = 'HIGH';
-      projectedOutcome = 'demotion_risk';
+      riskLevel = "HIGH";
+      projectedOutcome = "demotion_risk";
     } else if (bufferDays < 7) {
-      riskLevel = 'MEDIUM';
-      projectedOutcome = 'stay';
+      riskLevel = "MEDIUM";
+      projectedOutcome = "stay";
     } else {
-      riskLevel = 'LOW';
+      riskLevel = "LOW";
     }
   }
 
   if (fans_to_next_tier > 0 && daysLeft > 0) {
-    if (currentPace >= requiredPace && projectedOutcome !== 'demotion_risk') {
-      projectedOutcome = 'promote';
-    } else if (projectedOutcome !== 'demotion_risk') {
-      projectedOutcome = 'stay';
+    if (currentPace >= requiredPace && projectedOutcome !== "demotion_risk") {
+      projectedOutcome = "promote";
+    } else if (projectedOutcome !== "demotion_risk") {
+      projectedOutcome = "stay";
     }
   } else if (fans_to_next_tier > 0 && daysLeft === 0) {
-    if (projectedOutcome !== 'demotion_risk') {
-      projectedOutcome = 'stay';
+    if (projectedOutcome !== "demotion_risk") {
+      projectedOutcome = "stay";
     }
-  } else if (fans_to_next_tier === 0 && projectedOutcome !== 'demotion_risk') {
-    projectedOutcome = 'stay'; // already at top tier
+  } else if (fans_to_next_tier === 0 && projectedOutcome !== "demotion_risk") {
+    projectedOutcome = "stay"; // already at top tier
   }
 
   return {

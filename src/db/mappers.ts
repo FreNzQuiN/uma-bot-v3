@@ -4,23 +4,31 @@
  * into typed row objects, avoiding duplicated mapping logic.
  */
 
-import type { ScheduleRunRow, MemberHistoryRow, RankHistoryRow } from '../types';
+import type {
+  ScheduleRunRow,
+  MemberHistoryRow,
+  RankHistoryRow,
+} from "../types";
 
-export function mapScheduleRunRow(row: Record<string, unknown>): ScheduleRunRow {
+export function mapScheduleRunRow(
+  row: Record<string, unknown>,
+): ScheduleRunRow {
   return {
     id: row.id as number,
     report_type: row.report_type as string,
     report_date: row.report_date as string,
     scheduled_at: row.scheduled_at as string,
     sent_at: row.sent_at as string | null,
-    status: row.status as ScheduleRunRow['status'],
+    status: row.status as ScheduleRunRow["status"],
     is_catch_up: row.is_catch_up === 1 || row.is_catch_up === true,
     target_jid: row.target_jid as string,
     error_message: row.error_message as string | null,
   };
 }
 
-export function mapMemberHistoryRow(row: Record<string, unknown>): MemberHistoryRow {
+export function mapMemberHistoryRow(
+  row: Record<string, unknown>,
+): MemberHistoryRow {
   return {
     viewer_id: row.viewer_id as number,
     trainer_name: row.trainer_name as string,
@@ -29,11 +37,13 @@ export function mapMemberHistoryRow(row: Record<string, unknown>): MemberHistory
     last_seen: row.last_seen as string,
     previous_circle_id: row.previous_circle_id as number | null,
     previous_circle_name: row.previous_circle_name as string | null,
-    status: row.status as MemberHistoryRow['status'],
+    status: row.status as MemberHistoryRow["status"],
   };
 }
 
-export function mapRankHistoryRow(row: Record<string, unknown>): RankHistoryRow {
+export function mapRankHistoryRow(
+  row: Record<string, unknown>,
+): RankHistoryRow {
   return {
     date: row.date as string,
     circle_id: row.circle_id as number,

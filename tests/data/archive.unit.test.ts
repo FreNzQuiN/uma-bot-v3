@@ -8,32 +8,28 @@
  *   4. Return the snapshot
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { Snapshot } from '../../src/types';
-import {
-  ensureMonthSnapshot,
-  saveSnapshot,
-} from '../../src/data/snapshot';
-import { UmaMoeClient } from '../../src/api/uma-moe';
-import * as timezone from '../../src/utils/timezone';
-
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+import { Snapshot } from "../../src/types";
+import { ensureMonthSnapshot, saveSnapshot } from "../../src/data/snapshot";
+import { UmaMoeClient } from "../../src/api/uma-moe";
+import * as timezone from "../../src/utils/timezone";
 
 /** Create a minimal valid Snapshot for testing. */
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     circle: {
       circle_id: 1,
-      name: 'TestCircle',
-      comment: 'test',
+      name: "TestCircle",
+      comment: "test",
       leader_viewer_id: 100,
-      leader_name: 'Leader',
+      leader_name: "Leader",
       member_count: 1,
       join_style: 1,
       policy: 1,
-      created_at: '2026-01-01T00:00:00Z',
-      last_updated: '2026-06-11T00:00:00Z',
+      created_at: "2026-01-01T00:00:00Z",
+      last_updated: "2026-06-11T00:00:00Z",
       monthly_rank: 1,
       monthly_point: 1000,
       last_month_rank: null,
@@ -51,12 +47,12 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
         id: 1,
         circle_id: 1,
         viewer_id: 200,
-        trainer_name: 'Trainer1',
+        trainer_name: "Trainer1",
         shame_score: null,
         year: 2026,
         month: 6,
         daily_fans: new Array(32).fill(0),
-        last_updated: '2026-06-11T00:00:00Z',
+        last_updated: "2026-06-11T00:00:00Z",
       },
     ],
     club_rank: 5,
@@ -77,12 +73,11 @@ function createFilledFans(lastPositiveDay: number): number[] {
   return fans;
 }
 
-
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'archive-test-'));
-  jest.spyOn(timezone, 'getDataDay').mockReturnValue(15);
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "archive-test-"));
+  jest.spyOn(timezone, "getDataDay").mockReturnValue(15);
 });
 
 afterEach(() => {
@@ -90,67 +85,93 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-
-describe('ensureMonthSnapshot', () => {
-  test('cacheHit_returnsCachedSnapshot', async () => {
+describe("ensureMonthSnapshot", () => {
+  test("cacheHit_returnsCachedSnapshot", async () => {
     // Save two snapshots for (2026, 4) with circle_id=12345
     const snap1 = makeSnapshot({
       circle: { ...makeSnapshot().circle, circle_id: 12345 },
       members: [
-        { ...makeSnapshot().members[0], year: 2026, month: 4, daily_fans: createFilledFans(30) },
+        {
+          ...makeSnapshot().members[0],
+          year: 2026,
+          month: 4,
+          daily_fans: createFilledFans(30),
+        },
       ],
       club_rank: 10,
     });
     const snap2 = makeSnapshot({
       circle: { ...makeSnapshot().circle, circle_id: 12345 },
       members: [
-        { ...makeSnapshot().members[0], year: 2026, month: 4, daily_fans: createFilledFans(30) },
+        {
+          ...makeSnapshot().members[0],
+          year: 2026,
+          month: 4,
+          daily_fans: createFilledFans(30),
+        },
       ],
       club_rank: 25,
     });
-    saveSnapshot(snap1, '2026-04-10', tmpDir);
-    saveSnapshot(snap2, '2026-04-25', tmpDir);
+    saveSnapshot(snap1, "2026-04-10", tmpDir);
+    saveSnapshot(snap2, "2026-04-25", tmpDir);
 
     // Mock client where fetchCircleData throws (should never be called)
     const mockClient = {
       fetchCircleData: jest
         .fn<Promise<Snapshot>, [number, number, number]>()
-        .mockRejectedValue(new Error('should not be called')),
+        .mockRejectedValue(new Error("should not be called")),
     } as unknown as UmaMoeClient;
 
-    const result = await ensureMonthSnapshot(mockClient, 12345, 2026, 4, tmpDir);
+    const result = await ensureMonthSnapshot(
+      mockClient,
+      12345,
+      2026,
+      4,
+      tmpDir,
+    );
 
     // Should return the latest cached snapshot (day 25)
     expect(result.club_rank).toBe(25);
     expect(mockClient.fetchCircleData).not.toHaveBeenCalled();
   });
 
-  test('cacheHit_validatesCircleId', async () => {
+  test("cacheHit_validatesCircleId", async () => {
     // Save a cached snapshot with circle_id=999 (doesn't match requested 12345)
     const cachedSnap = makeSnapshot({
       circle: { ...makeSnapshot().circle, circle_id: 999 },
       members: [
-        { ...makeSnapshot().members[0], year: 2026, month: 4, daily_fans: createFilledFans(30) },
+        {
+          ...makeSnapshot().members[0],
+          year: 2026,
+          month: 4,
+          daily_fans: createFilledFans(30),
+        },
       ],
     });
-    saveSnapshot(cachedSnap, '2026-04-25', tmpDir);
+    saveSnapshot(cachedSnap, "2026-04-25", tmpDir);
 
     // Mock client returns the correct snapshot (circle_id=12345)
     const baseSnap = makeSnapshot();
     const apiSnap: Snapshot = {
       ...baseSnap,
-      circle: { ...baseSnap.circle, circle_id: 12345, last_updated: '2026-06-12T14:00:00Z' },
-      members: [{
-        id: 1,
+      circle: {
+        ...baseSnap.circle,
         circle_id: 12345,
-        viewer_id: 200,
-        trainer_name: 'Trainer1',
-        shame_score: null,
-        year: 2026,
-        month: 4,
-        daily_fans: createFilledFans(30),
-        last_updated: '2026-06-12T14:00:00Z',
-      }],
+        last_updated: "2026-06-12T14:00:00Z",
+      },
+      members: [
+        {
+          id: 1,
+          circle_id: 12345,
+          viewer_id: 200,
+          trainer_name: "Trainer1",
+          shame_score: null,
+          year: 2026,
+          month: 4,
+          daily_fans: createFilledFans(30),
+          last_updated: "2026-06-12T14:00:00Z",
+        },
+      ],
       club_rank: 42,
     };
     const mockClient = {
@@ -159,7 +180,13 @@ describe('ensureMonthSnapshot', () => {
         .mockResolvedValue(apiSnap),
     } as unknown as UmaMoeClient;
 
-    const result = await ensureMonthSnapshot(mockClient, 12345, 2026, 4, tmpDir);
+    const result = await ensureMonthSnapshot(
+      mockClient,
+      12345,
+      2026,
+      4,
+      tmpDir,
+    );
 
     // Must have called the API and returned the fetched data
     expect(mockClient.fetchCircleData).toHaveBeenCalledWith(12345, 2026, 4);
@@ -167,16 +194,23 @@ describe('ensureMonthSnapshot', () => {
     expect(result.club_rank).toBe(42);
   });
 
-  test('cacheMiss_fetchesAndSavesPastMonth', async () => {
+  test("cacheMiss_fetchesAndSavesPastMonth", async () => {
     // Lock timezone so April is treated as a past month
-    jest.spyOn(timezone, 'getDataDateComponents').mockReturnValue({ year: 2026, month: 6, day: 15 });
-    jest.spyOn(timezone, 'getDataDate').mockReturnValue('2026-06-15');
+    jest
+      .spyOn(timezone, "getDataDateComponents")
+      .mockReturnValue({ year: 2026, month: 6, day: 15 });
+    jest.spyOn(timezone, "getDataDate").mockReturnValue("2026-06-15");
 
     // No pre-saved snapshots — cache miss guaranteed
     const apiSnap = makeSnapshot({
       circle: { ...makeSnapshot().circle, circle_id: 12345 },
       members: [
-        { ...makeSnapshot().members[0], year: 2026, month: 4, daily_fans: createFilledFans(30) },
+        {
+          ...makeSnapshot().members[0],
+          year: 2026,
+          month: 4,
+          daily_fans: createFilledFans(30),
+        },
       ],
     });
     const mockClient = {
@@ -185,10 +219,23 @@ describe('ensureMonthSnapshot', () => {
         .mockResolvedValue(apiSnap),
     } as unknown as UmaMoeClient;
 
-    const result = await ensureMonthSnapshot(mockClient, 12345, 2026, 4, tmpDir);
+    const result = await ensureMonthSnapshot(
+      mockClient,
+      12345,
+      2026,
+      4,
+      tmpDir,
+    );
 
     // April has 30 days — past month saves on the last day
-    const expectedPath = path.join(tmpDir, 'data', 'snapshots', '2026', '04', '30.json');
+    const expectedPath = path.join(
+      tmpDir,
+      "data",
+      "snapshots",
+      "2026",
+      "04",
+      "30.json",
+    );
     expect(fs.existsSync(expectedPath)).toBe(true);
     // Returned snapshot is the one from the API
     expect(result).toBe(apiSnap);
@@ -196,16 +243,23 @@ describe('ensureMonthSnapshot', () => {
     expect(mockClient.fetchCircleData).toHaveBeenCalledTimes(1);
   });
 
-  test('cacheMiss_fetchesAndSavesCurrentMonth', async () => {
+  test("cacheMiss_fetchesAndSavesCurrentMonth", async () => {
     // Lock timezone so June is treated as the current month
-    jest.spyOn(timezone, 'getDataDateComponents').mockReturnValue({ year: 2026, month: 6, day: 15 });
-    jest.spyOn(timezone, 'getDataDay').mockReturnValue(15);
+    jest
+      .spyOn(timezone, "getDataDateComponents")
+      .mockReturnValue({ year: 2026, month: 6, day: 15 });
+    jest.spyOn(timezone, "getDataDay").mockReturnValue(15);
 
     // No pre-saved snapshots for June
     const apiSnap = makeSnapshot({
       circle: { ...makeSnapshot().circle, circle_id: 12345 },
       members: [
-        { ...makeSnapshot().members[0], year: 2026, month: 6, daily_fans: createFilledFans(15) },
+        {
+          ...makeSnapshot().members[0],
+          year: 2026,
+          month: 6,
+          daily_fans: createFilledFans(15),
+        },
       ],
     });
     const mockClient = {
@@ -214,40 +268,60 @@ describe('ensureMonthSnapshot', () => {
         .mockResolvedValue(apiSnap),
     } as unknown as UmaMoeClient;
 
-    const result = await ensureMonthSnapshot(mockClient, 12345, 2026, 6, tmpDir);
+    const result = await ensureMonthSnapshot(
+      mockClient,
+      12345,
+      2026,
+      6,
+      tmpDir,
+    );
 
     // Current month: file path derived from snapshot data (day 15)
-    const expectedPath = path.join(tmpDir, 'data', 'snapshots', '2026', '06', '15.json');
+    const expectedPath = path.join(
+      tmpDir,
+      "data",
+      "snapshots",
+      "2026",
+      "06",
+      "15.json",
+    );
     expect(fs.existsSync(expectedPath)).toBe(true);
     expect(result).toBe(apiSnap);
     expect(mockClient.fetchCircleData).toHaveBeenCalledTimes(1);
   });
 
-  test('cacheMiss_throwsWhenApiFails', async () => {
+  test("cacheMiss_throwsWhenApiFails", async () => {
     // No pre-saved snapshots — cache miss
     const mockClient = {
       fetchCircleData: jest
         .fn<Promise<Snapshot>, [number, number, number]>()
-        .mockRejectedValue(new Error('API is down')),
+        .mockRejectedValue(new Error("API is down")),
     } as unknown as UmaMoeClient;
 
     await expect(
-      ensureMonthSnapshot(mockClient, 12345, 2026, 4, tmpDir)
-    ).rejects.toThrow('No snapshot available for 2026-04');
+      ensureMonthSnapshot(mockClient, 12345, 2026, 4, tmpDir),
+    ).rejects.toThrow("No snapshot available for 2026-04");
 
     expect(mockClient.fetchCircleData).toHaveBeenCalledTimes(1);
   });
 
-  test('handlesDecemberToJanuaryBoundary', async () => {
+  test("handlesDecemberToJanuaryBoundary", async () => {
     // Lock timezone to June 2026 — Jan 2027 is a past month
-    jest.spyOn(timezone, 'getDataDateComponents').mockReturnValue({ year: 2026, month: 6, day: 15 });
-    jest.spyOn(timezone, 'getDataDay').mockReturnValue(15);
+    jest
+      .spyOn(timezone, "getDataDateComponents")
+      .mockReturnValue({ year: 2026, month: 6, day: 15 });
+    jest.spyOn(timezone, "getDataDay").mockReturnValue(15);
 
     // No pre-saved snapshots for January 2027
     const apiSnap = makeSnapshot({
       circle: { ...makeSnapshot().circle, circle_id: 12345 },
       members: [
-        { ...makeSnapshot().members[0], year: 2027, month: 1, daily_fans: createFilledFans(31) },
+        {
+          ...makeSnapshot().members[0],
+          year: 2027,
+          month: 1,
+          daily_fans: createFilledFans(31),
+        },
       ],
     });
     const mockClient = {
@@ -256,10 +330,23 @@ describe('ensureMonthSnapshot', () => {
         .mockResolvedValue(apiSnap),
     } as unknown as UmaMoeClient;
 
-    const result = await ensureMonthSnapshot(mockClient, 12345, 2027, 1, tmpDir);
+    const result = await ensureMonthSnapshot(
+      mockClient,
+      12345,
+      2027,
+      1,
+      tmpDir,
+    );
 
     // January has 31 days, past month with full data → saves on Jan 31
-    const expectedPath = path.join(tmpDir, 'data', 'snapshots', '2027', '01', '31.json');
+    const expectedPath = path.join(
+      tmpDir,
+      "data",
+      "snapshots",
+      "2027",
+      "01",
+      "31.json",
+    );
     expect(fs.existsSync(expectedPath)).toBe(true);
     expect(result).toBe(apiSnap);
     expect(mockClient.fetchCircleData).toHaveBeenCalledTimes(1);

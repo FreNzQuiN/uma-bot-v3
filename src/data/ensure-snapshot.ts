@@ -5,20 +5,24 @@
  * freshness checks, and save. Throws only if no snapshot is available at all.
  */
 
-import type { UmaMoeClient } from '../api/uma-moe';
-import type { Snapshot } from '../types';
-import { fetchAndSaveSnapshot } from './fetch-snapshot';
+import type { UmaMoeClient } from "../api/uma-moe";
+import type { Snapshot } from "../types";
+import { fetchAndSaveSnapshot } from "./fetch-snapshot";
 
 export async function ensureMonthSnapshot(
   umaMoe: UmaMoeClient,
   circleId: number,
   year: number,
   month: number,
-  rootDir?: string
+  rootDir?: string,
 ): Promise<Snapshot> {
-  const result = await fetchAndSaveSnapshot(umaMoe, circleId, year, month, { rootDir });
+  const result = await fetchAndSaveSnapshot(umaMoe, circleId, year, month, {
+    rootDir,
+  });
   if (!result.snapshot) {
-    throw new Error(`No snapshot available for ${year}-${String(month).padStart(2, '0')}`);
+    throw new Error(
+      `No snapshot available for ${year}-${String(month).padStart(2, "0")}`,
+    );
   }
   return result.snapshot;
 }

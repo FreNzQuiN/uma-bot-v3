@@ -6,6 +6,7 @@
 ## Overview
 
 uma.moe is a comprehensive Umamusume: Pretty Derby community platform built on the `honsemoe-backend` (v1.0.0). It provides:
+
 - **Circle (Club) Profiles** — daily fan progress, member stats, club rankings
 - **Rankings** — monthly, all-time, and rolling gains leaderboards
 - **User Profiles** — trainer stats, fan history, inheritance data, team stadium
@@ -16,9 +17,11 @@ uma.moe is a comprehensive Umamusume: Pretty Derby community platform built on t
 ## API
 
 ### Base URL
+
 `https://uma.moe`
 
 ### Backend
+
 - **Service name:** `honsemoe-backend`
 - **Backend repo:** `https://github.com/uma-moe/umamoe-backend`
 
@@ -34,6 +37,7 @@ The API is protected by **Cloudflare Turnstile** with a multi-layer auth pipelin
 4. Use the token in subsequent API requests as `X-Browser-Proof` header
 
 **Token characteristics:**
+
 - Cached for ~240 seconds (4 minutes)
 - Refreshed automatically on 401/403 responses
 - Harvested via Playwright with anti-detection flags
@@ -106,51 +110,52 @@ Game version history. Returns `current` + `history` array of past versions.
 Fetch circle (club) data for a specific month.
 
 **Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| circle_id | integer | Yes | The circle's unique ID |
-| year | integer | Yes | Year (e.g., 2026) |
-| month | integer | Yes | Month (1-12) |
+
+| Name      | Type    | Required | Description            |
+| --------- | ------- | -------- | ---------------------- |
+| circle_id | integer | Yes      | The circle's unique ID |
+| year      | integer | Yes      | Year (e.g., 2026)      |
+| month     | integer | Yes      | Month (1-12)           |
 
 **Response fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `circle.circle_id` | int | Club ID |
-| `circle.name` | str | Club name |
-| `circle.comment` | str | Club description |
-| `circle.leader_viewer_id` | int | Leader's viewer ID |
-| `circle.leader_name` | str | Leader's display name |
-| `circle.member_count` | int | Number of members |
-| `circle.join_style` | int | Join policy (2=open, 3=approval) |
-| `circle.policy` | int | Play style code |
-| `circle.created_at` | str | Club creation ISO timestamp |
-| `circle.last_updated` | str | Last data update ISO timestamp |
-| `circle.monthly_rank` | int | Current month ranking |
-| `circle.monthly_point` | int | Total monthly fans |
-| `circle.last_month_rank` | int? | Previous month rank |
-| `circle.last_month_point` | int? | Previous month fans |
-| `circle.archived` | bool | Whether club is archived |
-| `circle.yesterday_updated` | str? | Yesterday's update time |
-| `circle.yesterday_points` | int? | Yesterday's total fans |
-| `circle.yesterday_rank` | int? | Yesterday's rank |
-| `circle.live_points` | int? | Live event points (null if no event) |
-| `circle.live_rank` | int? | Live event rank |
-| `circle.last_live_update` | str? | Last live update time |
-| `club_rank` | int | Club tier rank (1-11) |
-| `fans_to_next_tier` | int | Fans needed for promotion to next tier |
-| `fans_to_lower_tier` | int | Fans above demotion threshold (buffer before dropping) |
-| `yesterday_fans_to_next_tier` | int | Yesterday's promotion threshold (changes daily) |
-| `yesterday_fans_to_lower_tier` | int | Yesterday's demotion threshold (changes daily) |
-| `members[].id` | int | Internal DB ID |
-| `members[].viewer_id` | int | Trainer's viewer ID |
-| `members[].trainer_name` | str | Display name |
-| `members[].shame_score` | int? | Activity score (null if not tracked) |
-| `members[].daily_fans` | int[] | 32-element cumulative daily fans |
-| `members[].last_updated` | str | Last update ISO timestamp |
-| `members[].previous_circle_id` | int? | Transfer source club ID |
-| `members[].previous_circle_name` | str? | Transfer source club name |
-| `members[].next_month_start` | int? | Projected starting fans for next month (appears in some months) |
+| Field                            | Type  | Description                                                     |
+| -------------------------------- | ----- | --------------------------------------------------------------- |
+| `circle.circle_id`               | int   | Club ID                                                         |
+| `circle.name`                    | str   | Club name                                                       |
+| `circle.comment`                 | str   | Club description                                                |
+| `circle.leader_viewer_id`        | int   | Leader's viewer ID                                              |
+| `circle.leader_name`             | str   | Leader's display name                                           |
+| `circle.member_count`            | int   | Number of members                                               |
+| `circle.join_style`              | int   | Join policy (2=open, 3=approval)                                |
+| `circle.policy`                  | int   | Play style code                                                 |
+| `circle.created_at`              | str   | Club creation ISO timestamp                                     |
+| `circle.last_updated`            | str   | Last data update ISO timestamp                                  |
+| `circle.monthly_rank`            | int   | Current month ranking                                           |
+| `circle.monthly_point`           | int   | Total monthly fans                                              |
+| `circle.last_month_rank`         | int?  | Previous month rank                                             |
+| `circle.last_month_point`        | int?  | Previous month fans                                             |
+| `circle.archived`                | bool  | Whether club is archived                                        |
+| `circle.yesterday_updated`       | str?  | Yesterday's update time                                         |
+| `circle.yesterday_points`        | int?  | Yesterday's total fans                                          |
+| `circle.yesterday_rank`          | int?  | Yesterday's rank                                                |
+| `circle.live_points`             | int?  | Live event points (null if no event)                            |
+| `circle.live_rank`               | int?  | Live event rank                                                 |
+| `circle.last_live_update`        | str?  | Last live update time                                           |
+| `club_rank`                      | int   | Club tier rank (1-11)                                           |
+| `fans_to_next_tier`              | int   | Fans needed for promotion to next tier                          |
+| `fans_to_lower_tier`             | int   | Fans above demotion threshold (buffer before dropping)          |
+| `yesterday_fans_to_next_tier`    | int   | Yesterday's promotion threshold (changes daily)                 |
+| `yesterday_fans_to_lower_tier`   | int   | Yesterday's demotion threshold (changes daily)                  |
+| `members[].id`                   | int   | Internal DB ID                                                  |
+| `members[].viewer_id`            | int   | Trainer's viewer ID                                             |
+| `members[].trainer_name`         | str   | Display name                                                    |
+| `members[].shame_score`          | int?  | Activity score (null if not tracked)                            |
+| `members[].daily_fans`           | int[] | 32-element cumulative daily fans                                |
+| `members[].last_updated`         | str   | Last update ISO timestamp                                       |
+| `members[].previous_circle_id`   | int?  | Transfer source club ID                                         |
+| `members[].previous_circle_name` | str?  | Transfer source club name                                       |
+| `members[].next_month_start`     | int?  | Projected starting fans for next month (appears in some months) |
 
 #### `daily_fans` Array
 
@@ -162,11 +167,13 @@ The `daily_fans` array is a 32-element list representing cumulative fan counts f
 - **Negative values** = transfer indicator (member transferred from another club)
 
 **Calculating daily gain:**
+
 ```
 day_gain = daily_fans[today] - daily_fans[yesterday]
 ```
 
 **Transfer handling:**
+
 - When `daily_fans[0] < 0`, the member transferred into this club
 - `previous_circle_id` and `previous_circle_name` indicate the source club
 - Use absolute values (`abs()`) to include transfer data in calculations
@@ -178,11 +185,13 @@ day_gain = daily_fans[today] - daily_fans[yesterday]
 List tracked circles ranked by monthly performance. Paginated (100 per page).
 
 **Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| page | integer | No | Page number (0-indexed, default: 0) |
+
+| Name | Type    | Required | Description                         |
+| ---- | ------- | -------- | ----------------------------------- |
+| page | integer | No       | Page number (0-indexed, default: 0) |
 
 **Response:**
+
 ```json
 {
   "total": 5000,
@@ -224,6 +233,7 @@ List tracked circles ranked by monthly performance. Paginated (100 per page).
 Returns the current rank tier thresholds with fan requirements.
 
 **Response:**
+
 ```json
 {
   "thresholds": [
@@ -252,28 +262,30 @@ Returns the current rank tier thresholds with fan requirements.
 Monthly trainer rankings (top performers).
 
 **Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| year | integer | Yes | Year |
-| month | integer | Yes | Month (1-12) |
+
+| Name  | Type    | Required | Description  |
+| ----- | ------- | -------- | ------------ |
+| year  | integer | Yes      | Year         |
+| month | integer | Yes      | Month (1-12) |
 
 **Response fields:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `viewer_id` | int | Trainer ID |
-| `trainer_name` | str | Display name |
-| `shame_score` | int | Activity score (0-100) |
-| `total_fans` | int | Total cumulative fans |
-| `monthly_gain` | int | Fans gained this month |
-| `active_days` | int | Days with activity |
-| `avg_daily` | float | Average daily gain |
-| `avg_3d` | float | 3-day rolling average |
-| `avg_7d` | float | 7-day rolling average |
-| `avg_monthly` | float | Monthly average |
-| `rank` | int | Monthly ranking position |
-| `circle_id` | int | Current club ID |
-| `circle_name` | str | Current club name |
-| `next_month_start` | int? | Starting fans for next month |
+
+| Field              | Type  | Description                  |
+| ------------------ | ----- | ---------------------------- |
+| `viewer_id`        | int   | Trainer ID                   |
+| `trainer_name`     | str   | Display name                 |
+| `shame_score`      | int   | Activity score (0-100)       |
+| `total_fans`       | int   | Total cumulative fans        |
+| `monthly_gain`     | int   | Fans gained this month       |
+| `active_days`      | int   | Days with activity           |
+| `avg_daily`        | float | Average daily gain           |
+| `avg_3d`           | float | 3-day rolling average        |
+| `avg_7d`           | float | 7-day rolling average        |
+| `avg_monthly`      | float | Monthly average              |
+| `rank`             | int   | Monthly ranking position     |
+| `circle_id`        | int   | Current club ID              |
+| `circle_name`      | str   | Current club name            |
+| `next_month_start` | int?  | Starting fans for next month |
 
 ---
 
@@ -282,17 +294,18 @@ Monthly trainer rankings (top performers).
 All-time trainer rankings.
 
 **Response fields (additional to monthly):**
-| Field | Type | Description |
-|-------|------|-------------|
-| `total_gain` | int | Total fans gained (excl. starting) |
-| `avg_day` | float | All-time daily average |
-| `avg_week` | float | All-time weekly average |
-| `avg_month` | float | All-time monthly average |
-| `rank_total_fans` | int | Rank by total fans |
-| `rank_total_gain` | int | Rank by total gain |
-| `rank_avg_day` | int | Rank by daily average |
-| `rank_avg_week` | int | Rank by weekly average |
-| `rank_avg_month` | int | Rank by monthly average |
+
+| Field             | Type  | Description                        |
+| ----------------- | ----- | ---------------------------------- |
+| `total_gain`      | int   | Total fans gained (excl. starting) |
+| `avg_day`         | float | All-time daily average             |
+| `avg_week`        | float | All-time weekly average            |
+| `avg_month`       | float | All-time monthly average           |
+| `rank_total_fans` | int   | Rank by total fans                 |
+| `rank_total_gain` | int   | Rank by total gain                 |
+| `rank_avg_day`    | int   | Rank by daily average              |
+| `rank_avg_week`   | int   | Rank by weekly average             |
+| `rank_avg_month`  | int   | Rank by monthly average            |
 
 ---
 
@@ -301,14 +314,15 @@ All-time trainer rankings.
 Rolling gains rankings (3d/7d/30d).
 
 **Response fields:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `gain_3d` | int | Fans gained in last 3 days |
-| `gain_7d` | int | Fans gained in last 7 days |
-| `gain_30d` | int | Fans gained in last 30 days |
-| `rank_3d` | int | Rank by 3-day gain |
-| `rank_7d` | int | Rank by 7-day gain |
-| `rank_30d` | int | Rank by 30-day gain |
+
+| Field      | Type | Description                 |
+| ---------- | ---- | --------------------------- |
+| `gain_3d`  | int  | Fans gained in last 3 days  |
+| `gain_7d`  | int  | Fans gained in last 7 days  |
+| `gain_30d` | int  | Fans gained in last 30 days |
+| `rank_3d`  | int  | Rank by 3-day gain          |
+| `rank_7d`  | int  | Rank by 7-day gain          |
+| `rank_30d` | int  | Rank by 30-day gain         |
 
 ---
 
@@ -318,18 +332,18 @@ Full user profile with trainer data, fan history, inheritance, and team stadium.
 
 **Response sections:**
 
-| Section | Description |
-|---------|-------------|
-| `trainer` | Account info, trophies, team stadium stats, release counts |
-| `circle` | Current club membership |
-| `circle_history` | Monthly club membership history |
-| `fan_history.monthly` | Monthly fan stats (total_fans, gain, rank, averages) |
-| `fan_history.rolling` | Rolling 3d/7d/30d gains and ranks |
-| `fan_history.alltime` | All-time fan stats with multi-dimensional ranking |
-| `inheritance` | Full inheritance data (sparks, factors, race results, saddles) |
-| `support_card` | Equipped support card |
-| `team_stadium` | Team stadium lineup (15 entries: 5 distances x 3 members) |
-| `veterans` | Veteran horse data (if any) |
+| Section               | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `trainer`             | Account info, trophies, team stadium stats, release counts     |
+| `circle`              | Current club membership                                        |
+| `circle_history`      | Monthly club membership history                                |
+| `fan_history.monthly` | Monthly fan stats (total_fans, gain, rank, averages)           |
+| `fan_history.rolling` | Rolling 3d/7d/30d gains and ranks                              |
+| `fan_history.alltime` | All-time fan stats with multi-dimensional ranking              |
+| `inheritance`         | Full inheritance data (sparks, factors, race results, saddles) |
+| `support_card`        | Equipped support card                                          |
+| `team_stadium`        | Team stadium lineup (15 entries: 5 distances x 3 members)      |
+| `veterans`            | Veteran horse data (if any)                                    |
 
 ---
 
@@ -338,25 +352,26 @@ Full user profile with trainer data, fan history, inheritance, and team stadium.
 Activity feed — tracks play patterns across all users.
 
 **Response fields per entry:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `viewer_id` | int | Trainer ID |
-| `trainer_name` | str | Display name |
-| `circle_id` | int | Club ID |
-| `circle_name` | str | Club name |
-| `circle_monthly_rank` | int | Club's monthly rank |
-| `first_seen` | str | First observation timestamp |
-| `last_seen` | str | Last observation timestamp |
-| `days_observed` | int | Total days observed |
-| `days_active` | int | Days with activity |
-| `total_active_seconds` | int | Total active time in seconds |
-| `total_fan_gain` | int | Total fans gained |
-| `total_careers` | int | Total career runs |
-| `avg_careers_per_day` | float | Average careers per day |
-| `careers_per_active_hour` | float | Career rate per active hour |
-| `career_rate_breakdown` | object | Rate breakdown by time window (all/30d/7d/3d/last20) |
-| `avg_career_length_last20_seconds` | float | Average career length |
-| `career_length_buckets` | int[] | Career length distribution |
+
+| Field                              | Type   | Description                                          |
+| ---------------------------------- | ------ | ---------------------------------------------------- |
+| `viewer_id`                        | int    | Trainer ID                                           |
+| `trainer_name`                     | str    | Display name                                         |
+| `circle_id`                        | int    | Club ID                                              |
+| `circle_name`                      | str    | Club name                                            |
+| `circle_monthly_rank`              | int    | Club's monthly rank                                  |
+| `first_seen`                       | str    | First observation timestamp                          |
+| `last_seen`                        | str    | Last observation timestamp                           |
+| `days_observed`                    | int    | Total days observed                                  |
+| `days_active`                      | int    | Days with activity                                   |
+| `total_active_seconds`             | int    | Total active time in seconds                         |
+| `total_fan_gain`                   | int    | Total fans gained                                    |
+| `total_careers`                    | int    | Total career runs                                    |
+| `avg_careers_per_day`              | float  | Average careers per day                              |
+| `careers_per_active_hour`          | float  | Career rate per active hour                          |
+| `career_rate_breakdown`            | object | Rate breakdown by time window (all/30d/7d/3d/last20) |
+| `avg_career_length_last20_seconds` | float  | Average career length                                |
+| `career_length_buckets`            | int[]  | Career length distribution                           |
 
 ---
 
@@ -365,6 +380,7 @@ Activity feed — tracks play patterns across all users.
 Individual shame/activity data for a specific trainer.
 
 **Response:**
+
 ```json
 {
   "score": 100,
@@ -386,15 +402,17 @@ Returns empty arrays and `null` score for untracked users.
 Search for trainers/inheritance records. Paginated.
 
 **Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| name | string | No | Search by trainer name (partial match) |
-| page | integer | No | Page number (0-indexed, default: 0) |
-| limit | integer | No | Items per page (default: 20) |
+
+| Name  | Type    | Required | Description                            |
+| ----- | ------- | -------- | -------------------------------------- |
+| name  | string  | No       | Search by trainer name (partial match) |
+| page  | integer | No       | Page number (0-indexed, default: 0)    |
+| limit | integer | No       | Items per page (default: 20)           |
 
 **Note:** The `q` parameter causes a 500 "Database error occurred" — this is a **backend bug**. Use `name` instead.
 
 **Response:**
+
 ```json
 {
   "items": [
@@ -423,6 +441,7 @@ Search for trainers/inheritance records. Paginated.
 Count total inheritance records and support card accounts.
 
 **Response:**
+
 ```json
 {
   "available_inheritance_records": 2311801,
@@ -436,47 +455,49 @@ Count total inheritance records and support card accounts.
 
 ## Non-Working Endpoints
 
-| Endpoint | Status | Reason |
-|----------|--------|--------|
-| `GET /api/v3/search?q=...` | 500 | Backend bug — `q` param triggers DB error. Use `name` |
-| `GET /api/v4/user/profile/veterans/{id}` | 400/404 | Requires UUID format, not numeric ID |
-| `GET /api/tasks` | 404 | Listed in health but doesn't exist (deprecated?) |
-| `GET /api/v4/tasks` | 404 | Doesn't exist |
-| `GET /api/v4/search` | 404 | Doesn't exist — search is v3 only |
+| Endpoint                                 | Status  | Reason                                                |
+| ---------------------------------------- | ------- | ----------------------------------------------------- |
+| `GET /api/v3/search?q=...`               | 500     | Backend bug — `q` param triggers DB error. Use `name` |
+| `GET /api/v4/user/profile/veterans/{id}` | 400/404 | Requires UUID format, not numeric ID                  |
+| `GET /api/tasks`                         | 404     | Listed in health but doesn't exist (deprecated?)      |
+| `GET /api/v4/tasks`                      | 404     | Doesn't exist                                         |
+| `GET /api/v4/search`                     | 404     | Doesn't exist — search is v3 only                     |
 
 ---
 
 ## Club Tier System
 
 | Rank | Tier | Ranking Range |
-|------|------|---------------|
-| 11 | SS | 1-10 |
-| 10 | S+ | 11-30 |
-| 9 | S | 31-100 |
-| 8 | A+ | 101-500 |
-| 7 | A | 501-1000 |
-| 6 | B+ | 1001-3000 |
-| 5 | B | 3001-5000 |
-| 4 | C+ | 5001-7000 |
-| 3 | C | 7001-10000 |
-| 2 | D+ | 10001+ |
-| 1 | D | Unranked |
+| ---- | ---- | ------------- |
+| 11   | SS   | 1-10          |
+| 10   | S+   | 11-30         |
+| 9    | S    | 31-100        |
+| 8    | A+   | 101-500       |
+| 7    | A    | 501-1000      |
+| 6    | B+   | 1001-3000     |
+| 5    | B    | 3001-5000     |
+| 4    | C+   | 5001-7000     |
+| 3    | C    | 7001-10000    |
+| 2    | D+   | 10001+        |
+| 1    | D    | Unranked      |
 
 ### Join Style Codes
-| Code | Meaning |
-|------|---------|
-| 2 | Open (auto-join) |
-| 3 | Approval required |
+
+| Code | Meaning           |
+| ---- | ----------------- |
+| 2    | Open (auto-join)  |
+| 3    | Approval required |
 
 ### Policy Codes (Club Play Style)
-| Code | Observed Usage |
-|------|----------------|
-| 2 | Everlast family |
-| 3 | Mixed/casual |
-| 5 | Endless family |
-| 10 | Competitive (most common) |
-| 11 | Ultra-competitive (top clubs) |
-| 12 | Dominator/Regalia family |
+
+| Code | Observed Usage                |
+| ---- | ----------------------------- |
+| 2    | Everlast family               |
+| 3    | Mixed/casual                  |
+| 5    | Endless family                |
+| 10   | Competitive (most common)     |
+| 11   | Ultra-competitive (top clubs) |
+| 12   | Dominator/Regalia family      |
 
 ## Data Refresh
 

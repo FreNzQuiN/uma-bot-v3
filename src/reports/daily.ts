@@ -5,23 +5,28 @@
  * Shows per-member daily gains ranked, stale warnings, and club tier info.
  */
 
-import { Snapshot, BotConfig, RankedMember } from '../types';
-import type { ComputedMember } from '../types';
-import { getDataDayFromSnapshot } from '../data/snapshot';
-import { getDailyGain } from '../data/daily-fans';
-import { formatNumber, sanitizeName } from '../utils/format';
-import { formatDateWIB } from '../utils/timezone';
-import { getStaleDataWarning, buildDateStr, buildFooter, buildReportHeader } from './format';
+import { Snapshot, BotConfig, RankedMember } from "../types";
+import type { ComputedMember } from "../types";
+import { getDataDayFromSnapshot } from "../data/snapshot";
+import { getDailyGain } from "../data/daily-fans";
+import { formatNumber, sanitizeName } from "../utils/format";
+import { formatDateWIB } from "../utils/timezone";
+import {
+  getStaleDataWarning,
+  buildDateStr,
+  buildFooter,
+  buildReportHeader,
+} from "./format";
 
 export function generateDailyReport(
   snapshot: Snapshot,
   config: BotConfig,
   computedMembers: ComputedMember[],
-  offset: number = 0
+  offset: number = 0,
 ): string {
   // Guard: empty members
   if (!snapshot.members || snapshot.members.length === 0) {
-    return 'ℹ️ *Daily Report*\nTidak ada data anggota untuk hari ini. Mungkin sync belum berjalan.';
+    return "ℹ️ *Daily Report*\nTidak ada data anggota untuk hari ini. Mungkin sync belum berjalan.";
   }
 
   const latestDataDay = getDataDayFromSnapshot(snapshot);
@@ -31,16 +36,16 @@ export function generateDailyReport(
   // Compute gains for the SPECIFIC offset day, not the latest
   const memberGains = computedMembers.map((m) => ({
     ...m,
-    dailyGain: getDailyGain(m.dailyFans, adjustedDataDay, config.requirements.includeTransferDataInCalculation),
+    dailyGain: getDailyGain(
+      m.dailyFans,
+      adjustedDataDay,
+      config.requirements.includeTransferDataInCalculation,
+    ),
   }));
 
-  const contributing = memberGains.filter(
-    (m) => m.status === 'active'
-  );
+  const contributing = memberGains.filter((m) => m.status === "active");
 
-  const sorted = [...contributing].sort(
-    (a, b) => b.dailyGain - a.dailyGain
-  );
+  const sorted = [...contributing].sort((a, b) => b.dailyGain - a.dailyGain);
 
   const ranked: RankedMember[] = sorted.map((m, i) => ({
     rank: i + 1,
@@ -53,59 +58,63 @@ export function generateDailyReport(
 
   // Stale members: active member with 0 gain on the viewed day who has been active before
   const staleMembers = memberGains.filter((m) => {
-    if (m.status !== 'active') return false;
+    if (m.status !== "active") return false;
     if (m.firstPositiveDay >= adjustedDataDay) return false;
     return m.dailyGain === 0;
   });
 
   const activeCount = contributing.length;
   const contributorCount = sorted.filter((m) => m.dailyGain > 0).length;
-  const totalDailyGain = contributing.reduce(
-    (sum, m) => sum + m.dailyGain,
-    0
-  );
+  const totalDailyGain = contributing.reduce((sum, m) => sum + m.dailyGain, 0);
 
   const { fans_to_next_tier, fans_to_lower_tier } = snapshot;
   const dateStr = buildDateStr(snapshot, adjustedDataDay);
   const formattedDate = formatDateWIB(dateStr);
 
   const lines: string[] = [];
-  const header = buildReportHeader(snapshot, `📊 *Daily Report — ${formattedDate}*`);
+  const header = buildReportHeader(
+    snapshot,
+    `📊 *Daily Report — ${formattedDate}*`,
+  );
   lines.push(...header);
   lines.push(
-    `Promosi: ${formatNumber(fans_to_next_tier)} fans lagi | Degradasi: buffer ${formatNumber(fans_to_lower_tier)}`
+    `Promosi: ${formatNumber(fans_to_next_tier)} fans lagi | Degradasi: buffer ${formatNumber(fans_to_lower_tier)}`,
   );
-  lines.push('');
+  lines.push("");
   lines.push(
-    `👥 ${contributorCount} kontribusi dari ${activeCount} anggota | Total: ${formatNumber(totalDailyGain)}`
+    `👥 ${contributorCount} kontribusi dari ${activeCount} anggota | Total: ${formatNumber(totalDailyGain)}`,
   );
-  lines.push('');
+  lines.push("");
 
   const rankedPositive = ranked.filter((m) => m.dailyGain > 0);
   for (const member of rankedPositive) {
     const gainStr = `+${formatNumber(member.dailyGain)}`;
-    const transferBadge = member.isTransfer ? ' 🔄' : '';
+    const transferBadge = member.isTransfer ? " 🔄" : "";
     lines.push(
-      `${member.rank}. *${sanitizeName(member.trainerName)}*${transferBadge} — ${gainStr}`
+      `${member.rank}. *${sanitizeName(member.trainerName)}*${transferBadge} — ${gainStr}`,
     );
   }
 
   if (staleMembers.length > 0) {
-    lines.push('');
+    lines.push("");
     if (contributorCount === 0 && adjustedDataDay <= 1) {
-      lines.push('ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya');
+      lines.push(
+        "ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya",
+      );
     } else {
-      lines.push('*⚠️ Belum aktif hari ini:*');
+      lines.push("*⚠️ Belum aktif hari ini:*");
       for (const s of staleMembers) {
         lines.push(`• ${sanitizeName(s.trainerName)}`);
       }
     }
   } else if (contributorCount === 0 && activeCount > 0) {
-    lines.push('');
+    lines.push("");
     if (adjustedDataDay <= 1) {
-      lines.push('ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya');
+      lines.push(
+        "ℹ️ Gain hari pertama: belum tersedia karena tidak ada data sebelumnya",
+      );
     } else {
-      lines.push('ℹ️ Hari ini: belum ada kontribusi tercatat');
+      lines.push("ℹ️ Hari ini: belum ada kontribusi tercatat");
     }
   }
 
@@ -114,11 +123,11 @@ export function generateDailyReport(
   const { year: snapYear, month: snapMonth } = snapshot.members[0];
   const staleWarning = getStaleDataWarning(snapYear, snapMonth, latestDataDay);
   if (staleWarning) {
-    lines.push('');
+    lines.push("");
     lines.push(staleWarning);
   }
 
-  lines.push('');
+  lines.push("");
   lines.push(buildFooter(config, buildDateStr(snapshot, latestDataDay)));
-  return lines.join('\n');
+  return lines.join("\n");
 }

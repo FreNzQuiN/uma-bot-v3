@@ -1,11 +1,11 @@
-import type { Snapshot } from '../../src/types';
-import { computeTierData } from '../../src/data/daily-fans';
-import { loadRealSnapshot } from '../_helpers';
+import type { Snapshot } from "../../src/types";
+import { computeTierData } from "../../src/data/daily-fans";
+import { loadRealSnapshot } from "../_helpers";
 
 const realSnapshot: Snapshot = loadRealSnapshot();
 
-describe('Bug 3: Tier projectedOutcome for max-tier clubs', () => {
-  it('max-tier club with low demotion buffer should show demotion_risk, not stay', () => {
+describe("Bug 3: Tier projectedOutcome for max-tier clubs", () => {
+  it("max-tier club with low demotion buffer should show demotion_risk, not stay", () => {
     // Create a snapshot where:
     // - club_rank = 11 (SS tier, highest) → fans_to_next_tier = 0
     // - fans_to_lower_tier is very small (low buffer)
@@ -38,11 +38,11 @@ describe('Bug 3: Tier projectedOutcome for max-tier clubs', () => {
 
     // With low buffer and high pace, risk should be HIGH
     // projectedOutcome should be demotion_risk, NOT stay
-    expect(tierData.riskLevel).toBe('HIGH');
-    expect(tierData.projectedOutcome).toBe('demotion_risk');
+    expect(tierData.riskLevel).toBe("HIGH");
+    expect(tierData.projectedOutcome).toBe("demotion_risk");
   });
 
-  it('max-tier club with high buffer shows LOW risk and stay', () => {
+  it("max-tier club with high buffer shows LOW risk and stay", () => {
     // club_rank = 11, fans_to_next_tier = 0, large buffer
     const snapshot: Snapshot = {
       ...realSnapshot,
@@ -69,7 +69,7 @@ describe('Bug 3: Tier projectedOutcome for max-tier clubs', () => {
     const tierData = computeTierData(snapshot);
 
     // Large buffer with low pace → bufferDays >= 7 → LOW risk → stay
-    expect(tierData.riskLevel).toBe('LOW');
-    expect(tierData.projectedOutcome).toBe('stay');
+    expect(tierData.riskLevel).toBe("LOW");
+    expect(tierData.projectedOutcome).toBe("stay");
   });
 });

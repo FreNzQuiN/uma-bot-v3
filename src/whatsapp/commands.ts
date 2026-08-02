@@ -5,7 +5,7 @@
  * Handles prefix matching, numeric offset extraction, and multi-word args.
  */
 
-import type { ComputedMember } from '../types';
+import type { ComputedMember } from "../types";
 
 export interface ParsedCommand {
   command: string;
@@ -30,9 +30,9 @@ function levenshteinDistance(a: string, b: string): number {
     for (let j = 1; j <= bLen; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       curr[j] = Math.min(
-        prev[j] + 1,       // deletion
-        curr[j - 1] + 1,   // insertion
-        prev[j - 1] + cost  // substitution
+        prev[j] + 1, // deletion
+        curr[j - 1] + 1, // insertion
+        prev[j - 1] + cost, // substitution
       );
     }
     [prev, curr] = [curr, prev];
@@ -42,9 +42,9 @@ function levenshteinDistance(a: string, b: string): number {
 }
 
 const COMMAND_ALIASES: Record<string, string> = {
-  d: 'daily',
-  w: 'weekly',
-  m: 'monthly',
+  d: "daily",
+  w: "weekly",
+  m: "monthly",
 };
 
 export function parseStrictInt(value: string): number | null {
@@ -60,7 +60,10 @@ export function parseStrictInt(value: string): number | null {
  *
  * Numeric args are parsed as offsets. Non-numeric args are collected as strings.
  */
-export function parseCommand(text: string, prefixes: string[]): ParsedCommand | null {
+export function parseCommand(
+  text: string,
+  prefixes: string[],
+): ParsedCommand | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
@@ -78,7 +81,8 @@ export function parseCommand(text: string, prefixes: string[]): ParsedCommand | 
   if (!afterPrefix) return null;
 
   const tokens = afterPrefix.split(/\s+/);
-  const command = COMMAND_ALIASES[tokens[0].toLowerCase()] || tokens[0].toLowerCase();
+  const command =
+    COMMAND_ALIASES[tokens[0].toLowerCase()] || tokens[0].toLowerCase();
   const args = tokens.slice(1);
 
   // Parse offset: first numeric arg (strict integer only — no hex/octal)
@@ -107,7 +111,7 @@ export function parseCommand(text: string, prefixes: string[]): ParsedCommand | 
  */
 export function resolveMemberName(
   partial: string,
-  members: ComputedMember[]
+  members: ComputedMember[],
 ): ComputedMember | null {
   if (!partial || !partial.trim() || members.length === 0) {
     return null;
@@ -122,13 +126,13 @@ export function resolveMemberName(
   // 2. Exact case-insensitive match
   const lowerQuery = query.toLowerCase();
   const caseInsensitiveMatch = members.find(
-    (m) => m.trainerName.toLowerCase() === lowerQuery
+    (m) => m.trainerName.toLowerCase() === lowerQuery,
   );
   if (caseInsensitiveMatch) return caseInsensitiveMatch;
 
   // 3. Unique partial (prefix) match — case-insensitive
   const partialMatches = members.filter((m) =>
-    m.trainerName.toLowerCase().startsWith(lowerQuery)
+    m.trainerName.toLowerCase().startsWith(lowerQuery),
   );
   if (partialMatches.length === 1) return partialMatches[0];
 

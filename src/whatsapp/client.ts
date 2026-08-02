@@ -5,12 +5,23 @@
  * Handles connection lifecycle, message sending, and message editing.
  */
 
-import type { WASocket } from '@whiskeysockets/baileys';
-import type { BotConfig } from '../types';
-import { log } from '../utils/logger';
-import { splitMessage } from '../utils/format';
-import { rmSync, existsSync } from 'node:fs';
-import { recordReconnect, recordMessageReceived, recordMessageParsed, recordMessageResponded, recordMessageFailed, recordSocketCreated, recordDisconnect, getRuntimeStats, recordConnectionState } from '../runtime';
+import type { WASocket } from "@whiskeysockets/baileys";
+import type { BotConfig } from "../types";
+import { log } from "../utils/logger";
+import { splitMessage } from "../utils/format";
+import { rmSync, existsSync } from "node:fs";
+import {
+  recordReconnect,
+  recordMessageReceived,
+  recordMessageParsed,
+  recordMessageResponded,
+  recordMessageFailed,
+  recordSocketCreated,
+  recordDisconnect,
+  getRuntimeStats,
+  recordConnectionState,
+} from "../runtime";
+import { runAuthCleanup, deleteCorruptedSenderKey } from "./auth-cleanup";
 
 export interface IncomingMessage {
   key: {
@@ -43,13 +54,13 @@ function suppressLibsignalErrors(): void {
   _libsignalSuppressed = true;
   const originalConsoleError = console.error.bind(console);
   console.error = (...args: any[]) => {
-    const joined = args.join(' ');
+    const joined = args.join(" ");
     if (
-      joined.includes('Failed to decrypt message') ||
-      joined.includes('Session error') ||
-      joined.includes('Bad MAC')
+      joined.includes("Failed to decrypt message") ||
+      joined.includes("Session error") ||
+      joined.includes("Bad MAC")
     ) {
-      log.debug('WhatsApp', `libsignal noise suppressed: ${joined}`);
+      log.debug("WhatsApp", `libsignal noise suppressed: ${joined}`);
       return;
     }
     originalConsoleError(...args);
@@ -67,45 +78,42 @@ function suppressLibsignalErrors(): void {
  * other Baileys log output through our structured logger at appropriate levels.
  */
 function createBaileysLogger() {
-  const suppressPatterns = [
-    'failed to decrypt message',
-    'unexpected error in',
-  ];
+  const suppressPatterns = ["failed to decrypt message", "unexpected error in"];
 
   const adapter = {
-    level: 'warn',
+    level: "warn",
 
     fatal: (obj: unknown, msg?: string) => {
-      const message = msg || (typeof obj === 'string' ? obj : '');
-      log.error('Baileys', message, obj instanceof Error ? obj : undefined);
+      const message = msg || (typeof obj === "string" ? obj : "");
+      log.error("Baileys", message, obj instanceof Error ? obj : undefined);
     },
 
     error: (obj: unknown, msg?: string) => {
-      const message = msg || (typeof obj === 'string' ? obj : '');
+      const message = msg || (typeof obj === "string" ? obj : "");
       for (const pattern of suppressPatterns) {
         if (message.includes(pattern)) return;
       }
-      log.warn('Baileys', message);
+      log.warn("Baileys", message);
     },
 
     warn: (obj: unknown, msg?: string) => {
-      const message = msg || (typeof obj === 'string' ? obj : '');
-      log.warn('Baileys', message);
+      const message = msg || (typeof obj === "string" ? obj : "");
+      log.warn("Baileys", message);
     },
 
     info: (obj: unknown, msg?: string) => {
-      const message = msg || (typeof obj === 'string' ? obj : '');
-      log.info('Baileys', message);
+      const message = msg || (typeof obj === "string" ? obj : "");
+      log.info("Baileys", message);
     },
 
     debug: (obj: unknown, msg?: string) => {
-      const message = msg || (typeof obj === 'string' ? obj : '');
-      log.debug('Baileys', message);
+      const message = msg || (typeof obj === "string" ? obj : "");
+      log.debug("Baileys", message);
     },
 
     trace: (obj: unknown, msg?: string) => {
-      const message = msg || (typeof obj === 'string' ? obj : '');
-      log.debug('Baileys', message);
+      const message = msg || (typeof obj === "string" ? obj : "");
+      log.debug("Baileys", message);
     },
 
     child: () => adapter,
@@ -120,11 +128,14 @@ export class WhatsAppClient {
   private messageHandlers: MessageHandler[] = [];
   private reconnectAttempts = 0;
   private baseReconnectDelay = 1000;
-  private connectionState: string = 'disconnected';
+  private connectionState: string = "disconnected";
   private lastMessageCount = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-  private authDir = process.env.WA_SESSION_DIR ?? 'data/auth';
-  private chats = new Map<string, { jid: string; name: string; type: 'dm' | 'group' }>();
+  private authDir = process.env.WA_SESSION_DIR ?? "data/auth";
+  private chats = new Map<
+    string,
+    { jid: string; name: string; type: "dm" | "group" }
+  >();
 
   /**
    * Cache of recently sent outgoing messages, keyed by message ID.
@@ -144,7 +155,11 @@ export class WhatsAppClient {
   }
 
   isConnected(): boolean {
-    return this.sock !== null && this.sock.user !== undefined && this.connectionState === 'open';
+    return (
+      this.sock !== null &&
+      this.sock.user !== undefined &&
+      this.connectionState === "open"
+    );
   }
 
   /**
@@ -157,9 +172,14 @@ export class WhatsAppClient {
       const rt = getRuntimeStats();
       const msgsSinceLast = rt.messagesReceived - this.lastMessageCount;
       this.lastMessageCount = rt.messagesReceived;
-      const jidInfo = this.sock?.user?.id ? this.sock.user.id.split(':')[0] : 'no-jid';
+      const jidInfo = this.sock?.user?.id
+        ? this.sock.user.id.split(":")[0]
+        : "no-jid";
       const mem = process.memoryUsage();
-      log.info('WhatsApp', `♥ heartbeat: state=${this.connectionState} jid=${jidInfo} msgs=${rt.messagesReceived} (+${msgsSinceLast} since last check) reconnects=${rt.reconnectCount} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB`);
+      log.info(
+        "WhatsApp",
+        `♥ heartbeat: state=${this.connectionState} jid=${jidInfo} msgs=${rt.messagesReceived} (+${msgsSinceLast} since last check) reconnects=${rt.reconnectCount} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB`,
+      );
     }, 30_000);
   }
 
@@ -190,18 +210,26 @@ export class WhatsAppClient {
     // Dynamic imports outside Promise constructor to avoid async antipattern.
     // If any import fails, the outer async method throws properly instead of
     // leaving the inner Promise hanging forever.
-    const Baileys = await import('@whiskeysockets/baileys');
+    const Baileys = await import("@whiskeysockets/baileys");
     const makeWASocket = Baileys.default;
-    const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, normalizeMessageContent } = Baileys;
+    const {
+      useMultiFileAuthState,
+      DisconnectReason,
+      fetchLatestBaileysVersion,
+      normalizeMessageContent,
+    } = Baileys;
     // @ts-ignore — no type declarations available for qrcode-terminal
-    const qrcodeTerminal = await import('qrcode-terminal');
+    const qrcodeTerminal = await import("qrcode-terminal");
 
-    const { mkdirSync, existsSync } = await import('fs');
-    const { join } = await import('path');
+    const { mkdirSync, existsSync } = await import("fs");
+    const { join } = await import("path");
     const authDir = this.authDir;
     if (!existsSync(authDir)) {
       mkdirSync(authDir, { recursive: true });
     }
+
+    // Prune stale lid-mapping files and log auth directory health.
+    runAuthCleanup(authDir);
 
     // Load auth state — creds.json provides identity keys; session-*.json
     // contain Signal Protocol sessions for DM and group contacts.
@@ -249,49 +277,63 @@ export class WhatsAppClient {
       },
     });
     recordSocketCreated();
-    log.debug('WhatsApp', `Socket created (total=${getRuntimeStats().socketCreatedCount})`);
+    log.debug(
+      "WhatsApp",
+      `Socket created (total=${getRuntimeStats().socketCreatedCount})`,
+    );
     this.chats.clear();
     const sock = this.sock;
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on("creds.update", saveCreds);
 
     // Accumulate chats for /chats API endpoint
-    sock.ev.on('chats.upsert', (newChats: any[]) => {
+    sock.ev.on("chats.upsert", (newChats: any[]) => {
       for (const chat of newChats) {
         const jid: string = chat.id;
         if (!jid) continue;
-        const isGroup = jid.endsWith('@g.us');
+        const isGroup = jid.endsWith("@g.us");
         this.chats.set(jid, {
           jid,
-          name: chat.name ?? chat.subject ?? '',
-          type: isGroup ? 'group' : 'dm',
+          name: chat.name ?? chat.subject ?? "",
+          type: isGroup ? "group" : "dm",
         });
       }
     });
 
-    sock.ev.on('messages.upsert', async (upt: any) => {
+    sock.ev.on("messages.upsert", async (upt: any) => {
       const upsertType = upt.type;
-      log.debug('WhatsApp', `messages.upsert type=${upsertType} count=${upt.messages?.length ?? 0}`);
+      log.debug(
+        "WhatsApp",
+        `messages.upsert type=${upsertType} count=${upt.messages?.length ?? 0}`,
+      );
 
-      if (upsertType !== 'notify') {
-        log.debug('WhatsApp', `Non-notify messages.upsert: type=${upsertType} count=${upt.messages?.length ?? 0}`);
+      if (upsertType !== "notify") {
+        log.debug(
+          "WhatsApp",
+          `Non-notify messages.upsert: type=${upsertType} count=${upt.messages?.length ?? 0}`,
+        );
         return;
       }
 
       if (!upt?.messages || !Array.isArray(upt.messages)) {
-        log.warn('WhatsApp', 'messages.upsert event has no messages array');
+        log.warn("WhatsApp", "messages.upsert event has no messages array");
         return;
       }
 
       for (const msg of upt.messages) {
-        if (msg.key.remoteJid === 'status@broadcast') continue;
+        if (msg.key.remoteJid === "status@broadcast") continue;
         if (msg.key.fromMe) continue;
 
         recordMessageReceived();
 
         // Log raw message structure BEFORE normalize (for debugging protocol changes)
-        const rawTypes = msg.message ? Object.keys(msg.message).join(',') : 'no-message';
-        log.debug('WhatsApp', `RAW msg chat=${(msg.key.remoteJid ?? '').replace(/\d+/, '***')} pushName=${(msg.pushName ?? '?').substring(0, 20)} types=[${rawTypes}]`);
+        const rawTypes = msg.message
+          ? Object.keys(msg.message).join(",")
+          : "no-message";
+        log.debug(
+          "WhatsApp",
+          `RAW msg chat=${(msg.key.remoteJid ?? "").replace(/\d+/, "***")} pushName=${(msg.pushName ?? "?").substring(0, 20)} types=[${rawTypes}]`,
+        );
 
         // Normalize message content: unwrap ephemeral, view-once, edited wrappers.
         // If the group has disappearing messages, the actual text is nested under
@@ -299,18 +341,31 @@ export class WhatsAppClient {
         // msg.message.conversation is undefined and commands silently fail.
         msg.message = normalizeMessageContent(msg.message) as any;
 
-        const normTypes = msg.message ? Object.keys(msg.message).join(',') : 'null';
-        const extMsg = msg.message?.extendedTextMessage as Record<string, unknown> | undefined;
+        const normTypes = msg.message
+          ? Object.keys(msg.message).join(",")
+          : "null";
+        const extMsg = msg.message?.extendedTextMessage as
+          Record<string, unknown> | undefined;
         // Use || not ?? — protobuf-decoded messages have conversation:"" (empty string),
         // which ?? treats as non-nullish, short-circuiting before reaching extendedTextMessage.text
-        const textContent = msg.message?.conversation
-          || msg.message?.extendedTextMessage?.text
-          || (extMsg?.displayText as string)
-          || '';
-        log.debug('WhatsApp', `NORM msg chat=${(msg.key.remoteJid ?? '').replace(/\d+/, '***')} types=[${normTypes}] cmd="${textContent.split(/\s+/)[0].slice(0, 20).replace(/[\r\n]/g, ' ')}"`);
+        const textContent =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          (extMsg?.displayText as string) ||
+          "";
+        log.debug(
+          "WhatsApp",
+          `NORM msg chat=${(msg.key.remoteJid ?? "").replace(/\d+/, "***")} types=[${normTypes}] cmd="${textContent
+            .split(/\s+/)[0]
+            .slice(0, 20)
+            .replace(/[\r\n]/g, " ")}"`,
+        );
 
         if (!textContent) {
-          log.warn('WhatsApp', `Empty content after normalize — raw types were [${rawTypes}], norm types are [${normTypes}]`);
+          log.warn(
+            "WhatsApp",
+            `Empty content after normalize — raw types were [${rawTypes}], norm types are [${normTypes}]`,
+          );
         }
 
         for (const handler of this.messageHandlers) {
@@ -318,7 +373,7 @@ export class WhatsAppClient {
             await handler(msg as IncomingMessage);
           } catch (err) {
             recordMessageFailed();
-            log.warn('WhatsApp', 'Message handler error', err);
+            log.warn("WhatsApp", "Message handler error", err);
           }
         }
       }
@@ -327,72 +382,111 @@ export class WhatsAppClient {
     // Wait for connection — the inner Promise wraps ONLY the event wait,
     // not the imports. If the event throws, reject() is called properly.
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Connection timeout')), 120_000);
+      const timeout = setTimeout(
+        () => reject(new Error("Connection timeout")),
+        120_000,
+      );
 
-      sock.ev.on('connection.update', (update: any) => {
+      sock.ev.on("connection.update", (update: any) => {
         const { connection, lastDisconnect, qr } = update;
 
         // Log ALL connection states — intermediate states like 'connecting' are informative
         if (connection) {
           this.connectionState = connection;
           recordConnectionState(connection);
-          log.info('WhatsApp', `Connection update: ${connection}${qr ? ' (QR received)' : ''}`);
+          log.info(
+            "WhatsApp",
+            `Connection update: ${connection}${qr ? " (QR received)" : ""}`,
+          );
         }
 
         if (qr) {
           qrcodeTerminal.generate(qr, { small: true });
-          log.info('WhatsApp', 'Scan QR code above to authenticate');
+          log.info("WhatsApp", "Scan QR code above to authenticate");
         }
 
-        if (connection === 'open') {
+        if (connection === "open") {
           clearTimeout(timeout);
-          log.info('WhatsApp', 'Connected successfully');
+          log.info("WhatsApp", "Connected successfully");
           this.reconnectAttempts = 0;
           this.startHeartbeat();
           if (sock.user?.id) {
-            log.info('WhatsApp', `Authenticated as: ${sock.user.id.split(':')[0]}`);
+            log.info(
+              "WhatsApp",
+              `Authenticated as: ${sock.user.id.split(":")[0]}`,
+            );
           }
           resolve();
         }
 
-        if (connection === 'close') {
+        if (connection === "close") {
           const statusCode = lastDisconnect?.error?.output?.statusCode;
-          const errMsg = lastDisconnect?.error?.message ?? 'Unknown error';
-          const reasonName: string = statusCode !== undefined
-            ? (DisconnectReason[statusCode as keyof typeof DisconnectReason] as unknown as string ?? `UNKNOWN(${statusCode})`)
-            : 'NO_STATUS';
-          log.error('WhatsApp', `Connection closed: reason=${reasonName}, error=${errMsg}`);
+          const errMsg = lastDisconnect?.error?.message ?? "Unknown error";
+          const reasonName: string =
+            statusCode !== undefined
+              ? ((DisconnectReason[
+                  statusCode as keyof typeof DisconnectReason
+                ] as unknown as string) ?? `UNKNOWN(${statusCode})`)
+              : "NO_STATUS";
+          log.error(
+            "WhatsApp",
+            `Connection closed: reason=${reasonName}, error=${errMsg}`,
+          );
           recordDisconnect(reasonName, errMsg);
           this.stopHeartbeat();
 
-          if (statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.badSession) {
-            const reasonLabel = statusCode === DisconnectReason.loggedOut ? 'logout' : 'badSession';
+          if (
+            statusCode === DisconnectReason.loggedOut ||
+            statusCode === DisconnectReason.badSession
+          ) {
+            const reasonLabel =
+              statusCode === DisconnectReason.loggedOut
+                ? "logout"
+                : "badSession";
             clearTimeout(timeout);
             this.sock = null;
             // Delete stale auth so next connect() shows QR instead of failing
             try {
               if (existsSync(this.authDir)) {
                 rmSync(this.authDir, { recursive: true, force: true });
-                log.info('WhatsApp', `Deleted stale session (${reasonLabel}) — reconnecting for QR scan`);
+                log.info(
+                  "WhatsApp",
+                  `Deleted stale session (${reasonLabel}) — reconnecting for QR scan`,
+                );
               }
             } catch (error) {
-              log.warn('WhatsApp', 'Failed to delete stale auth directory', error);
+              log.warn(
+                "WhatsApp",
+                "Failed to delete stale auth directory",
+                error,
+              );
             }
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', `Reconnection after ${reasonLabel} failed`, err);
+                log.error(
+                  "WhatsApp",
+                  `Reconnection after ${reasonLabel} failed`,
+                  err,
+                );
               });
             }, 2000);
           } else if (statusCode === DisconnectReason.restartRequired) {
             this.reconnectAttempts = 0;
             const delay = this.baseReconnectDelay;
-            log.info('WhatsApp', `Restart required, reconnecting in ${delay}ms`);
+            log.info(
+              "WhatsApp",
+              `Restart required, reconnecting in ${delay}ms`,
+            );
             clearTimeout(timeout);
             recordReconnect();
             this.sock = null;
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', 'Reconnection after restartRequired failed', err);
+                log.error(
+                  "WhatsApp",
+                  "Reconnection after restartRequired failed",
+                  err,
+                );
               });
             }, delay);
           } else {
@@ -400,16 +494,19 @@ export class WhatsAppClient {
             // with capped backoff. Only loggedOut/badSession reject (user must re-scan QR).
             const delay = Math.min(
               this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-              300_000 // cap at 5 minutes
+              300_000, // cap at 5 minutes
             );
             this.reconnectAttempts++;
-            log.warn('WhatsApp', `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+            log.warn(
+              "WhatsApp",
+              `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`,
+            );
             clearTimeout(timeout);
             recordReconnect();
             this.sock = null;
             setTimeout(() => {
               this.connect().catch((err) => {
-                log.error('WhatsApp', 'Reconnection failed', err);
+                log.error("WhatsApp", "Reconnection failed", err);
               });
             }, delay);
           }
@@ -424,11 +521,15 @@ export class WhatsAppClient {
    */
   async sendMessage(jid: string, text: string): Promise<void> {
     if (!this.sock) {
-      throw new Error('WhatsApp client not connected');
+      throw new Error("WhatsApp client not connected");
     }
 
     const config = this.getConfig();
-    const parts = splitMessage(text, config.message.maxLength, config.message.splitAtNewline);
+    const parts = splitMessage(
+      text,
+      config.message.maxLength,
+      config.message.splitAtNewline,
+    );
 
     for (const part of parts) {
       const result = await this.sock.sendMessage(jid, { text: part });
@@ -450,18 +551,25 @@ export class WhatsAppClient {
   async sendOrEdit(
     jid: string,
     messageId: string | null,
-    text: string
+    text: string,
   ): Promise<string> {
     if (!this.sock) {
       recordMessageFailed();
-      throw new Error('WhatsApp client not connected');
+      throw new Error("WhatsApp client not connected");
     }
 
     const config = this.getConfig();
-    const parts = splitMessage(text, config.message.maxLength, config.message.splitAtNewline);
+    const parts = splitMessage(
+      text,
+      config.message.maxLength,
+      config.message.splitAtNewline,
+    );
 
     const totalParts = parts.length;
-    log.debug('WhatsApp', `sendOrEdit: jid=${jid} parts=${totalParts} totalChars=${text.length} splitAtNewline=${config.message.splitAtNewline}`);
+    log.debug(
+      "WhatsApp",
+      `sendOrEdit: jid=${jid} parts=${totalParts} totalChars=${text.length} splitAtNewline=${config.message.splitAtNewline}`,
+    );
 
     if (parts.length === 1) {
       if (messageId) {
@@ -474,13 +582,13 @@ export class WhatsAppClient {
           recordMessageResponded();
           return messageId;
         } catch (err) {
-          log.warn('WhatsApp', 'Edit failed, sending as new message', err);
+          log.warn("WhatsApp", "Edit failed, sending as new message", err);
           // Fall through to send as new
         }
       }
       const sentMsg = await this.sendMessageWithRetry(jid, { text: parts[0] });
       recordMessageResponded();
-      return sentMsg?.key?.id ?? '';
+      return sentMsg?.key?.id ?? "";
     }
 
     if (messageId) {
@@ -488,11 +596,15 @@ export class WhatsAppClient {
         const key = { id: messageId, remoteJid: jid, fromMe: true };
         await this.sock.sendMessage(jid, { delete: key });
       } catch (err) {
-        log.debug('WhatsApp', 'Failed to delete loading message (best effort)', err);
+        log.debug(
+          "WhatsApp",
+          "Failed to delete loading message (best effort)",
+          err,
+        );
       }
     }
 
-    let lastId = '';
+    let lastId = "";
     for (const part of parts) {
       const sentMsg = await this.sendMessageWithRetry(jid, { text: part });
       if (sentMsg?.key?.id) {
@@ -505,16 +617,25 @@ export class WhatsAppClient {
 
   /**
    * Send a message with error handling for corrupted sender key records.
+   * Automatically deletes the corrupted sender-key file so Baileys
+   * recreates it on the next group message attempt.
    */
-  private async sendMessageWithRetry(jid: string, content: Record<string, unknown>): Promise<{ key?: { id?: string | null } } | undefined> {
+  private async sendMessageWithRetry(
+    jid: string,
+    content: Record<string, unknown>,
+  ): Promise<{ key?: { id?: string | null } } | undefined> {
     try {
       const result = await this.sock!.sendMessage(jid, content as any);
       this.cacheSentMessage(result);
       return result;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('senderMessageKeys') || msg.includes('SenderKeyState')) {
-        log.error('WhatsApp', `Corrupted sender key for ${jid.replace(/\d+/, '***')}. Run: rm data/auth/sender-key-${jid}*.json && restart`);
+      if (msg.includes("senderMessageKeys") || msg.includes("SenderKeyState")) {
+        log.warn(
+          "WhatsApp",
+          `Corrupted sender key for ${jid.replace(/\d+/, "***")} — auto-deleting, will retry on next send`,
+        );
+        deleteCorruptedSenderKey(this.authDir, jid);
       }
       throw err;
     }
@@ -526,9 +647,14 @@ export class WhatsAppClient {
    * re-fetch the original so it can re-encrypt with a fresh session.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private cacheSentMessage(result: { key?: { id?: string | null }; message?: any } | undefined): void {
+  private cacheSentMessage(
+    result: { key?: { id?: string | null }; message?: any } | undefined,
+  ): void {
     if (result?.key?.id && result.message) {
-      this.messageCache.set(result.key.id, result.message as Record<string, unknown>);
+      this.messageCache.set(
+        result.key.id,
+        result.message as Record<string, unknown>,
+      );
       if (this.messageCache.size > WhatsAppClient.MESSAGE_CACHE_MAX) {
         const evictCount = WhatsAppClient.MESSAGE_CACHE_EVICT;
         let evicted = 0;
@@ -537,15 +663,20 @@ export class WhatsAppClient {
           this.messageCache.delete(key);
           evicted++;
         }
-        log.debug('WhatsApp', `Message cache evicted ${evicted} entries (cache size: ${this.messageCache.size})`);
+        log.debug(
+          "WhatsApp",
+          `Message cache evicted ${evicted} entries (cache size: ${this.messageCache.size})`,
+        );
       }
     }
   }
 
-  async getGroups(): Promise<Array<{ id: string; name: string; participants: number }>> {
+  async getGroups(): Promise<
+    Array<{ id: string; name: string; participants: number }>
+  > {
     if (!this.sock) return [];
     const result = await this.sock.groupFetchAllParticipating();
-    return Object.values(result).map(g => ({
+    return Object.values(result).map((g) => ({
       id: g.id,
       name: g.subject,
       participants: g.participants.length,
@@ -555,7 +686,7 @@ export class WhatsAppClient {
   /**
    * Get all chats seen since bot started (accumulated from chats.upsert events).
    */
-  getChats(): Array<{ jid: string; name: string; type: 'dm' | 'group' }> {
+  getChats(): Array<{ jid: string; name: string; type: "dm" | "group" }> {
     return Array.from(this.chats.values());
   }
 
@@ -565,7 +696,7 @@ export class WhatsAppClient {
 
   disconnect(): void {
     this.stopHeartbeat();
-    this.connectionState = 'disconnected';
+    this.connectionState = "disconnected";
     this.messageCache.clear();
     if (this.sock) {
       this.sock.end(undefined);

@@ -13,19 +13,19 @@
  * contract that would break if the renderer changed.
  */
 
-import { Snapshot, BotConfig } from '../../src/types';
-import { generateDailyReport } from '../../src/reports/daily';
-import { generateWeeklyReport } from '../../src/reports/weekly';
-import { generateMonthlyReport } from '../../src/reports/monthly';
-import { generateRanksReport } from '../../src/reports/ranks';
-import { generateBottomReport } from '../../src/reports/bottom';
-import { generateStatsReport } from '../../src/reports/stats';
-import { generateMembersReport } from '../../src/reports/members';
-import { generateTierReport } from '../../src/reports/tier';
-import { getDataDayFromSnapshot } from '../../src/data/snapshot';
-import { computeMembers } from '../../src/reports/compute';
-import { getDefaultConfig } from '../../src/config';
-import { loadRealSnapshot, WHATSAPP_MAX_LENGTH } from '../_helpers';
+import { Snapshot, BotConfig } from "../../src/types";
+import { generateDailyReport } from "../../src/reports/daily";
+import { generateWeeklyReport } from "../../src/reports/weekly";
+import { generateMonthlyReport } from "../../src/reports/monthly";
+import { generateRanksReport } from "../../src/reports/ranks";
+import { generateBottomReport } from "../../src/reports/bottom";
+import { generateStatsReport } from "../../src/reports/stats";
+import { generateMembersReport } from "../../src/reports/members";
+import { generateTierReport } from "../../src/reports/tier";
+import { getDataDayFromSnapshot } from "../../src/data/snapshot";
+import { computeMembers } from "../../src/reports/compute";
+import { getDefaultConfig } from "../../src/config";
+import { loadRealSnapshot, WHATSAPP_MAX_LENGTH } from "../_helpers";
 
 let snapshot: Snapshot;
 
@@ -35,7 +35,6 @@ beforeAll(() => {
   snapshot = loadRealSnapshot();
   config = getDefaultConfig();
 });
-
 
 function getAllReports() {
   const members = computeMembers(snapshot, config);
@@ -51,63 +50,125 @@ function getAllReports() {
   };
 }
 
-
-describe('cross-report validation', () => {
-  it('all reports produce non-empty output', async () => {
+describe("cross-report validation", () => {
+  it("all reports produce non-empty output", async () => {
     const r = getAllReports();
-    const all = [r.daily, r.weekly, r.monthly, r.ranks, r.bottom, r.stats, await r.members, r.tier];
+    const all = [
+      r.daily,
+      r.weekly,
+      r.monthly,
+      r.ranks,
+      r.bottom,
+      r.stats,
+      await r.members,
+      r.tier,
+    ];
     for (const report of all) {
       expect(report.length).toBeGreaterThan(0);
     }
   });
 
-  it('all reports respect maxLength', async () => {
+  it("all reports respect maxLength", async () => {
     const r = getAllReports();
-    const all = [r.daily, r.weekly, r.monthly, r.ranks, r.bottom, r.stats, await r.members, r.tier];
+    const all = [
+      r.daily,
+      r.weekly,
+      r.monthly,
+      r.ranks,
+      r.bottom,
+      r.stats,
+      await r.members,
+      r.tier,
+    ];
     for (const report of all) {
       expect(report.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     }
   });
 
-  it('all reports contain the club name', async () => {
+  it("all reports contain the club name", async () => {
     const r = getAllReports();
-    const all = [r.daily, r.weekly, r.monthly, r.ranks, r.bottom, r.stats, await r.members, r.tier];
+    const all = [
+      r.daily,
+      r.weekly,
+      r.monthly,
+      r.ranks,
+      r.bottom,
+      r.stats,
+      await r.members,
+      r.tier,
+    ];
     for (const report of all) {
-      expect(report).toContain('Hol＿Horse');
+      expect(report).toContain("Hol＿Horse");
     }
   });
 });
 
-
-describe('E2E: Cross-report consistency', () => {
-  it('daily and monthly show same member count', () => {
-    const daily = generateDailyReport(snapshot, config, computeMembers(snapshot, config), 0);
-    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
+describe("E2E: Cross-report consistency", () => {
+  it("daily and monthly show same member count", () => {
+    const daily = generateDailyReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+      0,
+    );
+    const monthly = generateMonthlyReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+      0,
+    );
     const dailyMatch = daily.match(/kontribusi dari (\d+) anggota/);
     const monthlyMatch = monthly.match(/(\d+) kontribusi dari \d+ anggota/);
     expect(dailyMatch?.[1]).toBe(monthlyMatch?.[1]);
   });
 
-  it('ranks and monthly use same gain values for top member', () => {
-    const ranks = generateRanksReport(snapshot, config, computeMembers(snapshot, config));
-    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
+  it("ranks and monthly use same gain values for top member", () => {
+    const ranks = generateRanksReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+    );
+    const monthly = generateMonthlyReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+      0,
+    );
     // Both should reference the same top member
     const ranksTop = ranks.match(/🥇 \*(.+?)\* —/);
     const monthlyTop = monthly.match(/1\. \*(.+?)\* —/);
     expect(ranksTop?.[1]).toBe(monthlyTop?.[1]);
   });
 
-  it('stats projection matches monthly projection', () => {
-    const stats = generateStatsReport(snapshot, config, computeMembers(snapshot, config));
-    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
+  it("stats projection matches monthly projection", () => {
+    const stats = generateStatsReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+    );
+    const monthly = generateMonthlyReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+      0,
+    );
     const statsProj = stats.match(/Proyeksi akhir bulan: ~([\d.,]+[KMB])/);
     const monthlyProj = monthly.match(/Proyeksi akhir bulan: ~([\d.,]+[KMB])/);
     expect(statsProj?.[1]).toBe(monthlyProj?.[1]);
   });
 
-  it('bottom report shows members that monthly marks as below requirement', () => {
-    const monthly = generateMonthlyReport(snapshot, config, computeMembers(snapshot, config), 0);
-    const bottom = generateBottomReport(snapshot, config, computeMembers(snapshot, config));
+  it("bottom report shows members that monthly marks as below requirement", () => {
+    const monthly = generateMonthlyReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+      0,
+    );
+    const bottom = generateBottomReport(
+      snapshot,
+      config,
+      computeMembers(snapshot, config),
+    );
     // Monthly shows "❌ N kurang", bottom shows those members
     const failMatch = monthly.match(/❌ (\d+) kurang/);
     expect(failMatch).toBeTruthy();
@@ -115,21 +176,20 @@ describe('E2E: Cross-report consistency', () => {
   });
 });
 
-
-describe('E2E: Data integrity', () => {
-  it('snapshot has 34 members (as per AGENTS.md)', () => {
+describe("E2E: Data integrity", () => {
+  it("snapshot has 34 members (as per AGENTS.md)", () => {
     expect(snapshot.members.length).toBe(34);
   });
 
-  it('getDataDayFromSnapshot returns 11 for June 12 snapshot', () => {
+  it("getDataDayFromSnapshot returns 11 for June 12 snapshot", () => {
     const dataDay = getDataDayFromSnapshot(snapshot);
     expect(dataDay).toBe(11);
   });
 
-  it('computeMembers returns correct counts', () => {
+  it("computeMembers returns correct counts", () => {
     const members = computeMembers(snapshot, config);
-    const active = members.filter((m) => m.status === 'active').length;
-    const left = members.filter((m) => m.status === 'left').length;
+    const active = members.filter((m) => m.status === "active").length;
+    const left = members.filter((m) => m.status === "left").length;
     expect(active + left).toBe(34);
     // 6 transfer members (Zero, TheTengOne, Sairen, VitoHoow, Ceciria, Falkrum) — now active with isTransfer flag
     const transfer = members.filter((m) => m.isTransfer).length;
@@ -141,8 +201,7 @@ describe('E2E: Data integrity', () => {
   });
 });
 
-
-describe('E2E: Formatted output contracts', () => {
+describe("E2E: Formatted output contracts", () => {
   let reports: Record<string, string>;
 
   beforeAll(async () => {
@@ -159,8 +218,8 @@ describe('E2E: Formatted output contracts', () => {
     };
   });
 
-  it('daily report gain lines have correct format', () => {
-    const lines = reports.daily.split('\n');
+  it("daily report gain lines have correct format", () => {
+    const lines = reports.daily.split("\n");
     const gainLines = lines.filter((l) => /^\d+\.\s/.test(l));
 
     expect(gainLines.length).toBeGreaterThan(0);
@@ -171,21 +230,27 @@ describe('E2E: Formatted output contracts', () => {
     }
   });
 
-  it('daily report shows transfer badges for known transfer members', () => {
-    const transferNames = ['Zero', 'TheTengOne', 'Sairen', 'VitoHoow', 'Ceciria'];
+  it("daily report shows transfer badges for known transfer members", () => {
+    const transferNames = [
+      "Zero",
+      "TheTengOne",
+      "Sairen",
+      "VitoHoow",
+      "Ceciria",
+    ];
     for (const name of transferNames) {
       expect(reports.daily).toContain(name);
       expect(reports.daily).toMatch(new RegExp(`${name}.*🔄`));
     }
   });
 
-  it('daily report has footer with sync timestamp', () => {
-    expect(reports.daily).toContain('⸻');
+  it("daily report has footer with sync timestamp", () => {
+    expect(reports.daily).toContain("⸻");
     expect(reports.daily).toMatch(/Terakhir sync: \d+\/\d+ \d{2}:\d{2}$/);
   });
 
-  it('weekly report gain lines have correct format', () => {
-    const lines = reports.weekly.split('\n');
+  it("weekly report gain lines have correct format", () => {
+    const lines = reports.weekly.split("\n");
     const gainLines = lines.filter((l) => /^\d+\.\s/.test(l));
 
     expect(gainLines.length).toBeGreaterThan(0);
@@ -195,8 +260,15 @@ describe('E2E: Formatted output contracts', () => {
     }
   });
 
-  it('weekly report shows transfer badges for all 6 transfer members', () => {
-    const transferNames = ['Zero', 'TheTengOne', 'Sairen', 'VitoHoow', 'Ceciria', 'Falkrum'];
+  it("weekly report shows transfer badges for all 6 transfer members", () => {
+    const transferNames = [
+      "Zero",
+      "TheTengOne",
+      "Sairen",
+      "VitoHoow",
+      "Ceciria",
+      "Falkrum",
+    ];
     const badgeCount = (reports.weekly.match(/🔄/g) ?? []).length;
     expect(badgeCount).toBe(transferNames.length);
 
@@ -205,8 +277,8 @@ describe('E2E: Formatted output contracts', () => {
     }
   });
 
-  it('monthly report gain lines have correct format', () => {
-    const lines = reports.monthly.split('\n');
+  it("monthly report gain lines have correct format", () => {
+    const lines = reports.monthly.split("\n");
     const gainLines = lines.filter((l) => /^\d+\.\s/.test(l));
 
     expect(gainLines.length).toBeGreaterThan(0);
@@ -216,29 +288,29 @@ describe('E2E: Formatted output contracts', () => {
     }
   });
 
-  it('monthly report has requirement section with pass/fail counts', () => {
+  it("monthly report has requirement section with pass/fail counts", () => {
     expect(reports.monthly).toMatch(/✅ \d+ pass/);
     expect(reports.monthly).toMatch(/❌ \d+ kurang/);
     expect(reports.monthly).toMatch(/❌ \*.+\* — kurang [\d.]+[KMB]/);
   });
 
-  it('monthly report has projection line', () => {
+  it("monthly report has projection line", () => {
     expect(reports.monthly).toMatch(/Proyeksi akhir bulan: ~[\d.,]+[KMB]/);
   });
 
-  it('ranks report top 3 have medal emojis', () => {
-    expect(reports.ranks).toContain('🥇');
-    expect(reports.ranks).toContain('🥈');
-    expect(reports.ranks).toContain('🥉');
+  it("ranks report top 3 have medal emojis", () => {
+    expect(reports.ranks).toContain("🥇");
+    expect(reports.ranks).toContain("🥈");
+    expect(reports.ranks).toContain("🥉");
   });
 
-  it('members report shows transfer source for transfer members', () => {
+  it("members report shows transfer source for transfer members", () => {
     expect(reports.members).toMatch(/\*Sairen\* 🔄 — [\d.]+[KMB] \(dari .+\)/);
     expect(reports.members).toMatch(/\*Zero\* 🔄 — [\d.]+[KMB] \(dari .+\)/);
   });
 
-  it('members report shows door emoji for left members', () => {
-    const leftNames = ['DOA IBU', 'Kuro', 'Rowking', 'Lebowski'];
+  it("members report shows door emoji for left members", () => {
+    const leftNames = ["DOA IBU", "Kuro", "Rowking", "Lebowski"];
     for (const name of leftNames) {
       expect(reports.members).toContain(`*${name}* 🚪`);
     }

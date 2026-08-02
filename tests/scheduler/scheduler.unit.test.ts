@@ -1,12 +1,14 @@
-import { Scheduler } from '../../src/scheduler/scheduler';
-import { CatchUpManager } from '../../src/scheduler/catchup';
-import { getCollidingTypes } from '../../src/scheduler/helpers';
-import { getDataDate } from '../../src/utils/timezone';
-import { makeConfig, makeMockDb } from '../_helpers';
-import type { ScheduleRunRow } from '../../src/types';
+import { Scheduler } from "../../src/scheduler/scheduler";
+import { CatchUpManager } from "../../src/scheduler/catchup";
+import { getCollidingTypes } from "../../src/scheduler/helpers";
+import { getDataDate } from "../../src/utils/timezone";
+import { makeConfig, makeMockDb } from "../_helpers";
+import type { ScheduleRunRow } from "../../src/types";
 
 let db: ReturnType<typeof makeMockDb>;
-function asMock(fn: unknown): jest.Mock { return fn as jest.Mock; }
+function asMock(fn: unknown): jest.Mock {
+  return fn as jest.Mock;
+}
 
 beforeEach(() => {
   db = makeMockDb();
@@ -16,82 +18,83 @@ function makeRun(overrides: Partial<ScheduleRunRow> = {}): ScheduleRunRow {
   const today = getDataDate();
   return {
     id: 1,
-    report_type: 'daily',
+    report_type: "daily",
     report_date: today,
     scheduled_at: `${today}T22:05:00.000Z`,
     sent_at: `${today}T22:05:01.000Z`,
-    status: 'sent',
+    status: "sent",
     is_catch_up: false,
-    target_jid: 'test@g.us',
+    target_jid: "test@g.us",
     error_message: null,
     ...overrides,
   };
 }
 
-
-describe('Scheduler', () => {
-  describe('collision detection', () => {
-    it('uses getCollidingTypes for collision detection', () => {
+describe("Scheduler", () => {
+  describe("collision detection", () => {
+    it("uses getCollidingTypes for collision detection", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       // Day 7 with same time → collision
-      expect(getCollidingTypes(7, config)).toContain('daily');
-      expect(getCollidingTypes(7, config)).toContain('weekly');
+      expect(getCollidingTypes(7, config)).toContain("daily");
+      expect(getCollidingTypes(7, config)).toContain("weekly");
     });
 
-    it('no collision when different times', () => {
+    it("no collision when different times", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:15' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:15" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const colliding = getCollidingTypes(7, config);
       expect(colliding.length).toBe(1);
-      expect(colliding).toContain('daily');
+      expect(colliding).toContain("daily");
     });
 
-    it('no collision on non-weekly day', () => {
+    it("no collision on non-weekly day", () => {
       const config = makeConfig();
       const colliding = getCollidingTypes(10, config);
       expect(colliding.length).toBe(1);
-      expect(colliding).toContain('daily');
+      expect(colliding).toContain("daily");
     });
 
-    it('detects weekly+monthly collision on day 7', () => {
+    it("detects weekly+monthly collision on day 7", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:10' },
-          monthly: { enabled: true, day: 7, time: '22:10' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:10" },
+          monthly: { enabled: true, day: 7, time: "22:10" },
         },
       });
       // Daily has different time, so it's in its own group.
       // Weekly+monthly share time '22:10' → they collide.
       // getCollidingTypes returns the daily group (has daily), so we check
       // that weekly and monthly are at the same time via groupByCollision.
-      const { groupByCollision } = require('../../src/scheduler/helpers');
-      const groups = groupByCollision(['daily', 'weekly', 'monthly'], config);
-      const weeklyMonthlyGroup = groups.find((g: string[]) => g.includes('weekly') && g.includes('monthly'));
+      const { groupByCollision } = require("../../src/scheduler/helpers");
+      const groups = groupByCollision(["daily", "weekly", "monthly"], config);
+      const weeklyMonthlyGroup = groups.find(
+        (g: string[]) => g.includes("weekly") && g.includes("monthly"),
+      );
       expect(weeklyMonthlyGroup).toBeTruthy();
-      expect(weeklyMonthlyGroup).toContain('weekly');
-      expect(weeklyMonthlyGroup).toContain('monthly');
+      expect(weeklyMonthlyGroup).toContain("weekly");
+      expect(weeklyMonthlyGroup).toContain("monthly");
     });
   });
 
-  describe('cron expression generation', () => {
-    it('generates correct daily cron expression', () => {
+  describe("cron expression generation", () => {
+    it("generates correct daily cron expression", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const onReport = jest.fn();
@@ -99,15 +102,15 @@ describe('Scheduler', () => {
 
       const cronExpr = scheduler.getDailyCron();
       // 22:05 WIB → "5 22 * * *"
-      expect(cronExpr).toBe('05 22 * * *');
+      expect(cronExpr).toBe("05 22 * * *");
     });
 
-    it('generates correct weekly cron expression', () => {
+    it("generates correct weekly cron expression", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const onReport = jest.fn();
@@ -115,15 +118,15 @@ describe('Scheduler', () => {
 
       const cronExpr = scheduler.getWeeklyCron();
       // Days 7,14,21,28 at 22:05 → "5 22 7,14,21,28 * *"
-      expect(cronExpr).toBe('05 22 7,14,21,28 * *');
+      expect(cronExpr).toBe("05 22 7,14,21,28 * *");
     });
 
-    it('generates correct monthly cron expression', () => {
+    it("generates correct monthly cron expression", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const onReport = jest.fn();
@@ -131,12 +134,12 @@ describe('Scheduler', () => {
 
       const cronExpr = scheduler.getMonthlyCron();
       // Day 1 at 22:12 → "12 22 1 * *"
-      expect(cronExpr).toBe('12 22 1 * *');
+      expect(cronExpr).toBe("12 22 1 * *");
     });
   });
 
-  describe('scheduler lifecycle', () => {
-    it('starts without error', () => {
+  describe("scheduler lifecycle", () => {
+    it("starts without error", () => {
       const config = makeConfig();
       const onReport = jest.fn();
       const scheduler = new Scheduler(() => config, db, onReport);
@@ -145,7 +148,7 @@ describe('Scheduler', () => {
       scheduler.stop();
     });
 
-    it('stops without error', () => {
+    it("stops without error", () => {
       const config = makeConfig();
       const onReport = jest.fn();
       const scheduler = new Scheduler(() => config, db, onReport);
@@ -154,7 +157,7 @@ describe('Scheduler', () => {
       expect(() => scheduler.stop()).not.toThrow();
     });
 
-    it('stop is idempotent', () => {
+    it("stop is idempotent", () => {
       const config = makeConfig();
       const onReport = jest.fn();
       const scheduler = new Scheduler(() => config, db, onReport);
@@ -165,15 +168,15 @@ describe('Scheduler', () => {
     });
   });
 
-  describe('daily-disabled collision handling', () => {
-    it('weekly handler does NOT skip when daily is disabled (same time)', async () => {
+  describe("daily-disabled collision handling", () => {
+    it("weekly handler does NOT skip when daily is disabled (same time)", async () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: false, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: false, day: 1, time: '22:12' },
+          daily: { enabled: false, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: false, day: 1, time: "22:12" },
         },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
@@ -181,37 +184,37 @@ describe('Scheduler', () => {
       // Access the weekly cron task's callback directly via start/stop
       // Simulate by calling recordAndSend for weekly
       const recordAndSend = (scheduler as any).recordAndSend;
-      await recordAndSend('weekly');
+      await recordAndSend("weekly");
 
-      expect(onReport).toHaveBeenCalledWith('weekly', undefined);
+      expect(onReport).toHaveBeenCalledWith("weekly", undefined);
     });
 
-    it('monthly handler does NOT skip when daily is disabled (same time)', async () => {
+    it("monthly handler does NOT skip when daily is disabled (same time)", async () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: false, time: '22:05' },
-          weekly: { enabled: false, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:05' },
+          daily: { enabled: false, time: "22:05" },
+          weekly: { enabled: false, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:05" },
         },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
 
       const recordAndSend = (scheduler as any).recordAndSend;
-      await recordAndSend('monthly');
+      await recordAndSend("monthly");
 
-      expect(onReport).toHaveBeenCalledWith('monthly', undefined);
+      expect(onReport).toHaveBeenCalledWith("monthly", undefined);
     });
 
-    it('weekly handler skips when daily IS enabled (same time)', () => {
+    it("weekly handler skips when daily IS enabled (same time)", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: false, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: false, day: 1, time: "22:12" },
         },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
@@ -219,29 +222,31 @@ describe('Scheduler', () => {
       // getCollidingTypes on day 7 (weekly day) with daily enabled + same time
       // should return both 'daily' and 'weekly' in the same collision group
       const collidingTypes = getCollidingTypes(7, config);
-      expect(collidingTypes).toContain('daily');
-      expect(collidingTypes).toContain('weekly');
+      expect(collidingTypes).toContain("daily");
+      expect(collidingTypes).toContain("weekly");
 
       // The weekly handler skips when this condition (scheduler.ts:246) is true:
       // collidingTypes.includes('daily') && collidingTypes.includes('weekly') && dailyEnabled
       const dailyEnabled = config.schedule.daily.enabled;
       expect(
-        collidingTypes.includes('daily') && collidingTypes.includes('weekly') && dailyEnabled
+        collidingTypes.includes("daily") &&
+          collidingTypes.includes("weekly") &&
+          dailyEnabled,
       ).toBe(true);
 
       // On a non-weekly day, weekly is not in the collision group (handler wouldn't fire)
       const nonWeeklyDay = getCollidingTypes(10, config);
-      expect(nonWeeklyDay).not.toContain('weekly');
+      expect(nonWeeklyDay).not.toContain("weekly");
     });
 
-    it('monthly handler skips when weekly+monthly collide (same time, different from daily)', () => {
+    it("monthly handler skips when weekly+monthly collide (same time, different from daily)", () => {
       const config = makeConfig({
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:10' },
-          monthly: { enabled: true, day: 7, time: '22:10' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:10" },
+          monthly: { enabled: true, day: 7, time: "22:10" },
         },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
@@ -249,13 +254,14 @@ describe('Scheduler', () => {
       // On day 7: daily at 22:05, weekly+monthly at 22:10
       // getCollidingTypes prioritizes the daily group (contains only 'daily')
       const collidingTypes = getCollidingTypes(7, config);
-      expect(collidingTypes).toContain('daily');
+      expect(collidingTypes).toContain("daily");
 
       // The monthly handler skips when this condition (scheduler.ts:292) is true:
       // weeklyEnabled && sameTimeAsWeekly && isWeeklyDay
       const weeklyEnabled = config.schedule.weekly.enabled;
       const isWeeklyDay = config.schedule.weekly.days.includes(7);
-      const sameTimeAsWeekly = config.schedule.monthly.time === config.schedule.weekly.time;
+      const sameTimeAsWeekly =
+        config.schedule.monthly.time === config.schedule.weekly.time;
       expect(weeklyEnabled && sameTimeAsWeekly && isWeeklyDay).toBe(true);
 
       // On monthly day 1 (not a weekly day), the handler should NOT skip
@@ -264,126 +270,139 @@ describe('Scheduler', () => {
     });
   });
 
-  describe('double-send guard', () => {
-    it('skips sending if report already sent today', async () => {
+  describe("double-send guard", () => {
+    it("skips sending if report already sent today", async () => {
       const config = makeConfig({
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
 
-      asMock(db.getLastSuccessfulRun).mockResolvedValue(makeRun({ report_type: 'daily' }));
+      asMock(db.getLastSuccessfulRun).mockResolvedValue(
+        makeRun({ report_type: "daily" }),
+      );
 
       const recordAndSend = (scheduler as any).recordAndSend;
-      await recordAndSend('daily');
+      await recordAndSend("daily");
 
       expect(onReport).not.toHaveBeenCalled();
     });
 
-    it('sends if report was sent yesterday but not today', async () => {
+    it("sends if report was sent yesterday but not today", async () => {
       const config = makeConfig({
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
 
       const todayStr = getDataDate();
-      const [ty, tm, td] = todayStr.split('-').map(Number);
-      const yesterday = getDataDate(new Date(Date.UTC(ty, tm - 1, td - 1, 12, 0, 0)));
-      asMock(db.getLastSuccessfulRun).mockResolvedValue(makeRun({ report_type: 'daily', report_date: yesterday }));
+      const [ty, tm, td] = todayStr.split("-").map(Number);
+      const yesterday = getDataDate(
+        new Date(Date.UTC(ty, tm - 1, td - 1, 12, 0, 0)),
+      );
+      asMock(db.getLastSuccessfulRun).mockResolvedValue(
+        makeRun({ report_type: "daily", report_date: yesterday }),
+      );
 
       const recordAndSend = (scheduler as any).recordAndSend;
-      await recordAndSend('daily');
+      await recordAndSend("daily");
 
-      expect(onReport).toHaveBeenCalledWith('daily', undefined);
+      expect(onReport).toHaveBeenCalledWith("daily", undefined);
     });
 
-    it('sends if no previous successful run exists', async () => {
+    it("sends if no previous successful run exists", async () => {
       const config = makeConfig({
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
 
       const recordAndSend = (scheduler as any).recordAndSend;
-      await recordAndSend('daily');
+      await recordAndSend("daily");
 
-      expect(onReport).toHaveBeenCalledWith('daily', undefined);
+      expect(onReport).toHaveBeenCalledWith("daily", undefined);
     });
 
-    it('checks independently per report type', async () => {
+    it("checks independently per report type", async () => {
       const config = makeConfig({
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const onReport = jest.fn().mockResolvedValue(undefined);
       const scheduler = new Scheduler(() => config, db, onReport);
 
-      asMock(db.getLastSuccessfulRun).mockImplementation(async (type: string) => {
-        if (type === 'daily') return makeRun({ report_type: 'daily' });
-        return null;
-      });
+      asMock(db.getLastSuccessfulRun).mockImplementation(
+        async (type: string) => {
+          if (type === "daily") return makeRun({ report_type: "daily" });
+          return null;
+        },
+      );
 
       const recordAndSend = (scheduler as any).recordAndSend;
 
-      await recordAndSend('daily');
+      await recordAndSend("daily");
       expect(onReport).not.toHaveBeenCalled();
 
-      await recordAndSend('weekly');
-      expect(onReport).toHaveBeenCalledWith('weekly', undefined);
+      await recordAndSend("weekly");
+      expect(onReport).toHaveBeenCalledWith("weekly", undefined);
     });
   });
 });
 
-
-describe('CatchUpManager', () => {
-  describe('detectMissedReports', () => {
-    it('detects missed reports even when catch-up is disabled', async () => {
-      const config = makeConfig({ catchUp: { enabled: false, maxReportsPerStartup: 10 } });
+describe("CatchUpManager", () => {
+  describe("detectMissedReports", () => {
+    it("detects missed reports even when catch-up is disabled", async () => {
+      const config = makeConfig({
+        catchUp: { enabled: false, maxReportsPerStartup: 10 },
+      });
       const catchUp = new CatchUpManager(db, () => config);
 
       const missed = await catchUp.detectMissedReports();
       // Detection always runs regardless of catchUp.enabled.
       // With no prior runs, all enabled report types are missed.
-      expect(missed).toEqual(expect.arrayContaining(['daily', 'weekly', 'monthly']));
+      expect(missed).toEqual(
+        expect.arrayContaining(["daily", "weekly", "monthly"]),
+      );
     });
 
-    it('detects missed daily report when no previous run', async () => {
+    it("detects missed daily report when no previous run", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const catchUp = new CatchUpManager(db, () => config);
 
       const missed = await catchUp.detectMissedReports();
       // Should include 'daily' if daily is enabled
-      expect(missed).toContain('daily');
+      expect(missed).toContain("daily");
     });
 
-    it('does not detect missed reports when last run is today', async () => {
+    it("does not detect missed reports when last run is today", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
 
       const today = getDataDate();
-      asMock(db.getLastRun).mockResolvedValue(makeRun({ report_type: 'daily', report_date: today }));
+      asMock(db.getLastRun).mockResolvedValue(
+        makeRun({ report_type: "daily", report_date: today }),
+      );
 
       const catchUp = new CatchUpManager(db, () => config);
       const missed = await catchUp.detectMissedReports();
-      expect(missed).not.toContain('daily');
+      expect(missed).not.toContain("daily");
     });
 
-    it('handles unsorted weekly days in cross-month fallback', async () => {
+    it("handles unsorted weekly days in cross-month fallback", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
         schedule: {
-          daily: { enabled: false, time: '22:05' },
-          weekly: { enabled: true, days: [28, 7, 14, 21], time: '22:05' }, // unsorted!
-          monthly: { enabled: false, day: 1, time: '22:12' },
+          daily: { enabled: false, time: "22:05" },
+          weekly: { enabled: true, days: [28, 7, 14, 21], time: "22:05" }, // unsorted!
+          monthly: { enabled: false, day: 1, time: "22:12" },
         },
       });
 
@@ -391,13 +410,15 @@ describe('CatchUpManager', () => {
       // and correctly identify the last scheduled day as 28 (max), not 21 (last element)
       const catchUp = new CatchUpManager(db, () => config);
       const missed = await catchUp.detectMissedReports();
-      expect(missed).toContain('weekly');
+      expect(missed).toContain("weekly");
     });
   });
 
-  describe('executeCatchUp', () => {
-    it('returns 0 sent when catch-up disabled', async () => {
-      const config = makeConfig({ catchUp: { enabled: false, maxReportsPerStartup: 10 } });
+  describe("executeCatchUp", () => {
+    it("returns 0 sent when catch-up disabled", async () => {
+      const config = makeConfig({
+        catchUp: { enabled: false, maxReportsPerStartup: 10 },
+      });
       const catchUp = new CatchUpManager(db, () => config);
       const sendReport = jest.fn();
 
@@ -406,10 +427,10 @@ describe('CatchUpManager', () => {
       expect(sendReport).not.toHaveBeenCalled();
     });
 
-    it('sends missed reports and respects maxReportsPerStartup', async () => {
+    it("sends missed reports and respects maxReportsPerStartup", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 2 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const catchUp = new CatchUpManager(db, () => config);
       const sendReport = jest.fn().mockResolvedValue(undefined);
@@ -420,10 +441,10 @@ describe('CatchUpManager', () => {
       expect(sendReport.mock.calls.length).toBeGreaterThanOrEqual(result.sent);
     });
 
-    it('records sent status in database', async () => {
+    it("records sent status in database", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const catchUp = new CatchUpManager(db, () => config);
       const sendReport = jest.fn().mockResolvedValue(undefined);
@@ -432,16 +453,16 @@ describe('CatchUpManager', () => {
 
       expect(asMock(db.recordRun)).toHaveBeenCalled();
       const callArgs = asMock(db.recordRun).mock.calls[0][0];
-      expect(callArgs).toMatchObject({ is_catch_up: true, status: 'pending' });
+      expect(callArgs).toMatchObject({ is_catch_up: true, status: "pending" });
     });
 
-    it('handles send failures gracefully', async () => {
+    it("handles send failures gracefully", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const catchUp = new CatchUpManager(db, () => config);
-      const sendReport = jest.fn().mockRejectedValue(new Error('Send failed'));
+      const sendReport = jest.fn().mockRejectedValue(new Error("Send failed"));
 
       const result = await catchUp.executeCatchUp(sendReport);
       expect(result.sent).toBe(0);
@@ -449,15 +470,15 @@ describe('CatchUpManager', () => {
     });
   });
 
-  describe('maxReportsPerStartup limit', () => {
-    it('limits number of reports sent', async () => {
+  describe("maxReportsPerStartup limit", () => {
+    it("limits number of reports sent", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 1 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const catchUp = new CatchUpManager(db, () => config);
@@ -471,10 +492,10 @@ describe('CatchUpManager', () => {
       expect(result.sent + result.skipped).toBeGreaterThan(0);
     });
 
-    it('reports [catch-up] tag in report text via isCatchUp flag', async () => {
+    it("reports [catch-up] tag in report text via isCatchUp flag", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
       });
       const catchUp = new CatchUpManager(db, () => config);
       const sendReport = jest.fn().mockResolvedValue(undefined);
@@ -487,14 +508,14 @@ describe('CatchUpManager', () => {
       }
     });
 
-    it('reports skipped count when limit exceeded', async () => {
+    it("reports skipped count when limit exceeded", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 1 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const catchUp = new CatchUpManager(db, () => config);
@@ -507,14 +528,14 @@ describe('CatchUpManager', () => {
       expect(result.skipped).toBeGreaterThan(0);
     });
 
-    it('combines colliding reports into single group — fewer sendReport calls', async () => {
+    it("combines colliding reports into single group — fewer sendReport calls", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const catchUp = new CatchUpManager(db, () => config);
@@ -526,14 +547,14 @@ describe('CatchUpManager', () => {
       expect(sendReport.mock.calls.length).toBeGreaterThanOrEqual(result.sent);
     });
 
-    it('catch-up groups daily+monthly when they share time', async () => {
+    it("catch-up groups daily+monthly when they share time", async () => {
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:10' },
-          monthly: { enabled: true, day: 1, time: '22:05' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:10" },
+          monthly: { enabled: true, day: 1, time: "22:05" },
         },
       });
       const catchUp = new CatchUpManager(db, () => config);
@@ -545,17 +566,17 @@ describe('CatchUpManager', () => {
       expect(sendReport.mock.calls.length).toBeGreaterThanOrEqual(result.sent);
     });
 
-    it('sendReport receives isCatchUp=true for every catch-up report', async () => {
+    it("sendReport receives isCatchUp=true for every catch-up report", async () => {
       // CatchUpManager contract: every callback invocation during catch-up
       // must include { isCatchUp: true } as the second argument.
       // The consumer (src/index.ts) uses this flag to prepend [catch-up] prefix.
       const config = makeConfig({
         catchUp: { enabled: true, maxReportsPerStartup: 10 },
-        groups: { command: [], announcement: ['test@g.us'], alertAdmin: [] },
+        groups: { command: [], announcement: ["test@g.us"], alertAdmin: [] },
         schedule: {
-          daily: { enabled: true, time: '22:05' },
-          weekly: { enabled: true, days: [7, 14, 21, 28], time: '22:05' },
-          monthly: { enabled: true, day: 1, time: '22:12' },
+          daily: { enabled: true, time: "22:05" },
+          weekly: { enabled: true, days: [7, 14, 21, 28], time: "22:05" },
+          monthly: { enabled: true, day: 1, time: "22:12" },
         },
       });
       const catchUp = new CatchUpManager(db, () => config);

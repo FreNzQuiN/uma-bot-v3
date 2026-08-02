@@ -10,10 +10,18 @@
  * - Zero external dependencies
  */
 
-import { appendFileSync, existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+} from "fs";
+import { join, dirname } from "path";
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
@@ -35,12 +43,12 @@ export interface LoggerConfig {
 }
 
 const DEFAULT_CONFIG: LoggerConfig = {
-  level: 'info',
-  logFile: 'data/logs/bot.log',
+  level: "info",
+  logFile: "data/logs/bot.log",
   maxSizeMB: 5,
   maxFiles: 3,
   console: true,
-  timezone: 'Asia/Jakarta',
+  timezone: "Asia/Jakarta",
   // Jest sets JEST_WORKER_ID for each test worker. Disable file output
   // automatically so tests don't pollute the real bot.log.
   fileOutput: !process.env.JEST_WORKER_ID,
@@ -104,30 +112,34 @@ class Logger {
   private formatLine(level: LogLevel, tag: string, message: string): string {
     const now = new Date();
     if (!this.cachedFormatter) {
-      this.cachedFormatter = new Intl.DateTimeFormat('sv-SE', {
+      this.cachedFormatter = new Intl.DateTimeFormat("sv-SE", {
         timeZone: this.config.timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
       });
     }
     const ts = this.cachedFormatter.format(now);
-    const ms = String(now.getMilliseconds()).padStart(3, '0');
-    const sanitized = message.replace(/[\r\n]+/g, ' ');
-    const tagStr = tag ? ` [${tag}]` : '';
+    const ms = String(now.getMilliseconds()).padStart(3, "0");
+    const sanitized = message.replace(/[\r\n]+/g, " ");
+    const tagStr = tag ? ` [${tag}]` : "";
     return `[${ts}.${ms}] [${level.toUpperCase()}]${tagStr} ${sanitized}`;
   }
 
   private getColor(level: LogLevel): string {
     switch (level) {
-      case 'debug': return '\x1b[90m';  // gray
-      case 'info':  return '\x1b[36m';  // cyan
-      case 'warn':  return '\x1b[33m';  // yellow
-      case 'error': return '\x1b[31m';  // red
+      case "debug":
+        return "\x1b[90m"; // gray
+      case "info":
+        return "\x1b[36m"; // cyan
+      case "warn":
+        return "\x1b[33m"; // yellow
+      case "error":
+        return "\x1b[31m"; // red
     }
   }
 
@@ -141,10 +153,13 @@ class Logger {
     if (!this.shouldLog(level)) return;
 
     if (this.config.console) {
-      const consoleMsg = (level === 'error' || level === 'warn') ? this.stripStackTrace(message) : message;
+      const consoleMsg =
+        level === "error" || level === "warn"
+          ? this.stripStackTrace(message)
+          : message;
       const consoleLine = this.formatLine(level, tag, consoleMsg);
       const color = this.getColor(level);
-      const reset = '\x1b[0m';
+      const reset = "\x1b[0m";
       // eslint-disable-next-line no-console
       console.log(`${color}${consoleLine}${reset}`);
     }
@@ -158,7 +173,7 @@ class Logger {
    * "Error: foo\n    at bar\n    at baz" → "Error: foo"
    */
   private stripStackTrace(message: string): string {
-    const newlineIdx = message.indexOf('\n');
+    const newlineIdx = message.indexOf("\n");
     return newlineIdx >= 0 ? message.slice(0, newlineIdx) : message;
   }
 
@@ -169,19 +184,22 @@ class Logger {
 
     try {
       const filePath = this.config.logFile;
-      const fileMsg = (level === 'error' || level === 'warn') ? this.stripStackTrace(line) : line;
+      const fileMsg =
+        level === "error" || level === "warn"
+          ? this.stripStackTrace(line)
+          : line;
 
       if (existsSync(filePath) && this.config.maxFiles > 0) {
         const stat = statSync(filePath);
         const sizeMB = stat.size / (1024 * 1024);
         if (sizeMB >= this.config.maxSizeMB) {
-          appendFileSync(filePath, fileMsg + '\n', 'utf-8');
+          appendFileSync(filePath, fileMsg + "\n", "utf-8");
           setImmediate(() => this.rotate(filePath));
           return;
         }
       }
 
-      appendFileSync(filePath, fileMsg + '\n', 'utf-8');
+      appendFileSync(filePath, fileMsg + "\n", "utf-8");
     } catch (err) {
       this.initialized = false;
       const msg = err instanceof Error ? err.message : String(err);
@@ -199,8 +217,10 @@ class Logger {
   private rotate(filePath: string): void {
     try {
       const dir = dirname(filePath);
-      const ext = '.log';
-      const base = filePath.endsWith(ext) ? filePath.slice(0, -ext.length) : filePath;
+      const ext = ".log";
+      const base = filePath.endsWith(ext)
+        ? filePath.slice(0, -ext.length)
+        : filePath;
 
       const oldestFile = `${base}-${this.config.maxFiles}${ext}`;
       if (existsSync(oldestFile)) {
@@ -224,23 +244,27 @@ class Logger {
   }
 
   private formatErr(err: unknown): string {
-    return err instanceof Error ? `: ${err.stack}` : err ? `: ${String(err)}` : '';
+    return err instanceof Error
+      ? `: ${err.stack}`
+      : err
+        ? `: ${String(err)}`
+        : "";
   }
 
   debug(tag: string, message: string, err?: unknown): void {
-    this.write('debug', tag, message + this.formatErr(err));
+    this.write("debug", tag, message + this.formatErr(err));
   }
 
   info(tag: string, message: string, err?: unknown): void {
-    this.write('info', tag, message + this.formatErr(err));
+    this.write("info", tag, message + this.formatErr(err));
   }
 
   warn(tag: string, message: string, err?: unknown): void {
-    this.write('warn', tag, message + this.formatErr(err));
+    this.write("warn", tag, message + this.formatErr(err));
   }
 
   error(tag: string, message: string, err?: unknown): void {
-    this.write('error', tag, message + this.formatErr(err));
+    this.write("error", tag, message + this.formatErr(err));
   }
 }
 

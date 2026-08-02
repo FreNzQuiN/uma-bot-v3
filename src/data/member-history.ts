@@ -5,10 +5,10 @@
  * the member_history database table.
  */
 
-import type { Snapshot, MemberHistoryRow } from '../types';
-import type { IDatabase, MemberHistoryInsert } from '../db/types';
-import { getDataDate } from '../utils/timezone';
-import { log } from '../utils/logger';
+import type { Snapshot, MemberHistoryRow } from "../types";
+import type { IDatabase, MemberHistoryInsert } from "../db/types";
+import { getDataDate } from "../utils/timezone";
+import { log } from "../utils/logger";
 
 /**
  * For each member:
@@ -18,7 +18,10 @@ import { log } from '../utils/logger';
  *
  * Must be called before getLeftMembers so history is populated.
  */
-export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Promise<void> {
+export async function updateMemberHistory(
+  snapshot: Snapshot,
+  db: IDatabase,
+): Promise<void> {
   const today = getDataDate();
   const circleId = snapshot.circle.circle_id;
   const currentViewerIds = new Set<number>();
@@ -40,7 +43,7 @@ export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Pr
       last_seen: today,
       previous_circle_id: member.previous_circle_id ?? null,
       previous_circle_name: member.previous_circle_name ?? null,
-      status: 'active',
+      status: "active",
     });
   }
 
@@ -56,14 +59,17 @@ export async function updateMemberHistory(snapshot: Snapshot, db: IDatabase): Pr
       last_seen: m.last_seen,
       previous_circle_id: m.previous_circle_id ?? null,
       previous_circle_name: m.previous_circle_name ?? null,
-      status: 'left' as const,
+      status: "left" as const,
     }));
 
   await db.upsertMembers(leftInserts);
 }
 
 /** Returns member_history rows for members that existed previously but not in current snapshot. */
-export async function getLeftMembers(snapshot: Snapshot, db: IDatabase): Promise<MemberHistoryRow[]> {
+export async function getLeftMembers(
+  snapshot: Snapshot,
+  db: IDatabase,
+): Promise<MemberHistoryRow[]> {
   if (snapshot.members.length === 0) return [];
 
   const circleId = snapshot.circle.circle_id;
@@ -71,7 +77,5 @@ export async function getLeftMembers(snapshot: Snapshot, db: IDatabase): Promise
 
   const historicalMembers = await db.getMembers(circleId);
 
-  return historicalMembers.filter(
-    (m) => !currentViewerIds.has(m.viewer_id)
-  );
+  return historicalMembers.filter((m) => !currentViewerIds.has(m.viewer_id));
 }

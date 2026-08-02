@@ -6,15 +6,15 @@
  * All responses use standard envelope format.
  */
 
-import http from 'http';
-import crypto from 'crypto';
-import type { Snapshot, BotConfig } from '../types';
-import type { IDatabase } from '../db/types';
-import { getDataDayFromSnapshot } from '../data/snapshot';
-import { computeMembers, computeTierData } from '../reports/compute';
-import { log } from '../utils/logger';
-import { getRuntimeStats, getUptimeMs } from '../runtime';
-import { getDataDateComponents } from '../utils/timezone';
+import http from "http";
+import crypto from "crypto";
+import type { Snapshot, BotConfig } from "../types";
+import type { IDatabase } from "../db/types";
+import { getDataDayFromSnapshot } from "../data/snapshot";
+import { computeMembers, computeTierData } from "../reports/compute";
+import { log } from "../utils/logger";
+import { getRuntimeStats, getUptimeMs } from "../runtime";
+import { getDataDateComponents } from "../utils/timezone";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -26,19 +26,21 @@ export interface ApiResponse<T = unknown> {
 export function createResponse(
   res: http.ServerResponse,
   status: number,
-  body: ApiResponse
+  body: ApiResponse,
 ): void {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Cache-Control', 'no-store, no-cache');
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Cache-Control", "no-store, no-cache");
+  res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
 }
 
 export interface WhatsAppCapabilities {
   isConnected: () => boolean;
-  getGroups: () => Promise<Array<{ id: string; name: string; participants: number }>>;
-  getChats: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }>;
+  getGroups: () => Promise<
+    Array<{ id: string; name: string; participants: number }>
+  >;
+  getChats: () => Array<{ jid: string; name: string; type: "dm" | "group" }>;
 }
 
 export class ApiServer {
@@ -46,8 +48,14 @@ export class ApiServer {
   private snapshotLoader: () => Snapshot | null;
   private configLoader: () => BotConfig;
   private waConnected: () => boolean = () => false;
-  private waGroups: () => Promise<Array<{ id: string; name: string; participants: number }>> = async () => [];
-  private waChats: () => Array<{ jid: string; name: string; type: 'dm' | 'group' }> = () => [];
+  private waGroups: () => Promise<
+    Array<{ id: string; name: string; participants: number }>
+  > = async () => [];
+  private waChats: () => Array<{
+    jid: string;
+    name: string;
+    type: "dm" | "group";
+  }> = () => [];
   private db: IDatabase | null = null;
   private requestTimestamps: Map<string, number[]> = new Map();
   private server: http.Server | null = null;
@@ -58,11 +66,11 @@ export class ApiServer {
     snapshotLoader: () => Snapshot | null,
     config: BotConfig | (() => BotConfig),
     whatsapp?: WhatsAppCapabilities,
-    db?: IDatabase
+    db?: IDatabase,
   ) {
     this.port = port;
     this.snapshotLoader = snapshotLoader;
-    this.configLoader = typeof config === 'function' ? config : () => config;
+    this.configLoader = typeof config === "function" ? config : () => config;
     this.apiToken = process.env.API_TOKEN || undefined;
     this.db = db ?? null;
     if (whatsapp) {
@@ -84,10 +92,13 @@ export class ApiServer {
       this.server.timeout = 30_000;
 
       // Bind to localhost only (security requirement from spec)
-      this.server.listen(this.port, '127.0.0.1', () => {
-        log.info('API', `Server listening on http://127.0.0.1:${this.port}`);
+      this.server.listen(this.port, "127.0.0.1", () => {
+        log.info("API", `Server listening on http://127.0.0.1:${this.port}`);
         if (!this.apiToken) {
-          log.warn('API', 'No API_TOKEN set — API endpoints are unauthenticated. This is acceptable for localhost-only use.');
+          log.warn(
+            "API",
+            "No API_TOKEN set — API endpoints are unauthenticated. This is acceptable for localhost-only use.",
+          );
         }
         resolve();
       });
@@ -106,52 +117,65 @@ export class ApiServer {
 
   private handleRequest(
     req: http.IncomingMessage,
-    res: http.ServerResponse
+    res: http.ServerResponse,
   ): void {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
+    const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const path = url.pathname;
 
-    log.debug('API', `${req.method} ${path}`);
+    log.debug("API", `${req.method} ${path}`);
 
-    const clientIp = req.socket.remoteAddress ?? '127.0.0.1';
+    const clientIp = req.socket.remoteAddress ?? "127.0.0.1";
     if (this.isRateLimited(clientIp)) {
-      createResponse(res, 429, { success: false, error: 'Too many requests' });
+      createResponse(res, 429, { success: false, error: "Too many requests" });
       return;
     }
 
     // Minimal liveness probe — always unauthenticated, no operational data
-    if (path === '/healthz') {
-      createResponse(res, 200, { success: true, data: { status: 'ok', timestamp: new Date().toISOString() } });
+    if (path === "/healthz") {
+      createResponse(res, 200, {
+        success: true,
+        data: { status: "ok", timestamp: new Date().toISOString() },
+      });
       return;
     }
 
     if (this.apiToken) {
       const authHeader = req.headers.authorization;
       const expected = `Bearer ${this.apiToken}`;
-      if (!authHeader || authHeader.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
-        createResponse(res, 401, { success: false, error: 'Unauthorized' });
+      if (
+        !authHeader ||
+        authHeader.length !== expected.length ||
+        !crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))
+      ) {
+        createResponse(res, 401, { success: false, error: "Unauthorized" });
         return;
       }
     }
 
     try {
-      if (path === '/health') {
-        this.handleHealth(res).catch(err => {
-          log.error('API', 'health handler error', err);
-          createResponse(res, 500, { success: false, error: 'Internal server error' });
+      if (path === "/health") {
+        this.handleHealth(res).catch((err) => {
+          log.error("API", "health handler error", err);
+          createResponse(res, 500, {
+            success: false,
+            error: "Internal server error",
+          });
         });
         return;
       }
 
-      if (path === '/groups') {
-        this.handleGroups(res).catch(err => {
-          log.error('API', 'groups handler error', err);
-          createResponse(res, 500, { success: false, error: 'Internal server error' });
+      if (path === "/groups") {
+        this.handleGroups(res).catch((err) => {
+          log.error("API", "groups handler error", err);
+          createResponse(res, 500, {
+            success: false,
+            error: "Internal server error",
+          });
         });
         return;
       }
 
-      if (path === '/chats') {
+      if (path === "/chats") {
         return this.handleChats(res);
       }
 
@@ -159,57 +183,57 @@ export class ApiServer {
       if (!snapshot) {
         return createResponse(res, 503, {
           success: false,
-          error: 'No snapshot available',
+          error: "No snapshot available",
         });
       }
 
-      if (path === '/reports/daily') {
-        return this.handleReport(res, snapshot, 'daily');
+      if (path === "/reports/daily") {
+        return this.handleReport(res, snapshot, "daily");
       }
-      if (path === '/reports/weekly') {
-        return this.handleReport(res, snapshot, 'weekly');
+      if (path === "/reports/weekly") {
+        return this.handleReport(res, snapshot, "weekly");
       }
-      if (path === '/reports/monthly') {
-        return this.handleReport(res, snapshot, 'monthly');
+      if (path === "/reports/monthly") {
+        return this.handleReport(res, snapshot, "monthly");
       }
-      if (path === '/reports/stats') {
-        return this.handleReport(res, snapshot, 'stats');
+      if (path === "/reports/stats") {
+        return this.handleReport(res, snapshot, "stats");
       }
-      if (path === '/reports/bottom') {
-        return this.handleReport(res, snapshot, 'bottom');
+      if (path === "/reports/bottom") {
+        return this.handleReport(res, snapshot, "bottom");
       }
-      if (path === '/reports/ranks') {
-        return this.handleReport(res, snapshot, 'ranks');
+      if (path === "/reports/ranks") {
+        return this.handleReport(res, snapshot, "ranks");
       }
-      if (path === '/reports/members' || path === '/members') {
+      if (path === "/reports/members" || path === "/members") {
         return this.handleMembers(res, snapshot);
       }
-      if (path.startsWith('/members/')) {
-        const rawId = path.split('/')[2];
+      if (path.startsWith("/members/")) {
+        const rawId = path.split("/")[2];
         if (!rawId || !/^\d{1,15}$/.test(rawId)) {
           return createResponse(res, 400, {
             success: false,
-            error: 'Invalid viewerId format',
+            error: "Invalid viewerId format",
           });
         }
         return this.handleMemberDetail(res, snapshot, rawId);
       }
-      if (path === '/tier') {
+      if (path === "/tier") {
         return this.handleTier(res, snapshot);
       }
-      if (path === '/snapshots') {
+      if (path === "/snapshots") {
         return this.handleSnapshots(res);
       }
 
       createResponse(res, 404, {
         success: false,
-        error: 'Not found',
+        error: "Not found",
       });
     } catch (error) {
-      log.error('API', 'Request handler error', error);
+      log.error("API", "Request handler error", error);
       createResponse(res, 500, {
         success: false,
-        error: 'Internal server error',
+        error: "Internal server error",
       });
     }
   }
@@ -219,16 +243,16 @@ export class ApiServer {
     let dbOk = true;
     if (this.db) {
       try {
-        await this.db.getLastSuccessfulRun('_health_check');
+        await this.db.getLastSuccessfulRun("_health_check");
       } catch (err) {
-        log.debug('API', 'Health check DB probe failed', err);
+        log.debug("API", "Health check DB probe failed", err);
         dbOk = false;
       }
     }
     createResponse(res, dbOk ? 200 : 503, {
       success: dbOk,
       data: {
-        status: dbOk ? 'ok' : 'degraded',
+        status: dbOk ? "ok" : "degraded",
         timestamp: new Date().toISOString(),
         uptimeMs: getUptimeMs(),
         dbConnected: dbOk,
@@ -250,23 +274,36 @@ export class ApiServer {
 
   private async handleGroups(res: http.ServerResponse): Promise<void> {
     if (!this.waConnected()) {
-      return createResponse(res, 503, { success: false, error: 'WhatsApp not connected' });
+      return createResponse(res, 503, {
+        success: false,
+        error: "WhatsApp not connected",
+      });
     }
     try {
       const groups = await this.waGroups();
       createResponse(res, 200, { success: true, data: groups });
     } catch (error) {
-      log.error('API', 'handleGroups error', error);
-      createResponse(res, 500, { success: false, error: 'Internal server error' });
+      log.error("API", "handleGroups error", error);
+      createResponse(res, 500, {
+        success: false,
+        error: "Internal server error",
+      });
     }
   }
 
   private handleChats(res: http.ServerResponse): void {
     if (!this.waConnected()) {
-      return createResponse(res, 503, { success: false, error: 'WhatsApp not connected' });
+      return createResponse(res, 503, {
+        success: false,
+        error: "WhatsApp not connected",
+      });
     }
     const chats = this.waChats();
-    createResponse(res, 200, { success: true, data: chats, meta: { count: chats.length } });
+    createResponse(res, 200, {
+      success: true,
+      data: chats,
+      meta: { count: chats.length },
+    });
   }
 
   private isRateLimited(ip: string): boolean {
@@ -284,18 +321,25 @@ export class ApiServer {
   private handleReport(
     res: http.ServerResponse,
     snapshot: Snapshot,
-    reportType: string
+    reportType: string,
   ): void {
     const dataDay = getDataDayFromSnapshot(snapshot);
     const members = computeMembers(snapshot, this.config);
 
     const snapshotYear = snapshot.members[0]?.year;
     const snapshotMonth = snapshot.members[0]?.month;
-    const { year: currentYear, month: currentMonth, day: currentDay } = getDataDateComponents();
-    const stale = snapshotYear === currentYear && snapshotMonth === currentMonth && dataDay < currentDay - 1;
+    const {
+      year: currentYear,
+      month: currentMonth,
+      day: currentDay,
+    } = getDataDateComponents();
+    const stale =
+      snapshotYear === currentYear &&
+      snapshotMonth === currentMonth &&
+      dataDay < currentDay - 1;
 
     const meta = {
-      snapshotDate: snapshot.circle.last_updated?.split('T')[0] ?? 'unknown',
+      snapshotDate: snapshot.circle.last_updated?.split("T")[0] ?? "unknown",
       timezone: this.config.timezone,
       stale,
       dataDay,
@@ -338,7 +382,7 @@ export class ApiServer {
       })),
       meta: {
         total: members.length,
-        active: members.filter((m) => m.status === 'active').length,
+        active: members.filter((m) => m.status === "active").length,
         dataDay,
       },
     });
@@ -347,7 +391,7 @@ export class ApiServer {
   private handleMemberDetail(
     res: http.ServerResponse,
     snapshot: Snapshot,
-    viewerId: string
+    viewerId: string,
   ): void {
     const members = computeMembers(snapshot, this.config);
     const member = members.find((m) => String(m.viewerId) === viewerId);
@@ -381,7 +425,7 @@ export class ApiServer {
       success: true,
       data: tierData,
       meta: {
-        snapshotDate: snapshot.circle.last_updated?.split('T')[0] ?? 'unknown',
+        snapshotDate: snapshot.circle.last_updated?.split("T")[0] ?? "unknown",
       },
     });
   }
@@ -389,7 +433,7 @@ export class ApiServer {
   private handleSnapshots(res: http.ServerResponse): void {
     const snapshot = this.snapshotLoader();
     const available = snapshot
-      ? [snapshot.circle.last_updated?.split('T')[0] ?? 'unknown']
+      ? [snapshot.circle.last_updated?.split("T")[0] ?? "unknown"]
       : [];
 
     createResponse(res, 200, {

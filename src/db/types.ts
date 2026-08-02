@@ -9,7 +9,7 @@ import type {
   ScheduleRunRow,
   MemberHistoryRow,
   RankHistoryRow,
-} from '../types';
+} from "../types";
 
 export interface ScheduleRunInsert {
   report_type: string;
@@ -63,7 +63,11 @@ export interface IDatabase {
   /** Get the most recent run (any terminal status: sent, skipped). Used by catch-up detection. */
   getLastRun(reportType: string): Promise<ScheduleRunRow | null>;
   recordRun(run: ScheduleRunInsert): Promise<number>;
-  updateRunStatus(id: number, status: string, errorMessage?: string): Promise<void>;
+  updateRunStatus(
+    id: number,
+    status: string,
+    errorMessage?: string,
+  ): Promise<void>;
 
   /** Check which of the given event keys already exist (batch query). */
   getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>>;

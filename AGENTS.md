@@ -70,6 +70,7 @@ src/
 - **Coverage exclusions:** `src/index.ts`, `src/types/**`, `src/api/uma-moe.ts` are excluded from coverage
 
 **Test naming convention:**
+
 ```
 *.unit.test.ts          — pure logic, mocked deps
 *.integration.test.ts   — real I/O (HTTP, DB, filesystem)
@@ -95,19 +96,19 @@ Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer toke
 
 ## Key Gotchas
 
-| Gotcha | Why it matters |
-|--------|---------------|
-| **Snapshot immutability** | Never mutate saved snapshots. Reports recompute from the array each time. |
-| **Month boundaries** | Monthly reports use offset=-1 (previous month). Pre-fetching is automatic. |
-| **Combined reports** | On collision days (daily + weekly), a single combined message is sent. |
-| **sql.js, not sqlite3** | In-memory WASM SQLite. No native compilation. DB file is a binary blob. |
-| **mysql2 is optional** | Only imported when `backend: mysql`. SQLite works without it. |
-| **MySQL 8.0.31+ required** | Adapter checks version at startup. TiDB auto-detected and bypasses check. |
-| **Config hot-reload** | Polls mtime every 5s. Schedule changes restart scheduler automatically. |
-| **Baileys doesn't clean up** | Tests use `--forceExit` because Baileys sockets don't close cleanly. |
-| **User-facing language** | Indonesian (`id`). All reports, alerts, and bot responses. |
-| **JST as Server Time** | User can configure display time in config, uma.moe data updates at ~00:00 JST. |
-| **Message Management** | Keep Display Text short and concise. Long reports split at newline boundaries. |
+| Gotcha                       | Why it matters                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| **Snapshot immutability**    | Never mutate saved snapshots. Reports recompute from the array each time.      |
+| **Month boundaries**         | Monthly reports use offset=-1 (previous month). Pre-fetching is automatic.     |
+| **Combined reports**         | On collision days (daily + weekly), a single combined message is sent.         |
+| **sql.js, not sqlite3**      | In-memory WASM SQLite. No native compilation. DB file is a binary blob.        |
+| **mysql2 is optional**       | Only imported when `backend: mysql`. SQLite works without it.                  |
+| **MySQL 8.0.31+ required**   | Adapter checks version at startup. TiDB auto-detected and bypasses check.      |
+| **Config hot-reload**        | Polls mtime every 5s. Schedule changes restart scheduler automatically.        |
+| **Baileys doesn't clean up** | Tests use `--forceExit` because Baileys sockets don't close cleanly.           |
+| **User-facing language**     | Indonesian (`id`). All reports, alerts, and bot responses.                     |
+| **JST as Server Time**       | User can configure display time in config, uma.moe data updates at ~00:00 JST. |
+| **Message Management**       | Keep Display Text short and concise. Long reports split at newline boundaries. |
 
 ---
 
@@ -152,6 +153,7 @@ See `tests/examples/snapshot-june-12.json` for real snapshot data example.
 Comment follows a tiered system. Eliminate **what**, only explain **why**. Comments explain why it does it that way.
 
 **Tier 1 — File block comment (every file):**
+
 ```typescript
 /**
  * Daily fans calculation helpers for the Uma Club Bot's core data model.
@@ -162,9 +164,10 @@ Comment follows a tiered system. Eliminate **what**, only explain **why**. Comme
 ```
 
 **Tier 2 — Function JSDoc (only when the signature doesn't tell the story):**
+
 - Document: non-obvious algorithm logic, edge cases, business rules encoded in code, ambiguous code.
 - Skip: self-explanatory getters, simple transformations where name + types say everything, `@param` that just restates the parameter name.
-- Test: *Skip the JSDoc if you can guess what the function does and its edge cases from the name and signature alone.*
+- Test: _Skip the JSDoc if you can guess what the function does and its edge cases from the name and signature alone._
 
 ```typescript
  // Sort members by monthly gain in descending order.
@@ -189,6 +192,7 @@ export function getDailyGain(...): number { ... }
 ```
 
 **Tier 3 — Inline comments (only for "why"):**
+
 - Good: `"Guard: empty members"`, `"Ghost detection via member_count"`.
 - Bad: restating what the code does.
 
@@ -197,6 +201,7 @@ export function getDailyGain(...): number { ... }
 These rules catch comments that look like they were generated, not written. Delete comment that follows AI pattern.
 
 **Section divider comments — don't:**
+
 ```typescript
 // ✗ Bad — AI separator pattern
 // ============================================================
@@ -208,9 +213,11 @@ These rules catch comments that look like they were generated, not written. Dele
 
 // ✓ Good — use blank lines instead, or nothing at all
 ```
+
 Section dividers are noise. The file-level JSDoc already describes the module's purpose. Use a single blank line.
 
 **Redundant "what" comments — don't:**
+
 ```typescript
 // Create directories recursively if they don't exist
 fs.mkdirSync(dir, { recursive: true });
@@ -222,23 +229,25 @@ saveSnapshot(snapshot, dataDay, resolvedRoot);
 
 // Write to temp file then rename for atomicity.
 // This prevents corrupt files if the process crashes mid-write.
-const tmpPath = filePath + '.tmp';
+const tmpPath = filePath + ".tmp";
 // ✗ Bad — explains WHY, but still too obvious and long
- 
+
 // Prevents corrupt files if the process crashes mid-write.
-const tmpPath = filePath + '.tmp';
+const tmpPath = filePath + ".tmp";
 // ✓ Good — explains WHY, eliminate WHAT
 ```
 
 **"would a human write this?":**
 
 Before writing any comment, ask:
+
 1. **Would a human developer write this comment?** If not, don't write it.
 2. **Does the code already say this?** If yes, delete the comment.
 3. **Does this explain WHY?** If it explains WHAT, delete it. If yes, rewrite it to be more compact.
 4. **Is this documenting a business rule?** If yes, rewrite it in plain language.
 
 **Summary of rules:**
+
 1. **No section dividers.** Use blank lines.
 2. **No "what" comments.** The code says what it does.
 3. **"Why" comments only.** Explain reasoning, not actions.

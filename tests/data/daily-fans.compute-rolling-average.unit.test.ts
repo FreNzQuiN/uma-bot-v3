@@ -4,15 +4,15 @@
  * Split from tests/data/daily-fans.unit.test.ts
  */
 
-import { computeRollingAverage } from '../../src/data/daily-fans';
+import { computeRollingAverage } from "../../src/data/daily-fans";
 import {
   RYU_DAILY_FANS,
   DOA_IBU_DAILY_FANS,
   ZERO_DAILY_FANS,
-} from './daily-fans.fixtures';
+} from "./daily-fans.fixtures";
 
-describe('computeRollingAverage', () => {
-  it('computes 7-day average for Ryu correctly', () => {
+describe("computeRollingAverage", () => {
+  it("computes 7-day average for Ryu correctly", () => {
     // Ryu's gains (day 2-11):
     // day 2: 319191258-316856492 = 2334766
     // day 3: 320992164-319191258 = 1800906
@@ -30,7 +30,7 @@ describe('computeRollingAverage', () => {
     expect(avg).toBe(Math.floor(8692686 / 7));
   });
 
-  it('computes 3-day average for Ryu correctly', () => {
+  it("computes 3-day average for Ryu correctly", () => {
     // Last 3 days (days 9-11): 433706+215443+1096231 = wrong order
     // Last 3 valid gains: day 9=433706, day 10=215443... wait let me recalculate
     // Actually: last 3 days from latestDataDay=11 are days 11, 10, 9
@@ -40,21 +40,21 @@ describe('computeRollingAverage', () => {
     expect(avg).toBe(Math.floor((215443 + 433706 + 1096231) / 3));
   });
 
-  it('returns 0 when no valid gain days exist', () => {
+  it("returns 0 when no valid gain days exist", () => {
     const arr = new Array(32).fill(0);
     expect(computeRollingAverage(arr, 0, 7)).toBe(0);
   });
 
-  it('returns 0 for empty array', () => {
+  it("returns 0 for empty array", () => {
     expect(computeRollingAverage([], 0, 7)).toBe(0);
   });
 
-  it('handles case where fewer days have valid gains than requested window', () => {
+  it("handles case where fewer days have valid gains than requested window", () => {
     // DOA IBU: only 1 day positive → 0 gains → avg = 0
     expect(computeRollingAverage(DOA_IBU_DAILY_FANS, 1, 7)).toBe(0);
   });
 
-  it('computes correctly when transfer member has limited gain history', () => {
+  it("computes correctly when transfer member has limited gain history", () => {
     // Zero: first gain is day 5 (day 4 is baseline)
     // Last 3 days from day 11:
     // day 11: 315534000-313515911 = 2018089
@@ -64,13 +64,13 @@ describe('computeRollingAverage', () => {
     expect(avg).toBe(Math.floor((2018089 + 1244258 + 1380767) / 3));
   });
 
-  it('handles days=1 (single day rolling average)', () => {
+  it("handles days=1 (single day rolling average)", () => {
     // Ryu day 11 gain = 215443
     const avg = computeRollingAverage(RYU_DAILY_FANS, 11, 1);
     expect(avg).toBe(215443);
   });
 
-  it('handles days larger than available data window', () => {
+  it("handles days larger than available data window", () => {
     // Request 20-day average but only 11 days of data
     // Should only count gains that exist (days 2-11 = 10 gains)
     const gains = [

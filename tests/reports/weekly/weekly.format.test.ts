@@ -6,11 +6,11 @@
  * Uses real snapshot (examples/snapshot-june-12.json, 34 members).
  */
 
-import { generateWeeklyReport } from '../../../src/reports/weekly';
-import { computeMembers } from '../../../src/reports/compute';
-import { getDefaultConfig } from '../../../src/config';
-import { formatNumber } from '../../../src/utils/format';
-import type { Snapshot, BotConfig } from '../../../src/types';
+import { generateWeeklyReport } from "../../../src/reports/weekly";
+import { computeMembers } from "../../../src/reports/compute";
+import { getDefaultConfig } from "../../../src/config";
+import { formatNumber } from "../../../src/utils/format";
+import type { Snapshot, BotConfig } from "../../../src/types";
 import {
   loadRealSnapshot,
   makeConfig,
@@ -18,8 +18,7 @@ import {
   mockCurrentDate,
   restoreDateMocks,
   WHATSAPP_MAX_LENGTH,
-} from '../../_helpers';
-
+} from "../../_helpers";
 
 let snapshot: Snapshot;
 let config: BotConfig;
@@ -31,86 +30,90 @@ beforeAll(() => {
   computedMembers = computeMembers(snapshot, config);
 });
 
-
-describe('Full weekly report output (offset=0, W2)', () => {
+describe("Full weekly report output (offset=0, W2)", () => {
   let report: string;
   let lines: string[];
 
   beforeAll(() => {
     mockCurrentDate(2026, 6, 13);
     report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    lines = report.split('\n');
+    lines = report.split("\n");
   });
 
   afterAll(() => {
     restoreDateMocks();
   });
 
-  it('prints the full report for visual verification', () => {
+  it("prints the full report for visual verification", () => {
     expect(report.length).toBeGreaterThan(0);
   });
 
   it('header is "📈 *Weekly Report — Minggu 2*" (bold)', () => {
-    expect(report).toContain('📈 *Weekly Report — Minggu 2*');
+    expect(report).toContain("📈 *Weekly Report — Minggu 2*");
   });
 
-  it('report shows club name, tier, and rank', () => {
-    expect(report).toContain('Hol＿Horse');
-    expect(report).toContain('A+');
-    expect(report).toContain('#431');
+  it("report shows club name, tier, and rank", () => {
+    expect(report).toContain("Hol＿Horse");
+    expect(report).toContain("A+");
+    expect(report).toContain("#431");
   });
 
-  it('report shows data period date', () => {
-    expect(report).toContain('Periode data: 11 Juni 2026, 22:00 WIB');
+  it("report shows data period date", () => {
+    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
   });
 
-  it('report shows period day range', () => {
-    expect(report).toContain('Periode: Hari 8-14');
+  it("report shows period day range", () => {
+    expect(report).toContain("Periode: Hari 8-14");
   });
 
-  it('report shows promotion info', () => {
-    expect(report).toContain('Promosi: 349.2M fans lagi');
+  it("report shows promotion info", () => {
+    expect(report).toContain("Promosi: 349.2M fans lagi");
   });
 
-  it('report shows demotion info', () => {
-    expect(report).toContain('Degradasi: buffer 21.8M');
+  it("report shows demotion info", () => {
+    expect(report).toContain("Degradasi: buffer 21.8M");
   });
 
-  it('report shows contributor summary', () => {
-    expect(report).toContain('👥 30 kontribusi dari 30 anggota | Total: 144.5M');
+  it("report shows contributor summary", () => {
+    expect(report).toContain(
+      "👥 30 kontribusi dari 30 anggota | Total: 144.5M",
+    );
   });
 
-  it('has 30 contributing members (gain > 0)', () => {
+  it("has 30 contributing members (gain > 0)", () => {
     const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
     expect(memberLines.length).toBe(30);
   });
 
-  it('first member is *Sairen* 🔄 — +14.3M (bold name)', () => {
-    expect(report).toContain('1. *Sairen* 🔄 — +14.3M');
+  it("first member is *Sairen* 🔄 — +14.3M (bold name)", () => {
+    expect(report).toContain("1. *Sairen* 🔄 — +14.3M");
   });
 
-  it('second member is *GoldFamily* — +10.8M (bold name)', () => {
-    expect(report).toContain('2. *GoldFamily* — +10.8M');
+  it("second member is *GoldFamily* — +10.8M (bold name)", () => {
+    expect(report).toContain("2. *GoldFamily* — +10.8M");
   });
 
-  it('last member is *ursa* — +875.7K (bold name)', () => {
+  it("last member is *ursa* — +875.7K (bold name)", () => {
     const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
-    expect(memberLines[29]).toBe('30. *ursa* — +875.7K');
+    expect(memberLines[29]).toBe("30. *ursa* — +875.7K");
   });
 
-  it('members are sorted by weekly gain descending', () => {
+  it("members are sorted by weekly gain descending", () => {
     const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
     const gains: number[] = [];
     for (const line of memberLines) {
       const match = line.match(/— \+?([\d.]+[KMB]?|0)$/);
       if (!match) throw new Error(`Could not parse gain from: ${line}`);
       const val = match[1];
-      if (val === '0') { gains.push(0); continue; }
-      const numStr = val.replace(/[+-]/, '');
+      if (val === "0") {
+        gains.push(0);
+        continue;
+      }
+      const numStr = val.replace(/[+-]/, "");
       let num = parseFloat(numStr);
-      if (val.endsWith('K')) num *= 1_000;
-      if (val.endsWith('M')) num *= 1_000_000;
-      if (val.endsWith('B')) num *= 1_000_000_000;
+      if (val.endsWith("K")) num *= 1_000;
+      if (val.endsWith("M")) num *= 1_000_000;
+      if (val.endsWith("B")) num *= 1_000_000_000;
       gains.push(num);
     }
     for (let i = 1; i < gains.length; i++) {
@@ -118,215 +121,224 @@ describe('Full weekly report output (offset=0, W2)', () => {
     }
   });
 
-  it('stale members (DOA IBU, Kuro, Rowking, Lebowski) are NOT in member list', () => {
+  it("stale members (DOA IBU, Kuro, Rowking, Lebowski) are NOT in member list", () => {
     const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
     for (const line of memberLines) {
-      expect(line).not.toContain('DOA IBU');
-      expect(line).not.toContain('Kuro');
-      expect(line).not.toContain('Rowking');
-      expect(line).not.toContain('Lebowski');
+      expect(line).not.toContain("DOA IBU");
+      expect(line).not.toContain("Kuro");
+      expect(line).not.toContain("Rowking");
+      expect(line).not.toContain("Lebowski");
     }
   });
 
-  it('stale data warning is present (data is from June 11, running June 13)', () => {
+  it("stale data warning is present (data is from June 11, running June 13)", () => {
     mockCurrentDate(2026, 6, 13);
-    const freshReport = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(freshReport).toContain('⚠️ Data klub mungkin tidak terbaru (update terakhir: 11 Juni 2026)');
+    const freshReport = generateWeeklyReport(
+      snapshot,
+      config,
+      computedMembers,
+      0,
+    );
+    expect(freshReport).toContain(
+      "⚠️ Data klub mungkin tidak terbaru (update terakhir: 11 Juni 2026)",
+    );
     restoreDateMocks();
   });
 });
 
-
-describe('Transfer badges in weekly report', () => {
+describe("Transfer badges in weekly report", () => {
   let report: string;
 
   beforeAll(() => {
     report = generateWeeklyReport(snapshot, config, computedMembers, 0);
   });
 
-  it('all 6 transfer members have 🔄 badge', () => {
-    const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
+  it("all 6 transfer members have 🔄 badge", () => {
+    const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
     for (const name of TRANSFER_NAMES) {
       const line = memberLines.find((l) => l.includes(name));
       expect(line).toBeDefined();
-      expect(line!).toContain('🔄');
+      expect(line!).toContain("🔄");
     }
   });
 
-  it('exactly 6 lines contain 🔄', () => {
-    const memberLines = report.split('\n').filter((l) => /^\d+\.\s/.test(l));
-    const transferLines = memberLines.filter((l) => l.includes('🔄'));
+  it("exactly 6 lines contain 🔄", () => {
+    const memberLines = report.split("\n").filter((l) => /^\d+\.\s/.test(l));
+    const transferLines = memberLines.filter((l) => l.includes("🔄"));
     expect(transferLines.length).toBe(6);
   });
 });
 
-
-describe('Offset=1 shows W1 (days 1-7)', () => {
+describe("Offset=1 shows W1 (days 1-7)", () => {
   let report: string;
   let lines: string[];
 
   beforeAll(() => {
     report = generateWeeklyReport(snapshot, config, computedMembers, 1);
-    lines = report.split('\n');
+    lines = report.split("\n");
   });
 
-  it('prints the full W1 report', () => {
+  it("prints the full W1 report", () => {
     expect(report.length).toBeGreaterThan(0);
   });
 
   it('header is "📈 *Weekly Report — Minggu 1*" (bold)', () => {
-    expect(report).toContain('📈 *Weekly Report — Minggu 1*');
+    expect(report).toContain("📈 *Weekly Report — Minggu 1*");
   });
 
   it('period is "Periode: Hari 1-7"', () => {
-    expect(report).toContain('Periode: Hari 1-7');
+    expect(report).toContain("Periode: Hari 1-7");
   });
 
-  it('first member is *GoldFamily* — +16.9M (bold name)', () => {
-    expect(report).toContain('1. *GoldFamily* — +16.9M');
+  it("first member is *GoldFamily* — +16.9M (bold name)", () => {
+    expect(report).toContain("1. *GoldFamily* — +16.9M");
   });
 
-  it('second member is *Ryu* — +13.1M (bold name)', () => {
-    expect(report).toContain('2. *Ryu* — +13.1M');
+  it("second member is *Ryu* — +13.1M (bold name)", () => {
+    expect(report).toContain("2. *Ryu* — +13.1M");
   });
 
-  it('has 30 contributing members', () => {
+  it("has 30 contributing members", () => {
     const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
     expect(memberLines.length).toBe(30);
   });
 
-  it('contributor summary shows total gain 202.5M', () => {
-    expect(report).toContain('👥 30 kontribusi dari 30 anggota | Total: 202.5M');
+  it("contributor summary shows total gain 202.5M", () => {
+    expect(report).toContain(
+      "👥 30 kontribusi dari 30 anggota | Total: 202.5M",
+    );
   });
 
-  it('transfer badges still present in W1', () => {
+  it("transfer badges still present in W1", () => {
     const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
     for (const name of TRANSFER_NAMES) {
       const line = memberLines.find((l) => l.includes(name));
       expect(line).toBeDefined();
-      expect(line!).toContain('🔄');
+      expect(line!).toContain("🔄");
     }
   });
 });
 
-
-describe('WhatsApp formatting compliance', () => {
+describe("WhatsApp formatting compliance", () => {
   let report: string;
 
   beforeAll(() => {
     report = generateWeeklyReport(snapshot, config, computedMembers, 0);
   });
 
-  it('has no Markdown # headers', () => {
-    const lines = report.split('\n');
+  it("has no Markdown # headers", () => {
+    const lines = report.split("\n");
     for (const line of lines) {
       expect(line).not.toMatch(/^#{1,6}\s/);
     }
   });
 
-  it('has no Markdown **bold** syntax', () => {
+  it("has no Markdown **bold** syntax", () => {
     expect(report).not.toMatch(/\*\*[^*]+\*\*/);
   });
 
-  it('uses emoji for section markers', () => {
-    expect(report).toContain('📈');
-    expect(report).toContain('⚠️');
+  it("uses emoji for section markers", () => {
+    expect(report).toContain("📈");
+    expect(report).toContain("⚠️");
   });
 
-  it('uses Indonesian month name (Juni not June)', () => {
-    expect(report).toContain('Juni');
-    expect(report).not.toContain('June');
+  it("uses Indonesian month name (Juni not June)", () => {
+    expect(report).toContain("Juni");
+    expect(report).not.toContain("June");
   });
 
-  it('uses Indonesian labels', () => {
-    expect(report).toContain('Minggu');
-    expect(report).toContain('Periode');
-    expect(report).toContain('kontribusi');
+  it("uses Indonesian labels", () => {
+    expect(report).toContain("Minggu");
+    expect(report).toContain("Periode");
+    expect(report).toContain("kontribusi");
   });
 });
 
-
-describe('Header format and metadata', () => {
-  it('header always starts with 📈 *Weekly Report — (bold)', () => {
+describe("Header format and metadata", () => {
+  it("header always starts with 📈 *Weekly Report — (bold)", () => {
     const report0 = generateWeeklyReport(snapshot, config, computedMembers, 0);
     const report1 = generateWeeklyReport(snapshot, config, computedMembers, 1);
     expect(report0).toMatch(/📈 \*Weekly Report —/);
     expect(report1).toMatch(/📈 \*Weekly Report —/);
   });
 
-  it('club name, tier, and rank in report', () => {
+  it("club name, tier, and rank in report", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(report).toContain('Hol＿Horse');
-    expect(report).toContain('A+');
-    expect(report).toContain('#431');
+    expect(report).toContain("Hol＿Horse");
+    expect(report).toContain("A+");
+    expect(report).toContain("#431");
   });
 
-  it('data line with date', () => {
+  it("data line with date", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(report).toContain('Periode data: 11 Juni 2026, 22:00 WIB');
+    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
   });
 
-  it('period line shows correct day range for each week', () => {
+  it("period line shows correct day range for each week", () => {
     const report0 = generateWeeklyReport(snapshot, config, computedMembers, 0); // W2
     const report1 = generateWeeklyReport(snapshot, config, computedMembers, 1); // W1
-    expect(report0).toContain('Periode: Hari 8-14');
-    expect(report1).toContain('Periode: Hari 1-7');
+    expect(report0).toContain("Periode: Hari 8-14");
+    expect(report1).toContain("Periode: Hari 1-7");
   });
 
-  it('contributor summary line shows formatted total', () => {
+  it("contributor summary line shows formatted total", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(report).toMatch(/👥 \d+ kontribusi dari \d+ anggota \| Total: [\d.]+[KMB]/);
+    expect(report).toMatch(
+      /👥 \d+ kontribusi dari \d+ anggota \| Total: [\d.]+[KMB]/,
+    );
   });
 });
 
-
-describe('Report size within WhatsApp limits', () => {
-  it('weekly report (offset=0) does not exceed 4096 chars', () => {
+describe("Report size within WhatsApp limits", () => {
+  it("weekly report (offset=0) does not exceed 4096 chars", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
-  it('weekly report (offset=1) does not exceed 4096 chars', () => {
+  it("weekly report (offset=1) does not exceed 4096 chars", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 1);
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 
-  it('weekly report with below-requirement does not exceed 4096 chars', () => {
+  it("weekly report with below-requirement does not exceed 4096 chars", () => {
     const cfg = makeConfig({ requirements: { weeklyFans: 5_000_000 } });
-    const report = generateWeeklyReport(snapshot, cfg, computeMembers(snapshot, cfg), 0);
+    const report = generateWeeklyReport(
+      snapshot,
+      cfg,
+      computeMembers(snapshot, cfg),
+      0,
+    );
     expect(report.length).toBeLessThanOrEqual(4096);
   });
 });
 
-
-describe('Special characters in trainer names', () => {
-  it('Dyy\u201D with right double quotation mark renders correctly', () => {
+describe("Special characters in trainer names", () => {
+  it("Dyy\u201D with right double quotation mark renders correctly", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
     // The name uses U+201D (right double quotation mark), not ASCII "
-    expect(report).toContain('Dyy\u201D');
+    expect(report).toContain("Dyy\u201D");
   });
 
-  it('Hol＿Horse with full-width underscore renders correctly', () => {
+  it("Hol＿Horse with full-width underscore renders correctly", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(report).toContain('Hol＿Horse');
+    expect(report).toContain("Hol＿Horse");
   });
 
-  it('Suzuka Kopling with space renders correctly', () => {
+  it("Suzuka Kopling with space renders correctly", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(report).toContain('Suzuka Kopling');
+    expect(report).toContain("Suzuka Kopling");
   });
 
-  it('DOA IBU with space renders correctly in empty member list context', () => {
+  it("DOA IBU with space renders correctly in empty member list context", () => {
     // DOA IBU has 0 W2 gain, so not in member list
     // But verify the snapshot data is correct
-    const m = snapshot.members.find((mm) => mm.trainer_name === 'DOA IBU');
+    const m = snapshot.members.find((mm) => mm.trainer_name === "DOA IBU");
     expect(m).toBeDefined();
-    expect(m!.trainer_name).toBe('DOA IBU');
+    expect(m!.trainer_name).toBe("DOA IBU");
   });
 });
 
-
-describe('Line-by-line verification of W2 report', () => {
+describe("Line-by-line verification of W2 report", () => {
   let report: string;
 
   beforeAll(() => {
@@ -338,38 +350,40 @@ describe('Line-by-line verification of W2 report', () => {
     restoreDateMocks();
   });
 
-  it('report contains bold header', () => {
-    expect(report).toContain('📈 *Weekly Report — Minggu 2*');
+  it("report contains bold header", () => {
+    expect(report).toContain("📈 *Weekly Report — Minggu 2*");
   });
 
-  it('report contains club info with rank', () => {
-    expect(report).toContain('Hol＿Horse');
-    expect(report).toContain('A+');
-    expect(report).toContain('#431');
+  it("report contains club info with rank", () => {
+    expect(report).toContain("Hol＿Horse");
+    expect(report).toContain("A+");
+    expect(report).toContain("#431");
   });
 
-  it('report contains data date', () => {
-    expect(report).toContain('Periode data: 11 Juni 2026, 22:00 WIB');
+  it("report contains data date", () => {
+    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
   });
 
-  it('report contains period', () => {
-    expect(report).toContain('Periode: Hari 8-14');
+  it("report contains period", () => {
+    expect(report).toContain("Periode: Hari 8-14");
   });
 
-  it('report contains promotion info', () => {
-    expect(report).toContain('Promosi: 349.2M fans lagi');
+  it("report contains promotion info", () => {
+    expect(report).toContain("Promosi: 349.2M fans lagi");
   });
 
-  it('report contains demotion info', () => {
-    expect(report).toContain('Degradasi: buffer 21.8M');
+  it("report contains demotion info", () => {
+    expect(report).toContain("Degradasi: buffer 21.8M");
   });
 
-  it('report contains contributor summary', () => {
-    expect(report).toContain('👥 30 kontribusi dari 30 anggota | Total: 144.5M');
+  it("report contains contributor summary", () => {
+    expect(report).toContain(
+      "👥 30 kontribusi dari 30 anggota | Total: 144.5M",
+    );
   });
 
-  it('report contains 30 member lines with bold names', () => {
-    const lines = report.split('\n');
+  it("report contains 30 member lines with bold names", () => {
+    const lines = report.split("\n");
     const memberLines = lines.filter((l) => /^\d+\.\s/.test(l));
     expect(memberLines.length).toBe(30);
     for (const line of memberLines) {
@@ -377,29 +391,31 @@ describe('Line-by-line verification of W2 report', () => {
     }
   });
 
-  it('line after members: empty separator or stale section', () => {
-    const lines = report.split('\n');
+  it("line after members: empty separator or stale section", () => {
+    const lines = report.split("\n");
     // 30 member lines end around index 39
     // line 40 is empty separator before stale section
     if (lines.length > 40) {
-      expect(lines[40]).toBe('');
+      expect(lines[40]).toBe("");
     }
   });
 
-  it('stale data warning present when snapshot is old enough', () => {
-    const lines = report.split('\n');
-    const staleWarningIdx = lines.findIndex((l) => l.includes('⚠️ Data klub mungkin tidak terbaru'));
+  it("stale data warning present when snapshot is old enough", () => {
+    const lines = report.split("\n");
+    const staleWarningIdx = lines.findIndex((l) =>
+      l.includes("⚠️ Data klub mungkin tidak terbaru"),
+    );
     if (lines.length > 44) {
       expect(staleWarningIdx).toBeGreaterThanOrEqual(0);
     }
   });
 
-  it('last line is NOT empty (no trailing newline)', () => {
-    const lines = report.split('\n');
-    expect(lines[lines.length - 1]).not.toBe('');
+  it("last line is NOT empty (no trailing newline)", () => {
+    const lines = report.split("\n");
+    expect(lines[lines.length - 1]).not.toBe("");
   });
 
-  it('no line contains Markdown syntax', () => {
+  it("no line contains Markdown syntax", () => {
     expect(report).not.toMatch(/\*\*[^*]+\*\*/);
   });
 });

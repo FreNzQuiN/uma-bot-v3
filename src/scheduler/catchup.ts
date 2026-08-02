@@ -9,13 +9,19 @@
  * triggers when catch-up is later re-enabled.
  */
 
-import type { BotConfig } from '../types';
-import type { IDatabase } from '../db/types';
-import { getDataDate, getDataDay, getDataMonth, getDataYear, getDataDateComponents } from '../utils/timezone';
-import { log } from '../utils/logger';
-import { groupByCollision } from './helpers';
+import type { BotConfig } from "../types";
+import type { IDatabase } from "../db/types";
+import {
+  getDataDate,
+  getDataDay,
+  getDataMonth,
+  getDataYear,
+  getDataDateComponents,
+} from "../utils/timezone";
+import { log } from "../utils/logger";
+import { groupByCollision } from "./helpers";
 
-const REPORT_TYPES = ['daily', 'weekly', 'monthly'] as const;
+const REPORT_TYPES = ["daily", "weekly", "monthly"] as const;
 
 /**
  * Compute the most recent scheduled date for a report type.
@@ -25,33 +31,36 @@ const REPORT_TYPES = ['daily', 'weekly', 'monthly'] as const;
  * current month if it has passed, otherwise the same day last month.
  * Daily: always yesterday.
  */
-function getMostRecentScheduledDate(reportType: string, config: BotConfig): string {
+function getMostRecentScheduledDate(
+  reportType: string,
+  config: BotConfig,
+): string {
   switch (reportType) {
-    case 'daily':
+    case "daily":
       return getYesterdayDate();
-    case 'weekly': {
+    case "weekly": {
       const todayDay = getDataDay();
       const weeklyDays = config.schedule.weekly.days;
       for (const day of [...weeklyDays].sort((a, b) => b - a)) {
         if (day <= todayDay) {
-          return `${getDataYear()}-${String(getDataMonth()).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          return `${getDataYear()}-${String(getDataMonth()).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         }
       }
       const lastDay = Math.max(...weeklyDays);
       const jstMonth = getDataMonth();
       const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
       const prevYear = jstMonth === 1 ? getDataYear() - 1 : getDataYear();
-      return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      return `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     }
-    case 'monthly': {
+    case "monthly": {
       const monthlyDay = config.schedule.monthly.day;
       const jstMonth = getDataMonth();
       if (getDataDay() >= monthlyDay) {
-        return `${getDataYear()}-${String(jstMonth).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
+        return `${getDataYear()}-${String(jstMonth).padStart(2, "0")}-${String(monthlyDay).padStart(2, "0")}`;
       }
       const prevMonth = jstMonth === 1 ? 12 : jstMonth - 1;
       const prevYear = jstMonth === 1 ? getDataYear() - 1 : getDataYear();
-      return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(monthlyDay).padStart(2, '0')}`;
+      return `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(monthlyDay).padStart(2, "0")}`;
     }
     default:
       return getDataDate();
@@ -67,7 +76,7 @@ function getYesterdayDate(): string {
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
   const dd = d.getDate();
-  return `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  return `${y}-${String(m).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
 }
 
 export class CatchUpManager {
@@ -103,7 +112,10 @@ export class CatchUpManager {
       }
     }
 
-    log.debug('CatchUp', `Detection complete: ${missed.length > 0 ? missed.join(', ') : 'no missed reports'}`);
+    log.debug(
+      "CatchUp",
+      `Detection complete: ${missed.length > 0 ? missed.join(", ") : "no missed reports"}`,
+    );
 
     return missed;
   }
@@ -118,7 +130,7 @@ export class CatchUpManager {
     if (missed.length === 0) return;
 
     const scheduledAt = new Date().toISOString();
-    const targetJid = this.config.groups.announcement[0] ?? '';
+    const targetJid = this.config.groups.announcement[0] ?? "";
 
     for (const reportType of missed) {
       const reportDate = this.getMissedDate(reportType);
@@ -126,13 +138,16 @@ export class CatchUpManager {
         report_type: reportType,
         report_date: reportDate,
         scheduled_at: scheduledAt,
-        status: 'skipped',
+        status: "skipped",
         is_catch_up: false,
         target_jid: targetJid,
       });
     }
     await this.db.save();
-    log.info('CatchUp', `Recorded ${missed.length} skipped report(s): ${missed.join(', ')}`);
+    log.info(
+      "CatchUp",
+      `Recorded ${missed.length} skipped report(s): ${missed.join(", ")}`,
+    );
   }
 
   /**
@@ -151,42 +166,55 @@ export class CatchUpManager {
 
   private async executeSingleReport(
     reportType: string,
-    sendReport: (type: string, options?: { isCatchUp: boolean; offset?: number }) => Promise<unknown>,
+    sendReport: (
+      type: string,
+      options?: { isCatchUp: boolean; offset?: number },
+    ) => Promise<unknown>,
     today: string,
     scheduledAt: string,
-    targetJid: string
+    targetJid: string,
   ): Promise<{ success: boolean; alerts: unknown[] }> {
     const runId = await this.db.recordRun({
       report_type: reportType,
       report_date: today,
       scheduled_at: scheduledAt,
-      status: 'pending',
+      status: "pending",
       is_catch_up: true,
       target_jid: targetJid,
     });
 
     try {
-      const options: { isCatchUp: boolean; offset?: number } = { isCatchUp: true };
-      if (reportType === 'monthly') {
+      const options: { isCatchUp: boolean; offset?: number } = {
+        isCatchUp: true,
+      };
+      if (reportType === "monthly") {
         options.offset = -1;
       }
       const result = await sendReport(reportType, options);
       const alerts = Array.isArray(result) ? result : [];
-      await this.db.updateRunStatus(runId, 'sent');
+      await this.db.updateRunStatus(runId, "sent");
       await this.db.save();
       return { success: true, alerts };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      await this.db.updateRunStatus(runId, 'failed', errorMsg);
-      log.error('CatchUp', `Failed to send ${reportType} report`, error);
+      await this.db.updateRunStatus(runId, "failed", errorMsg);
+      log.error("CatchUp", `Failed to send ${reportType} report`, error);
       return { success: false, alerts: [] };
     }
   }
 
   async executeCatchUp(
-    sendReport: (type: string, options?: { isCatchUp: boolean; offset?: number }) => Promise<unknown>,
-    onCombinedReport?: (types: string[]) => Promise<unknown>
-  ): Promise<{ sent: number; skipped: number; failed: number; alerts: unknown[] }> {
+    sendReport: (
+      type: string,
+      options?: { isCatchUp: boolean; offset?: number },
+    ) => Promise<unknown>,
+    onCombinedReport?: (types: string[]) => Promise<unknown>,
+  ): Promise<{
+    sent: number;
+    skipped: number;
+    failed: number;
+    alerts: unknown[];
+  }> {
     if (!this.config.catchUp.enabled) {
       return { sent: 0, skipped: 0, failed: 0, alerts: [] };
     }
@@ -195,10 +223,13 @@ export class CatchUpManager {
     const maxReports = this.config.catchUp.maxReportsPerStartup;
     const today = getDataDate();
     const scheduledAt = new Date().toISOString();
-    const targetJid = this.config.groups.announcement[0] ?? '';
+    const targetJid = this.config.groups.announcement[0] ?? "";
 
     if (!targetJid) {
-      log.warn('CatchUp', 'No announcement groups configured, skipping catch-up');
+      log.warn(
+        "CatchUp",
+        "No announcement groups configured, skipping catch-up",
+      );
       return { sent: 0, skipped: missed.length, failed: 0, alerts: [] };
     }
 
@@ -216,7 +247,13 @@ export class CatchUpManager {
       }
 
       if (group.length === 1) {
-        const result = await this.executeSingleReport(group[0], sendReport, today, scheduledAt, targetJid);
+        const result = await this.executeSingleReport(
+          group[0],
+          sendReport,
+          today,
+          scheduledAt,
+          targetJid,
+        );
         if (result.success) {
           alerts.push(...result.alerts);
           sent++;
@@ -224,45 +261,56 @@ export class CatchUpManager {
           failed++;
         }
       } else if (onCombinedReport) {
-        const combinedKey = group.join('+');
+        const combinedKey = group.join("+");
         let runId: number | undefined;
         try {
           runId = await this.db.recordRun({
             report_type: combinedKey,
             report_date: today,
             scheduled_at: scheduledAt,
-            status: 'pending',
+            status: "pending",
             is_catch_up: true,
             target_jid: targetJid,
           });
           const result = await onCombinedReport(group);
           if (Array.isArray(result)) alerts.push(...result);
-          await this.db.updateRunStatus(runId, 'sent');
+          await this.db.updateRunStatus(runId, "sent");
           // Record individual runs so scheduled reports don't duplicate
           for (const type of group) {
             await this.db.recordRun({
               report_type: type,
               report_date: today,
               scheduled_at: scheduledAt,
-              status: 'sent',
+              status: "sent",
               is_catch_up: true,
               target_jid: targetJid,
             });
           }
           await this.db.save();
           sent++;
-          log.info('CatchUp', `Sent combined report: ${combinedKey}`);
+          log.info("CatchUp", `Sent combined report: ${combinedKey}`);
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
           if (runId !== undefined) {
-            await this.db.updateRunStatus(runId, 'failed', errorMsg);
+            await this.db.updateRunStatus(runId, "failed", errorMsg);
           }
           failed++;
-          log.error('CatchUp', `Failed to send combined report ${combinedKey}`, error);
+          log.error(
+            "CatchUp",
+            `Failed to send combined report ${combinedKey}`,
+            error,
+          );
         }
       } else {
         for (const reportType of group) {
-          const result = await this.executeSingleReport(reportType, sendReport, today, scheduledAt, targetJid);
+          const result = await this.executeSingleReport(
+            reportType,
+            sendReport,
+            today,
+            scheduledAt,
+            targetJid,
+          );
           if (result.success) {
             alerts.push(...result.alerts);
             sent++;
@@ -286,15 +334,14 @@ export class CatchUpManager {
 
   private isReportEnabled(reportType: string): boolean {
     switch (reportType) {
-      case 'daily':
+      case "daily":
         return this.config.schedule.daily.enabled;
-      case 'weekly':
+      case "weekly":
         return this.config.schedule.weekly.enabled;
-      case 'monthly':
+      case "monthly":
         return this.config.schedule.monthly.enabled;
       default:
         return false;
     }
   }
-
 }

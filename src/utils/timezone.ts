@@ -11,7 +11,7 @@
  * No hardcoded UTC offsets.
  */
 
-const DATA_TIMEZONE = 'Asia/Tokyo';
+const DATA_TIMEZONE = "Asia/Tokyo";
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`;
@@ -23,29 +23,29 @@ function pad2(n: number): string {
  */
 function extractInTimezone(
   date: Date,
-  tz: string
+  tz: string,
 ): { year: number; month: number; day: number; hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat('en-US', {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   }).formatToParts(date);
 
   const get = (type: string) => {
     const part = parts.find((p) => p.type === type);
-    return parseInt(part?.value ?? '0', 10);
+    return parseInt(part?.value ?? "0", 10);
   };
 
   return {
-    year: get('year'),
-    month: get('month'),
-    day: get('day'),
-    hour: get('hour'),
-    minute: get('minute'),
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
   };
 }
 
@@ -60,12 +60,14 @@ export function getDataDate(date?: Date): string {
 }
 
 /** Get JST date components for a given Date (or now). */
-export function getDataDateComponents(
-  date?: Date
-): { year: number; month: number; day: number } {
+export function getDataDateComponents(date?: Date): {
+  year: number;
+  month: number;
+  day: number;
+} {
   const { year, month, day } = extractInTimezone(
     date ?? new Date(),
-    DATA_TIMEZONE
+    DATA_TIMEZONE,
   );
   return { year, month, day };
 }
@@ -81,7 +83,10 @@ export function getDisplayDay(displayTimezone: string, date?: Date): number {
 }
 
 /** Get date components in the display timezone. Used by cron-triggered fetches to match WIB day. */
-export function getDisplayDateComponents(displayTimezone: string, date?: Date): { year: number; month: number; day: number } {
+export function getDisplayDateComponents(
+  displayTimezone: string,
+  date?: Date,
+): { year: number; month: number; day: number } {
   return extractInTimezone(date ?? new Date(), displayTimezone);
 }
 
@@ -109,7 +114,7 @@ export function getDataYear(date?: Date): number {
 export function getTargetMonth(
   curYear: number,
   curMonth: number,
-  offsetMonths: number
+  offsetMonths: number,
 ): { year: number; month: number } {
   const absOffset = Math.abs(offsetMonths);
   let targetMonth = curMonth - absOffset;
@@ -122,18 +127,18 @@ export function getTargetMonth(
 }
 
 export const INDONESIAN_MONTHS = [
-  'Januari',
-  'Februari',
-  'Maret',
-  'April',
-  'Mei',
-  'Juni',
-  'Juli',
-  'Agustus',
-  'September',
-  'Oktober',
-  'November',
-  'Desember',
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
 ];
 
 /**
@@ -142,7 +147,7 @@ export const INDONESIAN_MONTHS = [
  * @example formatDateWIB('2026-06-11') → '11 Juni 2026'
  */
 export function formatDateWIB(dateStr: string): string {
-  const [yearStr, monthStr, dayStr] = dateStr.split('-');
+  const [yearStr, monthStr, dayStr] = dateStr.split("-");
   const day = parseInt(dayStr, 10);
   const month = parseInt(monthStr, 10);
   const year = parseInt(yearStr, 10);
@@ -153,12 +158,7 @@ export function formatDateWIB(dateStr: string): string {
  * Format a Date for display in the configured timezone as "D/M HH:MM".
  * Used for the footer sync timestamp.
  */
-export function formatForDisplay(
-  date: Date,
-  displayTimezone: string
-): string {
+export function formatForDisplay(date: Date, displayTimezone: string): string {
   const { day, month, hour, minute } = extractInTimezone(date, displayTimezone);
   return `${day}/${month} ${pad2(hour)}:${pad2(minute)}`;
 }
-
-

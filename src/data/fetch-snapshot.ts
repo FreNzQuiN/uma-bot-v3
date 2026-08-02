@@ -10,12 +10,12 @@
  * finished yet (data is behind today's JST date).
  */
 
-import type { UmaMoeClient } from '../api/uma-moe';
-import type { Snapshot } from '../types';
-import { loadMonthSnapshot, saveSnapshot } from './snapshot';
-import { getDataDateComponents, getDataDay } from '../utils/timezone';
-import { getDataDayFromSnapshot } from './daily-fans';
-import { log } from '../utils/logger';
+import type { UmaMoeClient } from "../api/uma-moe";
+import type { Snapshot } from "../types";
+import { loadMonthSnapshot, saveSnapshot } from "./snapshot";
+import { getDataDateComponents, getDataDay } from "../utils/timezone";
+import { getDataDayFromSnapshot } from "./daily-fans";
+import { log } from "../utils/logger";
 
 export interface FetchResult {
   snapshot: Snapshot | null;
@@ -30,7 +30,8 @@ function p2(n: number): string {
 /** Derive file path from snapshot metadata, not clock. */
 export function getDataDateForFile(snapshot: Snapshot): string {
   const member = snapshot.members[0];
-  if (!member) return `${getDataDateComponents().year}-${p2(getDataDateComponents().month)}-${p2(getDataDateComponents().day)}`;
+  if (!member)
+    return `${getDataDateComponents().year}-${p2(getDataDateComponents().month)}-${p2(getDataDateComponents().day)}`;
   const day = getDataDayFromSnapshot(snapshot);
   if (day === 0) return `${member.year}-${p2(member.month)}-01`;
   return `${member.year}-${p2(member.month)}-${p2(day)}`;
@@ -73,9 +74,18 @@ export function isFetchedNewer(fetched: Snapshot, existing: Snapshot): boolean {
   const fetchedDay = getDataDayFromSnapshot(fetched);
   const existingDay = getDataDayFromSnapshot(existing);
   if (fetchedDay > existingDay) return true;
-  if (fetchedDay === existingDay && fetched.members.length > existing.members.length) return true;
-  if (fetchedDay === existingDay && fetched.members.length === existing.members.length) {
-    return (fetched.circle.last_updated ?? '') > (existing.circle.last_updated ?? '');
+  if (
+    fetchedDay === existingDay &&
+    fetched.members.length > existing.members.length
+  )
+    return true;
+  if (
+    fetchedDay === existingDay &&
+    fetched.members.length === existing.members.length
+  ) {
+    return (
+      (fetched.circle.last_updated ?? "") > (existing.circle.last_updated ?? "")
+    );
   }
   return false;
 }
@@ -89,7 +99,7 @@ async function fetchOnce(
   circleId: number,
   year: number,
   month: number,
-  existing: Snapshot | null
+  existing: Snapshot | null,
 ): Promise<{ fetched: Snapshot; shouldSave: boolean } | { error: string }> {
   let fetched: Snapshot;
   try {
@@ -99,7 +109,7 @@ async function fetchOnce(
   }
 
   if (fetched.members.length === 0) {
-    return { error: 'empty_response' };
+    return { error: "empty_response" };
   }
 
   if (fetched.circle.circle_id !== circleId) {
@@ -107,7 +117,7 @@ async function fetchOnce(
   }
 
   if (existing && !isFetchedNewer(fetched, existing)) {
-    return { error: 'not_newer' };
+    return { error: "not_newer" };
   }
 
   return { fetched, shouldSave: true };
@@ -128,7 +138,7 @@ export async function fetchAndSaveSnapshot(
   circleId: number,
   year: number,
   month: number,
-  options?: { rootDir?: string }
+  options?: { rootDir?: string },
 ): Promise<FetchResult> {
   const rootDir = options?.rootDir ?? process.cwd();
   const monthLabel = `${year}-${p2(month)}`;
@@ -139,7 +149,10 @@ export async function fetchAndSaveSnapshot(
   let needFetch = !existing;
   if (existing) {
     if (existing.circle.circle_id !== circleId) {
-      log.warn('Snapshot', `Circle ID mismatch: cached=${existing.circle.circle_id} requested=${circleId}`);
+      log.warn(
+        "Snapshot",
+        `Circle ID mismatch: cached=${existing.circle.circle_id} requested=${circleId}`,
+      );
       needFetch = true;
     } else {
       const { year: curYear, month: curMonth } = getDataDateComponents();
@@ -153,8 +166,8 @@ export async function fetchAndSaveSnapshot(
   }
 
   if (!needFetch) {
-    log.debug('Snapshot', `Cache hit for ${monthLabel}, returning existing`);
-    return { snapshot: existing, saved: false, reason: 'fresh' };
+    log.debug("Snapshot", `Cache hit for ${monthLabel}, returning existing`);
+    return { snapshot: existing, saved: false, reason: "fresh" };
   }
 
   // Check if existing data is already fresh enough (today or yesterday)
@@ -162,8 +175,11 @@ export async function fetchAndSaveSnapshot(
   const isCurrentMonth = curYear === year && curMonth === month;
 
   if (existing && isCurrentMonth && isDataFreshEnough(existing)) {
-    log.debug('Snapshot', `Existing data for ${monthLabel} is fresh enough (today/yesterday), skipping fetch`);
-    return { snapshot: existing, saved: false, reason: 'fresh' };
+    log.debug(
+      "Snapshot",
+      `Existing data for ${monthLabel} is fresh enough (today/yesterday), skipping fetch`,
+    );
+    return { snapshot: existing, saved: false, reason: "fresh" };
   }
 
   // Retry with exponential backoff for current-month data.
@@ -185,17 +201,20 @@ export async function fetchAndSaveSnapshot(
   if (!isCurrentMonth || maxWaitMs <= 0) {
     // Past month or data too old — single attempt, no retry
     const result = await fetchOnce(umaMoe, circleId, year, month, existing);
-    if ('fetched' in result) {
+    if ("fetched" in result) {
       const fileDate = getDataDateForFile(result.fetched);
       saveSnapshot(result.fetched, fileDate, rootDir);
-      log.info('Snapshot', `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`);
+      log.info(
+        "Snapshot",
+        `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
+      );
       return { snapshot: result.fetched, saved: true };
     }
-    log.warn('Snapshot', `Fetch failed for ${monthLabel}: ${result.error}`);
+    log.warn("Snapshot", `Fetch failed for ${monthLabel}: ${result.error}`);
     return { snapshot: existing, saved: false, reason: result.error };
   }
 
-  let lastError = '';
+  let lastError = "";
   let cumulativeWait = 0;
   let delay = 5 * 60_000; // start at 5m
   let attempt = 0;
@@ -204,41 +223,66 @@ export async function fetchAndSaveSnapshot(
     attempt++;
     const result = await fetchOnce(umaMoe, circleId, year, month, existing);
 
-    if ('fetched' in result) {
+    if ("fetched" in result) {
       const fileDate = getDataDateForFile(result.fetched);
       saveSnapshot(result.fetched, fileDate, rootDir);
-      log.info('Snapshot', `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`);
+      log.info(
+        "Snapshot",
+        `Saved ${monthLabel} (${result.fetched.members.length} members) as ${fileDate}`,
+      );
 
       if (!isDataFreshEnough(result.fetched)) {
         const fetchedDay = getDataDayFromSnapshot(result.fetched);
         const expectedDay = getDataDay() - 1;
-        log.warn('Snapshot', `Data behind for ${monthLabel} (day ${fetchedDay}, need ≥${expectedDay})`);
+        log.warn(
+          "Snapshot",
+          `Data behind for ${monthLabel} (day ${fetchedDay}, need ≥${expectedDay})`,
+        );
         if (cumulativeWait + delay <= maxWaitMs) {
-          log.info('Snapshot', `Retry ${attempt} for ${monthLabel} in ${Math.round(delay / 60_000)}m`);
+          log.info(
+            "Snapshot",
+            `Retry ${attempt} for ${monthLabel} in ${Math.round(delay / 60_000)}m`,
+          );
           await sleep(delay);
           cumulativeWait += delay;
           delay = Math.min(delay * 2, MAX_DELAY_MS);
           continue;
         }
-        log.warn('Snapshot', `Retry budget exhausted for ${monthLabel} (${Math.round(cumulativeWait / 60_000)}m waited)`);
+        log.warn(
+          "Snapshot",
+          `Retry budget exhausted for ${monthLabel} (${Math.round(cumulativeWait / 60_000)}m waited)`,
+        );
       }
 
       return { snapshot: result.fetched, saved: true };
     }
 
     lastError = result.error;
-    log.debug('Snapshot', `Attempt ${attempt} for ${monthLabel} failed: ${lastError}`);
+    log.debug(
+      "Snapshot",
+      `Attempt ${attempt} for ${monthLabel} failed: ${lastError}`,
+    );
 
     if (cumulativeWait + delay > maxWaitMs) {
-      log.warn('Snapshot', `Retry budget exhausted for ${monthLabel} (${Math.round(cumulativeWait / 60_000)}m waited): ${lastError}`);
+      log.warn(
+        "Snapshot",
+        `Retry budget exhausted for ${monthLabel} (${Math.round(cumulativeWait / 60_000)}m waited): ${lastError}`,
+      );
       break;
     }
 
-    log.info('Snapshot', `Retry ${attempt} for ${monthLabel} in ${Math.round(delay / 60_000)}m`);
+    log.info(
+      "Snapshot",
+      `Retry ${attempt} for ${monthLabel} in ${Math.round(delay / 60_000)}m`,
+    );
     await sleep(delay);
     cumulativeWait += delay;
     delay = Math.min(delay * 2, MAX_DELAY_MS);
   }
 
-  return { snapshot: existing, saved: false, reason: lastError || 'fetch_failed' };
+  return {
+    snapshot: existing,
+    saved: false,
+    reason: lastError || "fetch_failed",
+  };
 }

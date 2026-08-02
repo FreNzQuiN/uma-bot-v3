@@ -23,12 +23,12 @@ All responses use a standard envelope:
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `success` | `boolean` | Whether the request succeeded |
-| `data` | `any` | Response payload (only on success) |
-| `error` | `string` | Error message (only on failure) |
-| `meta` | `object` | Additional metadata (varies by endpoint) |
+| Field     | Type      | Description                              |
+| --------- | --------- | ---------------------------------------- |
+| `success` | `boolean` | Whether the request succeeded            |
+| `data`    | `any`     | Response payload (only on success)       |
+| `error`   | `string`  | Error message (only on failure)          |
+| `meta`    | `object`  | Additional metadata (varies by endpoint) |
 
 ## Authentication
 
@@ -38,10 +38,10 @@ If the `API_TOKEN` environment variable is set, all endpoints except `/health` r
 Authorization: Bearer <your-token>
 ```
 
-| Status | Condition |
-|--------|-----------|
-| `401` | Missing or incorrect `Authorization` header |
-| `200` | Valid token or `API_TOKEN` not set (auth disabled) |
+| Status | Condition                                          |
+| ------ | -------------------------------------------------- |
+| `401`  | Missing or incorrect `Authorization` header        |
+| `200`  | Valid token or `API_TOKEN` not set (auth disabled) |
 
 `/health` is always accessible without authentication.
 
@@ -184,15 +184,15 @@ List all members with computed data.
 
 **Member fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `viewerId` | `number` | Unique trainer ID |
-| `name` | `string` | Display name |
-| `status` | `string` | `"active"`, `"stale"`, or `"left"` |
-| `monthlyGain` | `number` | Fans gained this month |
-| `latestDailyGain` | `number` | Fans gained most recent day |
-| `isTransfer` | `boolean` | Whether member transferred from another club |
-| `previousCircleName` | `string?` | Source club name (if transfer) |
+| Field                | Type      | Description                                  |
+| -------------------- | --------- | -------------------------------------------- |
+| `viewerId`           | `number`  | Unique trainer ID                            |
+| `name`               | `string`  | Display name                                 |
+| `status`             | `string`  | `"active"`, `"stale"`, or `"left"`           |
+| `monthlyGain`        | `number`  | Fans gained this month                       |
+| `latestDailyGain`    | `number`  | Fans gained most recent day                  |
+| `isTransfer`         | `boolean` | Whether member transferred from another club |
+| `previousCircleName` | `string?` | Source club name (if transfer)               |
 
 ---
 
@@ -202,8 +202,8 @@ Single member detail.
 
 **Path parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter  | Type     | Description                      |
+| ---------- | -------- | -------------------------------- |
 | `viewerId` | `number` | Member's viewer ID (1-15 digits) |
 
 **Response** (`200`):
@@ -226,16 +226,16 @@ Single member detail.
 
 **Additional field:**
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field         | Type       | Description                            |
+| ------------- | ---------- | -------------------------------------- |
 | `weeklyGains` | `number[]` | Gains per week block (1-indexed weeks) |
 
 **Error responses:**
 
-| Status | Error | Reason |
-|--------|-------|--------|
-| `400` | `"Invalid viewerId format"` | ID is not 1-15 digits |
-| `404` | `"Member {id} not found"` | No member with that ID in current snapshot |
+| Status | Error                       | Reason                                     |
+| ------ | --------------------------- | ------------------------------------------ |
+| `400`  | `"Invalid viewerId format"` | ID is not 1-15 digits                      |
+| `404`  | `"Member {id} not found"`   | No member with that ID in current snapshot |
 
 ---
 
@@ -267,16 +267,16 @@ Tier promotion/demotion intelligence.
 
 **Tier fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `clubRank` | `number` | Numeric tier (1=D, 11=SS) |
-| `tierName` | `string` | Tier name (SS, S+, S, A+, etc.) |
-| `promotionGap` | `number` | Fans needed for promotion |
-| `demotionBuffer` | `number` | Fans above demotion threshold |
-| `requiredPace` | `number` | Daily pace needed to promote |
-| `currentPace` | `number` | Current daily pace |
-| `daysLeft` | `number` | Days left in month |
-| `riskLevel` | `string` | `"LOW"`, `"MEDIUM"`, or `"HIGH"` |
+| Field              | Type     | Description                                              |
+| ------------------ | -------- | -------------------------------------------------------- |
+| `clubRank`         | `number` | Numeric tier (1=D, 11=SS)                                |
+| `tierName`         | `string` | Tier name (SS, S+, S, A+, etc.)                          |
+| `promotionGap`     | `number` | Fans needed for promotion                                |
+| `demotionBuffer`   | `number` | Fans above demotion threshold                            |
+| `requiredPace`     | `number` | Daily pace needed to promote                             |
+| `currentPace`      | `number` | Current daily pace                                       |
+| `daysLeft`         | `number` | Days left in month                                       |
+| `riskLevel`        | `string` | `"LOW"`, `"MEDIUM"`, or `"HIGH"`                         |
 | `projectedOutcome` | `string` | `"promote"`, `"stay"`, `"demotion_risk"`, or `"unknown"` |
 
 ---
@@ -320,9 +320,9 @@ List WhatsApp groups the bot is in. Requires WhatsApp connection.
 
 **Error responses:**
 
-| Status | Error | Reason |
-|--------|-------|--------|
-| `503` | `"WhatsApp not connected"` | Bot hasn't connected to WhatsApp yet |
+| Status | Error                      | Reason                               |
+| ------ | -------------------------- | ------------------------------------ |
+| `503`  | `"WhatsApp not connected"` | Bot hasn't connected to WhatsApp yet |
 
 ---
 

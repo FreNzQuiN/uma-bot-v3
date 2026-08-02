@@ -3,6 +3,7 @@
 ## Mandatory Reading for All Agents
 
 **Before touching any test file, you MUST:**
+
 1. Read this document completely
 2. Load skill `test-pattern`
 3. Prove you understand the principles by answering the questions in the "Agent Prerequisites" section below
@@ -43,7 +44,7 @@ Internal logic (NEVER mock):
 Use `makeMockDb()` from `tests/_helpers`. Configure return values per test:
 
 ```typescript
-import { makeMockDb } from '../_helpers';
+import { makeMockDb } from "../_helpers";
 
 let db: ReturnType<typeof makeMockDb>;
 
@@ -51,16 +52,19 @@ beforeEach(() => {
   db = makeMockDb();
 });
 
-it('skips if already sent today', async () => {
-  asMock(db.getLastSuccessfulRun).mockResolvedValue(makeRun({ report_type: 'daily' }));
+it("skips if already sent today", async () => {
+  asMock(db.getLastSuccessfulRun).mockResolvedValue(
+    makeRun({ report_type: "daily" }),
+  );
   // ... test logic
 });
 ```
 
 **Never do this in unit tests:**
+
 ```typescript
 // ✗ BAD — creates real SqliteDatabase in unit test
-db = new SqliteDatabase(':memory:');
+db = new SqliteDatabase(":memory:");
 await db.initialize();
 ```
 
@@ -78,12 +82,12 @@ The `SqliteDatabase(':memory:')` call hits sql.js WASM, creates tables, and touc
 
 Every assertion must be able to fail. Check each assertion against this list:
 
-| Bad Pattern | Why It Fails | Fix |
-|-------------|-------------|-----|
-| `expect(x).toBeGreaterThanOrEqual(0)` when x can only be 0 | Always passes if x is 0 | Assert the exact expected value |
-| `expect(result).toBeDefined()` | Almost anything is defined | Assert the specific property or value |
-| `expect(Array.isArray(x)).toBe(true)` | Array is always an array if that's the return type | Assert length, contents, or specific elements |
-| `expect(alerts).toHaveLength(0)` with no setup | Depends on what function does | Verify the guard condition actually blocks |
+| Bad Pattern                                                | Why It Fails                                       | Fix                                           |
+| ---------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------- |
+| `expect(x).toBeGreaterThanOrEqual(0)` when x can only be 0 | Always passes if x is 0                            | Assert the exact expected value               |
+| `expect(result).toBeDefined()`                             | Almost anything is defined                         | Assert the specific property or value         |
+| `expect(Array.isArray(x)).toBe(true)`                      | Array is always an array if that's the return type | Assert length, contents, or specific elements |
+| `expect(alerts).toHaveLength(0)` with no setup             | Depends on what function does                      | Verify the guard condition actually blocks    |
 
 ### The Liar Check
 
@@ -126,24 +130,24 @@ it('returns well-formed alert objects', async () => {
 
 ### Shared Helpers (`tests/_helpers/index.ts`)
 
-| Helper | Purpose |
-|--------|---------|
-| `loadRealSnapshot()` | Load fixture data from `tests/examples/snapshot-june-12.json` |
-| `makeConfig(overrides?)` | Build a `BotConfig` with deep-merge overrides |
-| `makeMockDb()` | Create a mock `IDatabase` with `jest.fn()` stubs |
-| `makeMessage(overrides?)` | Build a mock `IncomingMessage` |
-| `mockCurrentDate(y, m, d)` | Freeze fake timers to a specific date (JST noon) |
-| `restoreDateMocks()` | Restore real timers |
-| `parseFormattedGain(str)` | Parse "+2.7M" back to number |
-| `makeEmptySnapshot(real)` | Build snapshot with `members: []` |
+| Helper                     | Purpose                                                       |
+| -------------------------- | ------------------------------------------------------------- |
+| `loadRealSnapshot()`       | Load fixture data from `tests/examples/snapshot-june-12.json` |
+| `makeConfig(overrides?)`   | Build a `BotConfig` with deep-merge overrides                 |
+| `makeMockDb()`             | Create a mock `IDatabase` with `jest.fn()` stubs              |
+| `makeMessage(overrides?)`  | Build a mock `IncomingMessage`                                |
+| `mockCurrentDate(y, m, d)` | Freeze fake timers to a specific date (JST noon)              |
+| `restoreDateMocks()`       | Restore real timers                                           |
+| `parseFormattedGain(str)`  | Parse "+2.7M" back to number                                  |
+| `makeEmptySnapshot(real)`  | Build snapshot with `members: []`                             |
 
 ### Constants
 
-| Constant | Value |
-|----------|-------|
-| `TRANSFER_NAMES` | `['Zero', 'TheTengOne', 'Sairen', 'VitoHoow', 'Ceciria', 'Falkrum']` |
-| `STALE_NAMES` | `['DOA IBU', 'Kuro', 'Rowking', 'Lebowski']` |
-| `WHATSAPP_MAX_LENGTH` | `4096` |
+| Constant              | Value                                                                |
+| --------------------- | -------------------------------------------------------------------- |
+| `TRANSFER_NAMES`      | `['Zero', 'TheTengOne', 'Sairen', 'VitoHoow', 'Ceciria', 'Falkrum']` |
+| `STALE_NAMES`         | `['DOA IBU', 'Kuro', 'Rowking', 'Lebowski']`                         |
+| `WHATSAPP_MAX_LENGTH` | `4096`                                                               |
 
 ---
 
@@ -177,6 +181,7 @@ Before analyzing any test file, answer these in your response:
 2. **What is the Liar check?** (How do you detect a test that always passes?)
 
 3. **Given this test:**
+
 ```typescript
 it('returns well-formed alert objects', async () => {
   const alerts = await detectAlerts(...);
@@ -185,6 +190,7 @@ it('returns well-formed alert objects', async () => {
   }
 });
 ```
+
 **Is this a valuable test or a Liar? Why?**
 
 4. **When is `SqliteDatabase(':memory:')` appropriate in a test?** When is it not?
@@ -197,19 +203,20 @@ it('returns well-formed alert objects', async () => {
 
 These were found and fixed. Watch for recurrence:
 
-| Anti-Pattern | Example | Fix |
-|--------------|---------|-----|
-| Real DB in unit test | `new SqliteDatabase(':memory:')` in scheduler tests | Use `makeMockDb()` |
-| Vacuous assertion | `toBeGreaterThanOrEqual(0)` when value is always 0 | Assert exact expected value |
-| Circular validation | Mock returns X, test asserts mock returned X | Test against real implementation |
-| Over-specified test | Tests assert internal state or call private methods | Test behavior through public API |
-| Missing mock setup | `db.getLastSuccessfulRun` not configured, returns undefined | Configure mock return per test |
+| Anti-Pattern         | Example                                                     | Fix                              |
+| -------------------- | ----------------------------------------------------------- | -------------------------------- |
+| Real DB in unit test | `new SqliteDatabase(':memory:')` in scheduler tests         | Use `makeMockDb()`               |
+| Vacuous assertion    | `toBeGreaterThanOrEqual(0)` when value is always 0          | Assert exact expected value      |
+| Circular validation  | Mock returns X, test asserts mock returned X                | Test against real implementation |
+| Over-specified test  | Tests assert internal state or call private methods         | Test behavior through public API |
+| Missing mock setup   | `db.getLastSuccessfulRun` not configured, returns undefined | Configure mock return per test   |
 
 ---
 
 ## Coverage Thresholds
 
 From `jest.config.js`:
+
 - Branches: 70%
 - Functions: 80%
 - Lines: 80%

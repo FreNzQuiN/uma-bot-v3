@@ -49,6 +49,7 @@ uma.moe API → Snapshot (immutable JSON) → computeMembers() → Report → Wh
 ```
 
 **Why this order:**
+
 - Config first — everything depends on it.
 - Data before reports — can't generate without it.
 - API before WhatsApp — independent, can start immediately.
@@ -91,6 +92,7 @@ Cron-based auto-delivery using node-cron. When daily + weekly collide at the sam
 ### Alerts
 
 Five alert types, each detecting a different problem:
+
 - **Performance drop:** Today's gain < 50% of 7-day average
 - **Demotion risk:** Club buffer < 3 days of current pace
 - **Streak break:** Member's consecutive active days interrupted
@@ -109,18 +111,18 @@ Baileys-based WhatsApp Web connection. Commands are parsed from incoming message
 
 12 generator functions, each producing a WhatsApp-formatted string from computed members. `computeMembers()` is called once per pipeline and injected into generators — never called internally by generators.
 
-| Type | What it computes |
-|------|-----------------|
-| Daily | Today's gain per member, ranked |
-| Weekly | Week block gain, requirement check |
-| Monthly | Month-to-date gain, projections |
-| Ranks | Top 10 members |
-| Bottom | Members needing attention |
-| Stats | Club-wide statistics |
-| Members | Full member list |
-| Tier | Tier promotion/demotion analysis |
-| Compare | Side-by-side member comparison |
-| Analyze | Deep single-member analysis |
+| Type     | What it computes                            |
+| -------- | ------------------------------------------- |
+| Daily    | Today's gain per member, ranked             |
+| Weekly   | Week block gain, requirement check          |
+| Monthly  | Month-to-date gain, projections             |
+| Ranks    | Top 10 members                              |
+| Bottom   | Members needing attention                   |
+| Stats    | Club-wide statistics                        |
+| Members  | Full member list                            |
+| Tier     | Tier promotion/demotion analysis            |
+| Compare  | Side-by-side member comparison              |
+| Analyze  | Deep single-member analysis                 |
 | Combined | Multi-type combined report (collision days) |
 
 ### REST API
@@ -147,14 +149,14 @@ Every report type is different arithmetic on this same array. The report engine 
 
 ## Error Recovery
 
-| Scenario | Behavior |
-|----------|----------|
-| uma.moe API down | Logs error, uses existing snapshots |
-| WhatsApp disconnected | Reports generated but not delivered; scheduler marks as `failed` |
-| Config invalid | Bot refuses to start with field-level error messages |
-| Database corrupted | sql.js handles gracefully; reset with `npm run db:reset` |
-| Bot crashes mid-report | Scheduler marks run as `failed`; catch-up sends it on restart |
-| Token expired | Auto-refreshes via Playwright (up to 3 retries) |
+| Scenario               | Behavior                                                         |
+| ---------------------- | ---------------------------------------------------------------- |
+| uma.moe API down       | Logs error, uses existing snapshots                              |
+| WhatsApp disconnected  | Reports generated but not delivered; scheduler marks as `failed` |
+| Config invalid         | Bot refuses to start with field-level error messages             |
+| Database corrupted     | sql.js handles gracefully; reset with `npm run db:reset`         |
+| Bot crashes mid-report | Scheduler marks run as `failed`; catch-up sends it on restart    |
+| Token expired          | Auto-refreshes via Playwright (up to 3 retries)                  |
 
 ## Deployment
 

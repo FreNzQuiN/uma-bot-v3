@@ -1,4 +1,4 @@
-import type { Pool, PoolConnection } from 'mysql2/promise';
+import type { Pool, PoolConnection } from "mysql2/promise";
 
 const mockRelease = jest.fn().mockResolvedValue(undefined);
 const mockBeginTransaction = jest.fn().mockResolvedValue(undefined);
@@ -26,22 +26,22 @@ const mockPool = {
   end: mockPoolEnd,
 } as unknown as Pool;
 
-jest.mock('mysql2/promise', () => ({
+jest.mock("mysql2/promise", () => ({
   __esModule: true,
   default: {
     createPool: jest.fn(() => mockPool),
   },
 }));
 
-import { MysqlDatabase } from '../../src/db/mysql-database';
-import type { MysqlConfig } from '../../src/db/mysql-database';
+import { MysqlDatabase } from "../../src/db/mysql-database";
+import type { MysqlConfig } from "../../src/db/mysql-database";
 
 const config: MysqlConfig = {
-  host: '127.0.0.1',
+  host: "127.0.0.1",
   port: 3306,
-  database: 'test_db',
-  user: 'root',
-  password: 'secret',
+  database: "test_db",
+  user: "root",
+  password: "secret",
   connectionLimit: 5,
   ssl: false,
 };
@@ -61,7 +61,7 @@ beforeEach(async () => {
   // checkVersion() runs on pool.getConnection() result (mockConn), so mockConnQuery
   // must return a valid version first. Pool queries (mockPoolQuery) follow after.
   mockConnQuery
-    .mockResolvedValueOnce([[{ version: '8.0.35' }], undefined])
+    .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
     .mockResolvedValue([[], undefined]);
 
   db = new MysqlDatabase(config);
@@ -77,12 +77,12 @@ beforeEach(async () => {
   mockPoolEnd.mockClear();
 });
 
-
-describe('initialize()', () => {
-  it('creates pool with correct config and verifies connection', async () => {
-    const mysql = await import('mysql2/promise');
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '8.0.35' }], undefined])
+describe("initialize()", () => {
+  it("creates pool with correct config and verifies connection", async () => {
+    const mysql = await import("mysql2/promise");
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
       .mockResolvedValue([[], undefined]);
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
@@ -95,74 +95,83 @@ describe('initialize()', () => {
         user: config.user,
         password: config.password,
         connectionLimit: config.connectionLimit,
-      })
+      }),
     );
     expect(mockGetConnection).toHaveBeenCalled();
     expect(mockRelease).toHaveBeenCalled();
   });
 
-  it('runs 5 CREATE TABLE + 3 CREATE INDEX statements', async () => {
+  it("runs 5 CREATE TABLE + 3 CREATE INDEX statements", async () => {
     mockPoolQuery.mockClear();
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '8.0.35' }], undefined])
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
       .mockResolvedValue([[], undefined]);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
 
     const tableCalls = mockPoolQuery.mock.calls.filter(
-      (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('CREATE TABLE')
+      (c: unknown[]) =>
+        typeof c[0] === "string" && c[0].includes("CREATE TABLE"),
     );
     const indexCalls = mockPoolQuery.mock.calls.filter(
-      (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('CREATE INDEX')
+      (c: unknown[]) =>
+        typeof c[0] === "string" && c[0].includes("CREATE INDEX"),
     );
 
     expect(tableCalls).toHaveLength(4);
     expect(indexCalls).toHaveLength(3);
   });
 
-  it('creates MySQL-compatible DDL (INT AUTO_INCREMENT, VARCHAR, TINYINT)', async () => {
+  it("creates MySQL-compatible DDL (INT AUTO_INCREMENT, VARCHAR, TINYINT)", async () => {
     mockPoolQuery.mockClear();
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '8.0.35' }], undefined])
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
       .mockResolvedValue([[], undefined]);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
 
-    const allSql = mockPoolQuery.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-    expect(allSql).toContain('INT AUTO_INCREMENT PRIMARY KEY');
-    expect(allSql).toContain('VARCHAR(255)');
-    expect(allSql).toContain('TINYINT(1)');
-    expect(allSql).toContain('TEXT NOT NULL');
-    expect(allSql).not.toContain('INTEGER PRIMARY KEY AUTOINCREMENT');
+    const allSql = mockPoolQuery.mock.calls
+      .map((c: unknown[]) => c[0])
+      .join("\n");
+    expect(allSql).toContain("INT AUTO_INCREMENT PRIMARY KEY");
+    expect(allSql).toContain("VARCHAR(255)");
+    expect(allSql).toContain("TINYINT(1)");
+    expect(allSql).toContain("TEXT NOT NULL");
+    expect(allSql).not.toContain("INTEGER PRIMARY KEY AUTOINCREMENT");
   });
 
-  it('checks MySQL version on initialize', async () => {
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '8.0.35' }], undefined])
+  it("checks MySQL version on initialize", async () => {
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
       .mockResolvedValue([[], undefined]);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
 
     const versionCall = mockConnQuery.mock.calls[0];
-    expect(versionCall[0]).toBe('SELECT VERSION() as version');
+    expect(versionCall[0]).toBe("SELECT VERSION() as version");
   });
 
-  it('throws clear error when MySQL version is below minimum', async () => {
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '5.7.40-log' }], undefined]);
+  it("throws clear error when MySQL version is below minimum", async () => {
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "5.7.40-log" }], undefined]);
 
     const freshDb = new MysqlDatabase(config);
     await expect(freshDb.initialize()).rejects.toThrow(
-      /MySQL 5\.7\.40-log detected.*Minimum required: 8\.0\.31.*Upgrade MySQL.*or switch to database\.backend: sqlite/s
+      /MySQL 5\.7\.40-log detected.*Minimum required: 8\.0\.31.*Upgrade MySQL.*or switch to database\.backend: sqlite/s,
     );
   });
 
-  it('allows TiDB version strings without version check', async () => {
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '5.7.25-TiDB-v7.1.0' }], undefined])
+  it("allows TiDB version strings without version check", async () => {
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "5.7.25-TiDB-v7.1.0" }], undefined])
       .mockResolvedValue([[], undefined]);
 
     const freshDb = new MysqlDatabase(config);
@@ -170,9 +179,10 @@ describe('initialize()', () => {
     await expect(freshDb.initialize()).resolves.toBeUndefined();
   });
 
-  it('proceeds with warning when version string cannot be parsed', async () => {
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: 'custom-build-123' }], undefined])
+  it("proceeds with warning when version string cannot be parsed", async () => {
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "custom-build-123" }], undefined])
       .mockResolvedValue([[], undefined]);
 
     const freshDb = new MysqlDatabase(config);
@@ -180,96 +190,99 @@ describe('initialize()', () => {
     await expect(freshDb.initialize()).resolves.toBeUndefined();
   });
 
-  it('CREATE INDEX does not use IF NOT EXISTS syntax', async () => {
+  it("CREATE INDEX does not use IF NOT EXISTS syntax", async () => {
     mockPoolQuery.mockClear();
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '8.0.35' }], undefined])
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "8.0.35" }], undefined])
       .mockResolvedValue([[], undefined]);
 
     const freshDb = new MysqlDatabase(config);
     await freshDb.initialize();
 
     const indexCalls = mockPoolQuery.mock.calls.filter(
-      (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('CREATE INDEX')
+      (c: unknown[]) =>
+        typeof c[0] === "string" && c[0].includes("CREATE INDEX"),
     );
     for (const call of indexCalls) {
-      expect(call[0]).not.toContain('IF NOT EXISTS');
+      expect(call[0]).not.toContain("IF NOT EXISTS");
     }
   });
 });
 
-
-describe('getLastSuccessfulRun()', () => {
-  it('returns null when no rows match', async () => {
+describe("getLastSuccessfulRun()", () => {
+  it("returns null when no rows match", async () => {
     mockPoolQuery.mockResolvedValue([[], undefined]);
 
-    const result = await db.getLastSuccessfulRun('daily');
+    const result = await db.getLastSuccessfulRun("daily");
     expect(result).toBeNull();
   });
 
-  it('executes correct SELECT with report_type and status params', async () => {
+  it("executes correct SELECT with report_type and status params", async () => {
     mockPoolQuery.mockResolvedValue([
       [
         {
           id: 42,
-          report_type: 'weekly',
-          report_date: '2025-06-15',
-          scheduled_at: '2025-06-15T22:05:00.000Z',
-          sent_at: '2025-06-15T22:05:03.000Z',
-          status: 'sent',
+          report_type: "weekly",
+          report_date: "2025-06-15",
+          scheduled_at: "2025-06-15T22:05:00.000Z",
+          sent_at: "2025-06-15T22:05:03.000Z",
+          status: "sent",
           is_catch_up: 0,
-          target_jid: 'group@g.us',
+          target_jid: "group@g.us",
           error_message: null,
         },
       ],
       undefined,
     ]);
 
-    const result = await db.getLastSuccessfulRun('weekly');
+    const result = await db.getLastSuccessfulRun("weekly");
 
     expect(result).toEqual({
       id: 42,
-      report_type: 'weekly',
-      report_date: '2025-06-15',
-      scheduled_at: '2025-06-15T22:05:00.000Z',
-      sent_at: '2025-06-15T22:05:03.000Z',
-      status: 'sent',
+      report_type: "weekly",
+      report_date: "2025-06-15",
+      scheduled_at: "2025-06-15T22:05:00.000Z",
+      sent_at: "2025-06-15T22:05:03.000Z",
+      status: "sent",
       is_catch_up: false,
-      target_jid: 'group@g.us',
+      target_jid: "group@g.us",
       error_message: null,
     });
 
-    const lastCall = mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
-    expect(lastCall[0]).toContain('FROM schedule_runs WHERE report_type = ? AND status = ?');
-    expect(lastCall[1]).toEqual(['weekly', 'sent']);
+    const lastCall =
+      mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
+    expect(lastCall[0]).toContain(
+      "FROM schedule_runs WHERE report_type = ? AND status = ?",
+    );
+    expect(lastCall[1]).toEqual(["weekly", "sent"]);
   });
 
-  it('maps is_catch_up=1 to true', async () => {
+  it("maps is_catch_up=1 to true", async () => {
     mockPoolQuery.mockResolvedValue([
       [
         {
           id: 1,
-          report_type: 'daily',
-          report_date: '2025-06-20',
-          scheduled_at: '2025-06-20T22:05:00.000Z',
-          sent_at: '2025-06-20T22:05:02.000Z',
-          status: 'sent',
+          report_type: "daily",
+          report_date: "2025-06-20",
+          scheduled_at: "2025-06-20T22:05:00.000Z",
+          sent_at: "2025-06-20T22:05:02.000Z",
+          status: "sent",
           is_catch_up: 1,
-          target_jid: 'group@g.us',
+          target_jid: "group@g.us",
           error_message: null,
         },
       ],
       undefined,
     ]);
 
-    const result = await db.getLastSuccessfulRun('daily');
+    const result = await db.getLastSuccessfulRun("daily");
     expect(result!.is_catch_up).toBe(true);
   });
 });
 
-
-describe('recordRun()', () => {
-  it('inserts row then calls LAST_INSERT_ID() and returns id', async () => {
+describe("recordRun()", () => {
+  it("inserts row then calls LAST_INSERT_ID() and returns id", async () => {
     let callCount = 0;
     mockPoolQuery.mockImplementation(async () => {
       callCount++;
@@ -278,67 +291,67 @@ describe('recordRun()', () => {
     });
 
     const id = await db.recordRun({
-      report_type: 'monthly',
-      report_date: '2025-06-01',
-      scheduled_at: '2025-06-30T22:05:00.000Z',
-      status: 'sent',
+      report_type: "monthly",
+      report_date: "2025-06-01",
+      scheduled_at: "2025-06-30T22:05:00.000Z",
+      status: "sent",
       is_catch_up: false,
-      target_jid: 'group@g.us',
+      target_jid: "group@g.us",
     });
 
     expect(id).toBe(99);
     const insertSql = mockPoolQuery.mock.calls[0][0] as string;
     const idSql = mockPoolQuery.mock.calls[1][0] as string;
-    expect(insertSql).toContain('INSERT INTO schedule_runs');
-    expect(idSql).toContain('LAST_INSERT_ID()');
+    expect(insertSql).toContain("INSERT INTO schedule_runs");
+    expect(idSql).toContain("LAST_INSERT_ID()");
   });
 
-  it('uses LAST_INSERT_ID() not last_insert_rowid()', async () => {
+  it("uses LAST_INSERT_ID() not last_insert_rowid()", async () => {
     mockPoolQuery.mockImplementation(async () => [[{ id: 1 }], undefined]);
 
     await db.recordRun({
-      report_type: 'daily',
-      report_date: '2025-06-20',
-      scheduled_at: '2025-06-20T22:05:00.000Z',
-      status: 'pending',
+      report_type: "daily",
+      report_date: "2025-06-20",
+      scheduled_at: "2025-06-20T22:05:00.000Z",
+      status: "pending",
       is_catch_up: false,
-      target_jid: 'group@g.us',
+      target_jid: "group@g.us",
     });
 
     const idQuery = mockPoolQuery.mock.calls[1][0] as string;
-    expect(idQuery).toContain('LAST_INSERT_ID()');
-    expect(idQuery).not.toContain('last_insert_rowid');
+    expect(idQuery).toContain("LAST_INSERT_ID()");
+    expect(idQuery).not.toContain("last_insert_rowid");
   });
 });
 
-
-describe('upsertMember()', () => {
-  it('uses AS new_vals alias syntax for standard MySQL', async () => {
+describe("upsertMember()", () => {
+  it("uses AS new_vals alias syntax for standard MySQL", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.upsertMember({
       viewer_id: 12345,
-      trainer_name: 'Player1',
+      trainer_name: "Player1",
       circle_id: 100,
-      first_seen: '2025-06-01',
-      last_seen: '2025-06-20',
+      first_seen: "2025-06-01",
+      last_seen: "2025-06-20",
     });
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).toContain('ON DUPLICATE KEY UPDATE');
-    expect(sql).toContain('AS new_vals');
-    expect(sql).toContain('new_vals.trainer_name');
-    expect(sql).toContain('new_vals.circle_id');
-    expect(sql).toContain('new_vals.status');
-    expect(sql).not.toContain('VALUES(');
-    expect(sql).not.toContain('excluded.');
-    expect(sql).not.toContain('ON CONFLICT');
+    expect(sql).toContain("ON DUPLICATE KEY UPDATE");
+    expect(sql).toContain("AS new_vals");
+    expect(sql).toContain("new_vals.trainer_name");
+    expect(sql).toContain("new_vals.circle_id");
+    expect(sql).toContain("new_vals.status");
+    expect(sql).not.toContain("VALUES(");
+    expect(sql).not.toContain("excluded.");
+    expect(sql).not.toContain("ON CONFLICT");
   });
 
-  it('uses VALUES() syntax for TiDB', async () => {
+  it("uses VALUES() syntax for TiDB", async () => {
     // Create a TiDB-backed instance
-    mockConnQuery.mockReset()
-      .mockResolvedValueOnce([[{ version: '5.7.25-TiDB-v7.1.0' }], undefined])
+    mockConnQuery
+      .mockReset()
+      .mockResolvedValueOnce([[{ version: "5.7.25-TiDB-v7.1.0" }], undefined])
       .mockResolvedValue([[], undefined]);
     const tidbDb = new MysqlDatabase(config);
     await tidbDb.initialize();
@@ -348,62 +361,74 @@ describe('upsertMember()', () => {
 
     await tidbDb.upsertMember({
       viewer_id: 12345,
-      trainer_name: 'Player1',
+      trainer_name: "Player1",
       circle_id: 100,
-      first_seen: '2025-06-01',
-      last_seen: '2025-06-20',
+      first_seen: "2025-06-01",
+      last_seen: "2025-06-20",
     });
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).toContain('ON DUPLICATE KEY UPDATE');
-    expect(sql).toContain('VALUES(trainer_name)');
-    expect(sql).toContain('VALUES(circle_id)');
-    expect(sql).toContain('VALUES(status)');
-    expect(sql).not.toContain('AS new_vals');
+    expect(sql).toContain("ON DUPLICATE KEY UPDATE");
+    expect(sql).toContain("VALUES(trainer_name)");
+    expect(sql).toContain("VALUES(circle_id)");
+    expect(sql).toContain("VALUES(status)");
+    expect(sql).not.toContain("AS new_vals");
   });
 
-  it('passes all parameters including COALESCE for nullable fields', async () => {
+  it("passes all parameters including COALESCE for nullable fields", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.upsertMember({
       viewer_id: 100,
-      trainer_name: 'Test',
+      trainer_name: "Test",
       circle_id: 200,
-      first_seen: '2025-06-01',
-      last_seen: '2025-06-20',
+      first_seen: "2025-06-01",
+      last_seen: "2025-06-20",
       previous_circle_id: 50,
-      previous_circle_name: 'OldCircle',
-      status: 'active',
+      previous_circle_name: "OldCircle",
+      status: "active",
     });
 
     const params = mockPoolQuery.mock.calls[0][1] as unknown[];
-    expect(params).toEqual([100, 'Test', 200, '2025-06-01', '2025-06-20', 50, 'OldCircle', 'active']);
+    expect(params).toEqual([
+      100,
+      "Test",
+      200,
+      "2025-06-01",
+      "2025-06-20",
+      50,
+      "OldCircle",
+      "active",
+    ]);
   });
 
-  it('uses COALESCE to preserve previous values when null', async () => {
+  it("uses COALESCE to preserve previous values when null", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.upsertMember({
       viewer_id: 100,
-      trainer_name: 'Test',
+      trainer_name: "Test",
       circle_id: 200,
-      first_seen: '2025-06-01',
-      last_seen: '2025-06-20',
+      first_seen: "2025-06-01",
+      last_seen: "2025-06-20",
     });
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).toContain('COALESCE(new_vals.previous_circle_id, member_history.previous_circle_id)');
-    expect(sql).toContain('COALESCE(new_vals.previous_circle_name, member_history.previous_circle_name)');
+    expect(sql).toContain(
+      "COALESCE(new_vals.previous_circle_id, member_history.previous_circle_id)",
+    );
+    expect(sql).toContain(
+      "COALESCE(new_vals.previous_circle_name, member_history.previous_circle_name)",
+    );
   });
 });
 
-
-describe('saveRankHistory()', () => {
-  it('uses REPLACE INTO (not INSERT OR REPLACE INTO)', async () => {
+describe("saveRankHistory()", () => {
+  it("uses REPLACE INTO (not INSERT OR REPLACE INTO)", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.saveRankHistory({
-      date: '2025-06-20',
+      date: "2025-06-20",
       circle_id: 100,
       monthly_rank: 5,
       monthly_point: 12345,
@@ -413,15 +438,15 @@ describe('saveRankHistory()', () => {
     });
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).toContain('REPLACE INTO rank_history');
-    expect(sql).not.toContain('INSERT OR REPLACE');
+    expect(sql).toContain("REPLACE INTO rank_history");
+    expect(sql).not.toContain("INSERT OR REPLACE");
   });
 
-  it('passes all rank parameters in correct order', async () => {
+  it("passes all rank parameters in correct order", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.saveRankHistory({
-      date: '2025-06-20',
+      date: "2025-06-20",
       circle_id: 100,
       monthly_rank: 5,
       monthly_point: 12345,
@@ -431,24 +456,23 @@ describe('saveRankHistory()', () => {
     });
 
     const params = mockPoolQuery.mock.calls[0][1] as unknown[];
-    expect(params).toEqual(['2025-06-20', 100, 5, 12345, 7, 5000, 2000]);
+    expect(params).toEqual(["2025-06-20", 100, 5, 12345, 7, 5000, 2000]);
   });
 });
 
-
-describe('getMembers()', () => {
-  it('queries by circle_id and maps rows', async () => {
+describe("getMembers()", () => {
+  it("queries by circle_id and maps rows", async () => {
     mockPoolQuery.mockResolvedValue([
       [
         {
           viewer_id: 1,
-          trainer_name: 'Alice',
+          trainer_name: "Alice",
           circle_id: 100,
-          first_seen: '2025-06-01',
-          last_seen: '2025-06-20',
+          first_seen: "2025-06-01",
+          last_seen: "2025-06-20",
           previous_circle_id: null,
           previous_circle_name: null,
-          status: 'active',
+          status: "active",
         },
       ],
       undefined,
@@ -459,41 +483,41 @@ describe('getMembers()', () => {
     expect(members).toHaveLength(1);
     expect(members[0]).toEqual({
       viewer_id: 1,
-      trainer_name: 'Alice',
+      trainer_name: "Alice",
       circle_id: 100,
-      first_seen: '2025-06-01',
-      last_seen: '2025-06-20',
+      first_seen: "2025-06-01",
+      last_seen: "2025-06-20",
       previous_circle_id: null,
       previous_circle_name: null,
-      status: 'active',
+      status: "active",
     });
 
-    const lastCall = mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
+    const lastCall =
+      mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
     expect(lastCall[1]).toEqual([100]);
   });
 });
 
-
-describe('getMember()', () => {
-  it('returns null when no member found', async () => {
+describe("getMember()", () => {
+  it("returns null when no member found", async () => {
     mockPoolQuery.mockResolvedValue([[], undefined]);
 
     const result = await db.getMember(99999);
     expect(result).toBeNull();
   });
 
-  it('returns mapped member when found', async () => {
+  it("returns mapped member when found", async () => {
     mockPoolQuery.mockResolvedValue([
       [
         {
           viewer_id: 42,
-          trainer_name: 'Bob',
+          trainer_name: "Bob",
           circle_id: 100,
-          first_seen: '2025-06-01',
-          last_seen: '2025-06-20',
+          first_seen: "2025-06-01",
+          last_seen: "2025-06-20",
           previous_circle_id: 50,
-          previous_circle_name: 'OldCircle',
-          status: 'stale',
+          previous_circle_name: "OldCircle",
+          status: "stale",
         },
       ],
       undefined,
@@ -502,18 +526,17 @@ describe('getMember()', () => {
     const result = await db.getMember(42);
     expect(result).not.toBeNull();
     expect(result!.viewer_id).toBe(42);
-    expect(result!.status).toBe('stale');
+    expect(result!.status).toBe("stale");
     expect(result!.previous_circle_id).toBe(50);
   });
 });
 
-
-describe('getRankHistory()', () => {
-  it('queries with circle_id and days limit, returns mapped rows', async () => {
+describe("getRankHistory()", () => {
+  it("queries with circle_id and days limit, returns mapped rows", async () => {
     mockPoolQuery.mockResolvedValue([
       [
         {
-          date: '2025-06-20',
+          date: "2025-06-20",
           circle_id: 100,
           monthly_rank: 3,
           monthly_point: 50000,
@@ -530,115 +553,127 @@ describe('getRankHistory()', () => {
     expect(result).toHaveLength(1);
     expect(result[0].monthly_rank).toBe(3);
 
-    const lastCall = mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
-    expect(lastCall[0]).toContain('ORDER BY date DESC');
-    expect(lastCall[0]).toContain('LIMIT ?');
+    const lastCall =
+      mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
+    expect(lastCall[0]).toContain("ORDER BY date DESC");
+    expect(lastCall[0]).toContain("LIMIT ?");
     expect(lastCall[1]).toEqual([100, 30]);
   });
 });
 
-
-describe('updateRunStatus()', () => {
+describe("updateRunStatus()", () => {
   it('includes sent_at when status is "sent"', async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
-    await db.updateRunStatus(42, 'sent');
+    await db.updateRunStatus(42, "sent");
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).toContain('UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?');
+    expect(sql).toContain(
+      "UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?",
+    );
     const params = mockPoolQuery.mock.calls[0][1] as unknown[];
-    expect(params[0]).toBe('sent');
-    expect(typeof params[1]).toBe('string');
+    expect(params[0]).toBe("sent");
+    expect(typeof params[1]).toBe("string");
     expect(params[3]).toBe(42);
   });
 
   it('omits sent_at when status is not "sent"', async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
-    await db.updateRunStatus(7, 'failed', 'timeout');
+    await db.updateRunStatus(7, "failed", "timeout");
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).toContain('UPDATE schedule_runs SET status = ?, error_message = ? WHERE id = ?');
-    expect(sql).not.toContain('sent_at');
+    expect(sql).toContain(
+      "UPDATE schedule_runs SET status = ?, error_message = ? WHERE id = ?",
+    );
+    expect(sql).not.toContain("sent_at");
     const params = mockPoolQuery.mock.calls[0][1] as unknown[];
-    expect(params).toEqual(['failed', 'timeout', 7]);
+    expect(params).toEqual(["failed", "timeout", 7]);
   });
 });
 
-
-describe('getExistingAlertKeys()', () => {
-  it('returns empty set for empty input', async () => {
+describe("getExistingAlertKeys()", () => {
+  it("returns empty set for empty input", async () => {
     const result = await db.getExistingAlertKeys([]);
     expect(result.size).toBe(0);
     expect(mockPoolQuery).not.toHaveBeenCalled();
   });
 
-  it('returns set of matching event_keys with sent/suppressed status', async () => {
+  it("returns set of matching event_keys with sent/suppressed status", async () => {
     mockPoolQuery.mockResolvedValue([
-      [{ event_key: 'key-1' }, { event_key: 'key-3' }],
+      [{ event_key: "key-1" }, { event_key: "key-3" }],
       undefined,
     ]);
 
-    const result = await db.getExistingAlertKeys(['key-1', 'key-2', 'key-3']);
+    const result = await db.getExistingAlertKeys(["key-1", "key-2", "key-3"]);
     expect(result.size).toBe(2);
-    expect(result.has('key-1')).toBe(true);
-    expect(result.has('key-3')).toBe(true);
-    expect(result.has('key-2')).toBe(false);
+    expect(result.has("key-1")).toBe(true);
+    expect(result.has("key-3")).toBe(true);
+    expect(result.has("key-2")).toBe(false);
 
-    const lastCall = mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
-    expect(lastCall[0]).toContain('event_key IN');
-    expect(lastCall[1]).toEqual(['key-1', 'key-2', 'key-3', 'sent', 'suppressed']);
+    const lastCall =
+      mockPoolQuery.mock.calls[mockPoolQuery.mock.calls.length - 1];
+    expect(lastCall[0]).toContain("event_key IN");
+    expect(lastCall[1]).toEqual([
+      "key-1",
+      "key-2",
+      "key-3",
+      "sent",
+      "suppressed",
+    ]);
   });
 });
 
-describe('recordAlert()', () => {
-  it('returns existing id if event_key already exists', async () => {
+describe("recordAlert()", () => {
+  it("returns existing id if event_key already exists", async () => {
     let callCount = 0;
     mockPoolQuery.mockImplementation(async () => {
       callCount++;
-      if (callCount === 1) return [{}, undefined];                     // INSERT IGNORE (skipped)
-      if (callCount === 2) return [[{ id: 0 }], undefined];            // LAST_INSERT_ID → 0
-      return [[{ id: 55 }], undefined];                                // fallback SELECT
+      if (callCount === 1) return [{}, undefined]; // INSERT IGNORE (skipped)
+      if (callCount === 2) return [[{ id: 0 }], undefined]; // LAST_INSERT_ID → 0
+      return [[{ id: 55 }], undefined]; // fallback SELECT
     });
 
     const id = await db.recordAlert({
-      alert_type: 'perf_drop',
-      event_key: 'dedup-key',
-      member_viewer_id: '12345',
-      report_date: '2025-06-20',
-      created_at: '2025-06-20T22:05:00.000Z',
-      message: 'test',
+      alert_type: "perf_drop",
+      event_key: "dedup-key",
+      member_viewer_id: "12345",
+      report_date: "2025-06-20",
+      created_at: "2025-06-20T22:05:00.000Z",
+      message: "test",
     });
 
     expect(id).toBe(55);
     expect(mockPoolQuery).toHaveBeenCalledTimes(3);
     const fallbackSql = mockPoolQuery.mock.calls[2][0] as string;
-    expect(fallbackSql).toContain('SELECT id FROM alert_events WHERE event_key = ?');
+    expect(fallbackSql).toContain(
+      "SELECT id FROM alert_events WHERE event_key = ?",
+    );
   });
 
-  it('inserts new alert and returns LAST_INSERT_ID()', async () => {
+  it("inserts new alert and returns LAST_INSERT_ID()", async () => {
     let callCount = 0;
     mockPoolQuery.mockImplementation(async () => {
       callCount++;
-      if (callCount === 1) return [{}, undefined];                     // INSERT IGNORE (inserted)
-      return [[{ id: 77 }], undefined];                                // LAST_INSERT_ID → 77
+      if (callCount === 1) return [{}, undefined]; // INSERT IGNORE (inserted)
+      return [[{ id: 77 }], undefined]; // LAST_INSERT_ID → 77
     });
 
     const id = await db.recordAlert({
-      alert_type: 'demotion',
-      event_key: 'new-key',
-      member_viewer_id: '99',
-      report_date: '2025-06-20',
-      created_at: '2025-06-20T22:05:00.000Z',
-      message: 'risk detected',
+      alert_type: "demotion",
+      event_key: "new-key",
+      member_viewer_id: "99",
+      report_date: "2025-06-20",
+      created_at: "2025-06-20T22:05:00.000Z",
+      message: "risk detected",
     });
 
     expect(id).toBe(77);
     expect(mockPoolQuery).toHaveBeenCalledTimes(2);
     const insertSql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(insertSql).toContain('INSERT IGNORE INTO alert_events');
+    expect(insertSql).toContain("INSERT IGNORE INTO alert_events");
     const idSql = mockPoolQuery.mock.calls[1][0] as string;
-    expect(idSql).toContain('LAST_INSERT_ID()');
+    expect(idSql).toContain("LAST_INSERT_ID()");
   });
 
   it('defaults status to "pending" when not provided', async () => {
@@ -647,43 +682,44 @@ describe('recordAlert()', () => {
       callCount++;
       if (callCount === 1) {
         const params = args[1] as unknown[];
-        expect(params[5]).toBe('pending');
+        expect(params[5]).toBe("pending");
         return [{}, undefined];
       }
       return [[{ id: 1 }], undefined];
     });
 
     await db.recordAlert({
-      alert_type: 'perf_drop',
-      event_key: 'k1',
-      member_viewer_id: '1',
-      report_date: '2025-06-20',
-      created_at: '2025-06-20T22:05:00.000Z',
-      message: 'msg',
+      alert_type: "perf_drop",
+      event_key: "k1",
+      member_viewer_id: "1",
+      report_date: "2025-06-20",
+      created_at: "2025-06-20T22:05:00.000Z",
+      message: "msg",
     });
 
     expect(mockPoolQuery).toHaveBeenCalledTimes(2);
   });
 });
 
-describe('markAlertSent()', () => {
-  it('updates status and sent_at for given id', async () => {
+describe("markAlertSent()", () => {
+  it("updates status and sent_at for given id", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.markAlertSent(10);
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).toContain('UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?');
+    expect(sql).toContain(
+      "UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?",
+    );
     const params = mockPoolQuery.mock.calls[0][1] as unknown[];
-    expect(params[0]).toBe('sent');
-    expect(typeof params[1]).toBe('string');
+    expect(params[0]).toBe("sent");
+    expect(typeof params[1]).toBe("string");
     expect(params[2]).toBe(10);
   });
 });
 
-
-describe('transaction()', () => {
-  it('acquires connection, begins, commits, and releases', async () => {
+describe("transaction()", () => {
+  it("acquires connection, begins, commits, and releases", async () => {
     const result = await db.transaction(async () => 42);
 
     expect(result).toBe(42);
@@ -694,33 +730,33 @@ describe('transaction()', () => {
     expect(mockRelease).toHaveBeenCalled();
   });
 
-  it('calls rollback and re-throws on error', async () => {
-    const error = new Error('boom');
+  it("calls rollback and re-throws on error", async () => {
+    const error = new Error("boom");
 
     await expect(
       db.transaction(async () => {
         throw error;
-      })
-    ).rejects.toThrow('boom');
+      }),
+    ).rejects.toThrow("boom");
 
     expect(mockRollback).toHaveBeenCalled();
     expect(mockCommit).not.toHaveBeenCalled();
     expect(mockRelease).toHaveBeenCalled();
   });
 
-  it('uses connection from pool for inner method calls', async () => {
+  it("uses connection from pool for inner method calls", async () => {
     mockConnQuery.mockReset();
     mockConnQuery.mockResolvedValue([
       [
         {
           id: 1,
-          report_type: 'daily',
-          report_date: '2025-06-20',
-          scheduled_at: '2025-06-20T22:05:00.000Z',
-          sent_at: '2025-06-20T22:05:02.000Z',
-          status: 'sent',
+          report_type: "daily",
+          report_date: "2025-06-20",
+          scheduled_at: "2025-06-20T22:05:00.000Z",
+          sent_at: "2025-06-20T22:05:02.000Z",
+          status: "sent",
           is_catch_up: 0,
-          target_jid: 'group@g.us',
+          target_jid: "group@g.us",
           error_message: null,
         },
       ],
@@ -728,88 +764,87 @@ describe('transaction()', () => {
     ]);
 
     const result = await db.transaction(async () => {
-      return db.getLastSuccessfulRun('daily');
+      return db.getLastSuccessfulRun("daily");
     });
 
     expect(result).not.toBeNull();
-    expect(result!.report_type).toBe('daily');
+    expect(result!.report_type).toBe("daily");
     expect(mockPoolQuery).not.toHaveBeenCalled();
     expect(mockConnQuery).toHaveBeenCalled();
   });
 
-  it('pool methods still work after failed transaction connection', async () => {
-    mockGetConnection.mockRejectedValueOnce(new Error('Pool exhausted'));
+  it("pool methods still work after failed transaction connection", async () => {
+    mockGetConnection.mockRejectedValueOnce(new Error("Pool exhausted"));
 
     await expect(
-      db.transaction(async () => 'should not reach')
-    ).rejects.toThrow('Pool exhausted');
+      db.transaction(async () => "should not reach"),
+    ).rejects.toThrow("Pool exhausted");
 
     mockPoolQuery.mockResolvedValue([[], undefined]);
-    const result = await db.getLastSuccessfulRun('daily');
+    const result = await db.getLastSuccessfulRun("daily");
     expect(result).toBeNull();
     expect(mockPoolQuery).toHaveBeenCalled();
   });
 
-  it('sets transactionConn to null after completion', async () => {
-    await db.transaction(async () => 'done');
+  it("sets transactionConn to null after completion", async () => {
+    await db.transaction(async () => "done");
 
     mockPoolQuery.mockResolvedValue([[], undefined]);
-    await db.getLastSuccessfulRun('test');
+    await db.getLastSuccessfulRun("test");
     expect(mockPoolQuery).toHaveBeenCalled();
   });
 });
 
-
-describe('save()', () => {
-  it('does nothing — no pool interaction', async () => {
+describe("save()", () => {
+  it("does nothing — no pool interaction", async () => {
     const poolQueryCount = mockPoolQuery.mock.calls.length;
     const poolExecCount = (mockPool.execute as jest.Mock).mock.calls.length;
 
     await db.save();
 
     expect(mockPoolQuery.mock.calls.length).toBe(poolQueryCount);
-    expect((mockPool.execute as jest.Mock).mock.calls.length).toBe(poolExecCount);
+    expect((mockPool.execute as jest.Mock).mock.calls.length).toBe(
+      poolExecCount,
+    );
     expect(mockGetConnection).not.toHaveBeenCalled();
   });
 });
 
-
-describe('close()', () => {
-  it('calls pool.end()', async () => {
+describe("close()", () => {
+  it("calls pool.end()", async () => {
     await db.close();
     expect(mockPoolEnd).toHaveBeenCalled();
   });
 
-  it('is safe to call twice', async () => {
+  it("is safe to call twice", async () => {
     await db.close();
     await db.close();
     expect(mockPoolEnd).toHaveBeenCalledTimes(1);
   });
 });
 
-
-describe('MySQL-specific SQL patterns', () => {
-  it('upsertMember does not use SQLite ON CONFLICT syntax', async () => {
+describe("MySQL-specific SQL patterns", () => {
+  it("upsertMember does not use SQLite ON CONFLICT syntax", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.upsertMember({
       viewer_id: 1,
-      trainer_name: 'Test',
+      trainer_name: "Test",
       circle_id: 1,
-      first_seen: '2025-06-01',
-      last_seen: '2025-06-20',
+      first_seen: "2025-06-01",
+      last_seen: "2025-06-20",
     });
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).not.toContain('ON CONFLICT');
-    expect(sql).not.toContain('excluded.');
+    expect(sql).not.toContain("ON CONFLICT");
+    expect(sql).not.toContain("excluded.");
   });
 
-  it('saveRankHistory does not use INSERT OR REPLACE', async () => {
+  it("saveRankHistory does not use INSERT OR REPLACE", async () => {
     mockPoolQuery.mockResolvedValue([{}, undefined]);
 
     await db.saveRankHistory({
-      date: '2025-06-20',
+      date: "2025-06-20",
       circle_id: 1,
       monthly_rank: 1,
       monthly_point: 1000,
@@ -819,42 +854,42 @@ describe('MySQL-specific SQL patterns', () => {
     });
 
     const sql = mockPoolQuery.mock.calls[0][0] as string;
-    expect(sql).not.toContain('INSERT OR REPLACE');
-    expect(sql).toContain('REPLACE INTO');
+    expect(sql).not.toContain("INSERT OR REPLACE");
+    expect(sql).toContain("REPLACE INTO");
   });
 
-  it('recordRun and recordAlert use LAST_INSERT_ID() not last_insert_rowid()', async () => {
+  it("recordRun and recordAlert use LAST_INSERT_ID() not last_insert_rowid()", async () => {
     mockPoolQuery
-      .mockResolvedValueOnce([{ insertId: 1 }, undefined])  // INSERT
-      .mockResolvedValueOnce([[{ id: 1 }], undefined]);      // LAST_INSERT_ID
+      .mockResolvedValueOnce([{ insertId: 1 }, undefined]) // INSERT
+      .mockResolvedValueOnce([[{ id: 1 }], undefined]); // LAST_INSERT_ID
 
     await db.recordRun({
-      report_type: 'daily',
-      report_date: '2025-06-20',
-      scheduled_at: '2025-06-20T22:05:00.000Z',
-      status: 'sent',
+      report_type: "daily",
+      report_date: "2025-06-20",
+      scheduled_at: "2025-06-20T22:05:00.000Z",
+      status: "sent",
       is_catch_up: false,
-      target_jid: 'g@g.us',
+      target_jid: "g@g.us",
     });
 
     mockPoolQuery
-      .mockResolvedValueOnce([{}, undefined])                     // INSERT IGNORE
-      .mockResolvedValueOnce([[{ id: 2 }], undefined]);           // LAST_INSERT_ID
+      .mockResolvedValueOnce([{}, undefined]) // INSERT IGNORE
+      .mockResolvedValueOnce([[{ id: 2 }], undefined]); // LAST_INSERT_ID
 
     await db.recordAlert({
-      alert_type: 'test',
-      event_key: 'k',
-      member_viewer_id: '1',
-      report_date: '2025-06-20',
-      created_at: '2025-06-20T22:05:00.000Z',
-      message: 'm',
+      alert_type: "test",
+      event_key: "k",
+      member_viewer_id: "1",
+      report_date: "2025-06-20",
+      created_at: "2025-06-20T22:05:00.000Z",
+      message: "m",
     });
 
     for (const call of mockPoolQuery.mock.calls) {
       const sql = call[0] as string;
-      if (typeof sql === 'string' && sql.includes('INSERT_ID')) {
-        expect(sql).toContain('LAST_INSERT_ID()');
-        expect(sql).not.toContain('last_insert_rowid');
+      if (typeof sql === "string" && sql.includes("INSERT_ID")) {
+        expect(sql).toContain("LAST_INSERT_ID()");
+        expect(sql).not.toContain("last_insert_rowid");
       }
     }
   });

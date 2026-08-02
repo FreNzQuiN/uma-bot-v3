@@ -13,32 +13,40 @@
  *   import { loadRealSnapshot, makeConfig, TRANSFER_NAMES } from '../_helpers';
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { getDefaultConfig } from '../../src/config';
-import type { Snapshot, BotConfig } from '../../src/types';
-import type { IncomingMessage } from '../../src/whatsapp/client';
-import type { IDatabase } from '../../src/db/types';
-
+import * as fs from "fs";
+import * as path from "path";
+import { getDefaultConfig } from "../../src/config";
+import type { Snapshot, BotConfig } from "../../src/types";
+import type { IncomingMessage } from "../../src/whatsapp/client";
+import type { IDatabase } from "../../src/db/types";
 
 /** Path to the real snapshot fixture */
-export const SNAPSHOT_PATH = path.join(__dirname, '..', 'examples', 'snapshot-june-12.json');
+export const SNAPSHOT_PATH = path.join(
+  __dirname,
+  "..",
+  "examples",
+  "snapshot-june-12.json",
+);
 
 /** Names of the 6 transfer members in the June 12 snapshot */
 export const TRANSFER_NAMES = [
-  'Zero', 'TheTengOne', 'Sairen', 'VitoHoow', 'Ceciria', 'Falkrum',
+  "Zero",
+  "TheTengOne",
+  "Sairen",
+  "VitoHoow",
+  "Ceciria",
+  "Falkrum",
 ] as const;
 
 /** Names of the 4 stale/left members in the June 12 snapshot */
-export const STALE_NAMES = ['DOA IBU', 'Kuro', 'Rowking', 'Lebowski'] as const;
+export const STALE_NAMES = ["DOA IBU", "Kuro", "Rowking", "Lebowski"] as const;
 
 /** WhatsApp message character limit */
 export const WHATSAPP_MAX_LENGTH = 4096;
 
-
 /** Load the real snapshot from the fixture file (parsed from JSON) */
 export function loadRealSnapshot(): Snapshot {
-  return JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf-8'));
+  return JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf-8"));
 }
 
 /**
@@ -124,12 +132,15 @@ export function makeConfig(overrides: Record<string, any> = {}): BotConfig {
   };
 }
 
-
 /**
  * Mock the current date/time using Jest fake timers.
  * Sets time to noon JST (03:00 UTC) on the given date.
  */
-export function mockCurrentDate(year: number, month: number, day: number): void {
+export function mockCurrentDate(
+  year: number,
+  month: number,
+  day: number,
+): void {
   const utcMs = Date.UTC(year, month - 1, day, 3, 0, 0);
   jest.useFakeTimers();
   jest.setSystemTime(new Date(utcMs));
@@ -139,7 +150,6 @@ export function mockCurrentDate(year: number, month: number, day: number): void 
 export function restoreDateMocks(): void {
   jest.useRealTimers();
 }
-
 
 /**
  * Build an empty snapshot (members: []) using the real snapshot's metadata.
@@ -157,21 +167,19 @@ export function makeEmptySnapshot(realSnapshot: Snapshot): Snapshot {
   };
 }
 
-
 /**
  * Parse a formatted gain string like "+2.7M", "+215.4K", "+1.5B", "-3.1M"
  * back to a number. Handles K (thousands), M (millions), B (billions).
  */
 export function parseFormattedGain(formatted: string): number {
-  const cleaned = formatted.replace(/^[+-]/, '');
-  const numStr = cleaned.replace(/[KMB]/g, '');
+  const cleaned = formatted.replace(/^[+-]/, "");
+  const numStr = cleaned.replace(/[KMB]/g, "");
   let num = parseFloat(numStr);
-  if (cleaned.endsWith('K')) num *= 1_000;
-  if (cleaned.endsWith('M')) num *= 1_000_000;
-  if (cleaned.endsWith('B')) num *= 1_000_000_000;
-  return formatted.startsWith('-') ? -num : num;
+  if (cleaned.endsWith("K")) num *= 1_000;
+  if (cleaned.endsWith("M")) num *= 1_000_000;
+  if (cleaned.endsWith("B")) num *= 1_000_000_000;
+  return formatted.startsWith("-") ? -num : num;
 }
-
 
 /**
  * Create a mock database object with common jest.fn() stubs.
@@ -203,23 +211,24 @@ export function makeMockDb() {
   } as unknown as IDatabase;
 }
 
-
 /**
  * Build a mock IncomingMessage with sensible defaults.
  * Override any field via the overrides parameter.
  */
-export function makeMessage(overrides: Record<string, any> = {}): IncomingMessage {
+export function makeMessage(
+  overrides: Record<string, any> = {},
+): IncomingMessage {
   return {
     key: {
-      remoteJid: 'group-cmd@g.us',
-      id: 'msg-001',
+      remoteJid: "group-cmd@g.us",
+      id: "msg-001",
       ...overrides.key,
     },
     message: {
-      conversation: '/daily',
+      conversation: "/daily",
       ...overrides.message,
     },
-    pushName: 'TestUser',
+    pushName: "TestUser",
     ...overrides,
   };
 }

@@ -5,19 +5,31 @@
  * Implements IDatabase for pluggable backend support.
  */
 
-import type { ScheduleRunRow, MemberHistoryRow, RankHistoryRow } from '../types';
+import type {
+  ScheduleRunRow,
+  MemberHistoryRow,
+  RankHistoryRow,
+} from "../types";
 import type {
   IDatabase,
   ScheduleRunInsert,
   AlertEventInsert,
   MemberHistoryInsert,
   RankHistoryInsert,
-} from './types';
-import { mapScheduleRunRow, mapMemberHistoryRow, mapRankHistoryRow } from './mappers';
-import initSqlJs, { Database as SqlJsDatabase, QueryExecResult, BindParams } from 'sql.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import * as path from 'path';
-import { log } from '../utils/logger';
+} from "./types";
+import {
+  mapScheduleRunRow,
+  mapMemberHistoryRow,
+  mapRankHistoryRow,
+} from "./mappers";
+import initSqlJs, {
+  Database as SqlJsDatabase,
+  QueryExecResult,
+  BindParams,
+} from "sql.js";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import * as path from "path";
+import { log } from "../utils/logger";
 
 export class SqliteDatabase implements IDatabase {
   private db: SqlJsDatabase | null = null;
@@ -27,14 +39,14 @@ export class SqliteDatabase implements IDatabase {
   private dirty = false;
 
   constructor(dbPath?: string, autoSaveMs?: number) {
-    this.dbPath = dbPath ?? 'data/bot.db';
+    this.dbPath = dbPath ?? "data/bot.db";
     this.autoSaveMs = autoSaveMs ?? 30_000;
   }
 
   async initialize(): Promise<void> {
     const SQL = await initSqlJs();
 
-    if (this.dbPath === ':memory:') {
+    if (this.dbPath === ":memory:") {
       this.db = new SQL.Database();
     } else {
       const dir = path.dirname(this.dbPath);
@@ -52,10 +64,13 @@ export class SqliteDatabase implements IDatabase {
 
     this.createTables();
 
-    if (this.dbPath !== ':memory:') {
+    if (this.dbPath !== ":memory:") {
       this.saveTimer = setInterval(() => {
         this.save().catch((err) => {
-          log.error('DB', `Auto-save failed: ${err instanceof Error ? err.message : String(err)}`);
+          log.error(
+            "DB",
+            `Auto-save failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         });
       }, this.autoSaveMs);
     }
@@ -63,7 +78,7 @@ export class SqliteDatabase implements IDatabase {
 
   private ensureDb(): SqlJsDatabase {
     if (!this.db) {
-      throw new Error('Database not initialized. Call initialize() first.');
+      throw new Error("Database not initialized. Call initialize() first.");
     }
     return this.db;
   }
@@ -75,7 +90,7 @@ export class SqliteDatabase implements IDatabase {
       return result;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('DB', `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
+      log.error("DB", `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
       throw err;
     }
   }
@@ -86,7 +101,7 @@ export class SqliteDatabase implements IDatabase {
       this.dirty = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('DB', `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
+      log.error("DB", `SQL error: ${msg} | SQL: ${sql.substring(0, 100)}`);
       throw err;
     }
   }
@@ -96,7 +111,7 @@ export class SqliteDatabase implements IDatabase {
       this.ensureDb().run(sql, params);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('DB', `Transaction command failed: ${msg} | SQL: ${sql}`);
+      log.error("DB", `Transaction command failed: ${msg} | SQL: ${sql}`);
       throw err;
     }
   }
@@ -156,15 +171,23 @@ export class SqliteDatabase implements IDatabase {
       )
     `);
 
-    this.runSql('CREATE INDEX IF NOT EXISTS idx_member_history_circle_id ON member_history(circle_id)');
-    this.runSql('CREATE INDEX IF NOT EXISTS idx_rank_history_circle_date ON rank_history(circle_id, date DESC)');
-    this.runSql('CREATE INDEX IF NOT EXISTS idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)');
+    this.runSql(
+      "CREATE INDEX IF NOT EXISTS idx_member_history_circle_id ON member_history(circle_id)",
+    );
+    this.runSql(
+      "CREATE INDEX IF NOT EXISTS idx_rank_history_circle_date ON rank_history(circle_id, date DESC)",
+    );
+    this.runSql(
+      "CREATE INDEX IF NOT EXISTS idx_schedule_runs_type_status ON schedule_runs(report_type, status, id DESC)",
+    );
   }
 
-async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
+  async getLastSuccessfulRun(
+    reportType: string,
+  ): Promise<ScheduleRunRow | null> {
     const result = this.execSql(
-      'SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1',
-      [reportType, 'sent']
+      "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status = ? ORDER BY id DESC LIMIT 1",
+      [reportType, "sent"],
     );
     if (result.length === 0 || result[0].values.length === 0) {
       return null;
@@ -174,8 +197,8 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
 
   async getLastRun(reportType: string): Promise<ScheduleRunRow | null> {
     const result = this.execSql(
-      'SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1',
-      [reportType, 'sent', 'skipped']
+      "SELECT id, report_type, report_date, scheduled_at, sent_at, status, is_catch_up, target_jid, error_message FROM schedule_runs WHERE report_type = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1",
+      [reportType, "sent", "skipped"],
     );
     if (result.length === 0 || result[0].values.length === 0) {
       return null;
@@ -197,33 +220,37 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
         run.is_catch_up ? 1 : 0,
         run.target_jid,
         run.error_message ?? null,
-      ]
+      ],
     );
-    const result = this.execSql('SELECT last_insert_rowid() as id');
+    const result = this.execSql("SELECT last_insert_rowid() as id");
     return result[0].values[0][0] as number;
   }
 
-  async updateRunStatus(id: number, status: string, errorMessage?: string): Promise<void> {
-    if (status === 'sent') {
+  async updateRunStatus(
+    id: number,
+    status: string,
+    errorMessage?: string,
+  ): Promise<void> {
+    if (status === "sent") {
       const now = new Date().toISOString();
       this.runSql(
-        'UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?',
-        [status, now, errorMessage ?? null, id]
+        "UPDATE schedule_runs SET status = ?, sent_at = ?, error_message = ? WHERE id = ?",
+        [status, now, errorMessage ?? null, id],
       );
     } else {
       this.runSql(
-        'UPDATE schedule_runs SET status = ?, error_message = ? WHERE id = ?',
-        [status, errorMessage ?? null, id]
+        "UPDATE schedule_runs SET status = ?, error_message = ? WHERE id = ?",
+        [status, errorMessage ?? null, id],
       );
     }
   }
 
   async getExistingAlertKeys(eventKeys: string[]): Promise<Set<string>> {
     if (eventKeys.length === 0) return new Set();
-    const placeholders = eventKeys.map(() => '?').join(',');
+    const placeholders = eventKeys.map(() => "?").join(",");
     const result = this.execSql(
       `SELECT event_key FROM alert_events WHERE event_key IN (${placeholders}) AND status IN (?, ?)`,
-      [...eventKeys, 'sent', 'suppressed']
+      [...eventKeys, "sent", "suppressed"],
     );
     if (result.length === 0) return new Set();
     return new Set(result[0].values.map((row) => row[0] as string));
@@ -233,7 +260,10 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
     // NOTE: This check-then-insert is not atomic (TOCTOU). Safe in single-process
     // mode due to SQLite file-level locking. For multi-process scenarios, use the
     // MySQL adapter's INSERT IGNORE pattern instead.
-    const existing = this.execSql('SELECT id FROM alert_events WHERE event_key = ?', [alert.event_key]);
+    const existing = this.execSql(
+      "SELECT id FROM alert_events WHERE event_key = ?",
+      [alert.event_key],
+    );
     if (existing.length > 0 && existing[0].values.length > 0) {
       return existing[0].values[0][0] as number;
     }
@@ -248,19 +278,19 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
         alert.member_viewer_id,
         alert.report_date,
         alert.created_at,
-        alert.status ?? 'pending',
+        alert.status ?? "pending",
         alert.message,
-      ]
+      ],
     );
-    const result = this.execSql('SELECT last_insert_rowid() as id');
+    const result = this.execSql("SELECT last_insert_rowid() as id");
     return result[0].values[0][0] as number;
   }
 
   async markAlertSent(id: number): Promise<void> {
     const now = new Date().toISOString();
     this.runSql(
-      'UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?',
-      ['sent', now, id]
+      "UPDATE alert_events SET status = ?, sent_at = ? WHERE id = ?",
+      ["sent", now, id],
     );
   }
 
@@ -278,20 +308,20 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
   async markAlertsSent(ids: number[]): Promise<void> {
     if (ids.length === 0) return;
     const now = new Date().toISOString();
-    const placeholders = ids.map(() => '?').join(',');
+    const placeholders = ids.map(() => "?").join(",");
     this.runSql(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE id IN (${placeholders})`,
-      ['sent', now, ...ids]
+      ["sent", now, ...ids],
     );
   }
 
   async markAlertsByEventKeys(eventKeys: string[]): Promise<void> {
     if (eventKeys.length === 0) return;
     const now = new Date().toISOString();
-    const placeholders = eventKeys.map(() => '?').join(',');
+    const placeholders = eventKeys.map(() => "?").join(",");
     this.runSql(
       `UPDATE alert_events SET status = ?, sent_at = ? WHERE event_key IN (${placeholders})`,
-      ['sent', now, ...eventKeys]
+      ["sent", now, ...eventKeys],
     );
   }
 
@@ -315,8 +345,8 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
         member.last_seen,
         member.previous_circle_id ?? null,
         member.previous_circle_name ?? null,
-        member.status ?? 'active',
-      ]
+        member.status ?? "active",
+      ],
     );
   }
 
@@ -331,8 +361,8 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
 
   async getMembers(circleId: number): Promise<MemberHistoryRow[]> {
     const result = this.execSql(
-      'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE circle_id = ? ORDER BY trainer_name',
-      [circleId]
+      "SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE circle_id = ? ORDER BY trainer_name",
+      [circleId],
     );
     if (result.length === 0) return [];
     return this.rowsToMemberHistory(result[0]);
@@ -340,14 +370,14 @@ async getLastSuccessfulRun(reportType: string): Promise<ScheduleRunRow | null> {
 
   async getMember(viewerId: number): Promise<MemberHistoryRow | null> {
     const result = this.execSql(
-      'SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE viewer_id = ?',
-      [viewerId]
+      "SELECT viewer_id, trainer_name, circle_id, first_seen, last_seen, previous_circle_id, previous_circle_name, status FROM member_history WHERE viewer_id = ?",
+      [viewerId],
     );
     if (result.length === 0 || result[0].values.length === 0) return null;
     return this.rowToMemberHistory(result[0]);
   }
 
-async saveRankHistory(row: RankHistoryInsert): Promise<void> {
+  async saveRankHistory(row: RankHistoryInsert): Promise<void> {
     this.runSql(
       `INSERT OR REPLACE INTO rank_history
         (date, circle_id, monthly_rank, monthly_point, club_rank, fans_to_next_tier, fans_to_lower_tier)
@@ -360,40 +390,46 @@ async saveRankHistory(row: RankHistoryInsert): Promise<void> {
         row.club_rank,
         row.fans_to_next_tier,
         row.fans_to_lower_tier,
-      ]
+      ],
     );
   }
 
-  async getRankHistory(circleId: number, days: number): Promise<RankHistoryRow[]> {
+  async getRankHistory(
+    circleId: number,
+    days: number,
+  ): Promise<RankHistoryRow[]> {
     const result = this.execSql(
       `SELECT date, circle_id, monthly_rank, monthly_point, club_rank, fans_to_next_tier, fans_to_lower_tier FROM rank_history
        WHERE circle_id = ?
        ORDER BY date DESC
        LIMIT ?`,
-      [circleId, days]
+      [circleId, days],
     );
     if (result.length === 0) return [];
     return this.rowsToRankHistory(result[0]);
   }
 
-async transaction<T>(fn: () => Promise<T>): Promise<T> {
+  async transaction<T>(fn: () => Promise<T>): Promise<T> {
     this.ensureDb();
-    this.rawRun('BEGIN');
+    this.rawRun("BEGIN");
     try {
       const result = await fn();
-      this.rawRun('COMMIT');
+      this.rawRun("COMMIT");
       return result;
     } catch (err) {
       try {
-        this.rawRun('ROLLBACK');
+        this.rawRun("ROLLBACK");
       } catch (rollbackErr) {
-        log.error('DB', `Rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+        log.error(
+          "DB",
+          `Rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`,
+        );
       }
       throw err;
     }
   }
 
-async save(): Promise<void> {
+  async save(): Promise<void> {
     if (!this.dirty) return;
     const db = this.ensureDb();
     const data = db.export();
@@ -408,7 +444,7 @@ async save(): Promise<void> {
       this.saveTimer = null;
     }
     if (this.db) {
-      if (this.dbPath !== ':memory:') {
+      if (this.dbPath !== ":memory:") {
         await this.save();
       }
       this.db.close();
@@ -416,12 +452,18 @@ async save(): Promise<void> {
     }
   }
 
-  private rowToScheduleRun(result: { columns: string[]; values: unknown[][] }): ScheduleRunRow | null {
+  private rowToScheduleRun(result: {
+    columns: string[];
+    values: unknown[][];
+  }): ScheduleRunRow | null {
     if (result.values.length === 0) return null;
     return mapScheduleRunRow(this.rowToObj(result));
   }
 
-  private rowToObj(result: { columns: string[]; values: unknown[][] }, index: number = 0): Record<string, unknown> {
+  private rowToObj(
+    result: { columns: string[]; values: unknown[][] },
+    index: number = 0,
+  ): Record<string, unknown> {
     const obj: Record<string, unknown> = {};
     result.columns.forEach((col, i) => {
       obj[col] = result.values[index][i];
@@ -429,20 +471,29 @@ async save(): Promise<void> {
     return obj;
   }
 
-  private rowToMemberHistory(result: { columns: string[]; values: unknown[][] }): MemberHistoryRow | null {
+  private rowToMemberHistory(result: {
+    columns: string[];
+    values: unknown[][];
+  }): MemberHistoryRow | null {
     if (result.values.length === 0) return null;
     return mapMemberHistoryRow(this.rowToObj(result));
   }
 
-  private rowsToMemberHistory(result: { columns: string[]; values: unknown[][] }): MemberHistoryRow[] {
+  private rowsToMemberHistory(result: {
+    columns: string[];
+    values: unknown[][];
+  }): MemberHistoryRow[] {
     return result.values.map((_, idx) =>
-      mapMemberHistoryRow(this.rowToObj(result, idx))
+      mapMemberHistoryRow(this.rowToObj(result, idx)),
     );
   }
 
-  private rowsToRankHistory(result: { columns: string[]; values: unknown[][] }): RankHistoryRow[] {
+  private rowsToRankHistory(result: {
+    columns: string[];
+    values: unknown[][];
+  }): RankHistoryRow[] {
     return result.values.map((_, idx) =>
-      mapRankHistoryRow(this.rowToObj(result, idx))
+      mapRankHistoryRow(this.rowToObj(result, idx)),
     );
   }
 }

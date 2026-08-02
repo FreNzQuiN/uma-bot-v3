@@ -1,12 +1,15 @@
-import { splitMessage } from '../../src/utils/format';
+import { splitMessage } from "../../src/utils/format";
 
-describe('Bug 1: splitMessage Part marker overhead', () => {
+describe("Bug 1: splitMessage Part marker overhead", () => {
   const MAX_LENGTH = 4096;
 
-  it('all parts including Part X/Y markers must be ≤ maxLength', () => {
+  it("all parts including Part X/Y markers must be ≤ maxLength", () => {
     // Create a message that will need splitting
-    const lines = Array.from({ length: 200 }, (_, i) => `Line ${i}: ${'x'.repeat(30)}`);
-    const longMessage = lines.join('\n');
+    const lines = Array.from(
+      { length: 200 },
+      (_, i) => `Line ${i}: ${"x".repeat(30)}`,
+    );
+    const longMessage = lines.join("\n");
 
     const parts = splitMessage(longMessage, MAX_LENGTH);
 
@@ -16,10 +19,10 @@ describe('Bug 1: splitMessage Part marker overhead', () => {
     }
   });
 
-  it('parts with markers at small maxLength are still within limit', () => {
+  it("parts with markers at small maxLength are still within limit", () => {
     // Use a small maxLength to make the bug more obvious
     const lines = Array.from({ length: 50 }, (_, i) => `Line ${i}`);
-    const longMessage = lines.join('\n');
+    const longMessage = lines.join("\n");
     const smallMax = 80;
 
     const parts = splitMessage(longMessage, smallMax);
@@ -30,11 +33,11 @@ describe('Bug 1: splitMessage Part marker overhead', () => {
     }
   });
 
-  it('single-line parts with markers respect maxLength', () => {
+  it("single-line parts with markers respect maxLength", () => {
     // Create a message with lines just under maxLength
-    const line = 'x'.repeat(100);
+    const line = "x".repeat(100);
     const lines = Array.from({ length: 50 }, () => line);
-    const longMessage = lines.join('\n');
+    const longMessage = lines.join("\n");
     const maxLen = 120;
 
     const parts = splitMessage(longMessage, maxLen);
@@ -45,9 +48,9 @@ describe('Bug 1: splitMessage Part marker overhead', () => {
     }
   });
 
-  it('force-split long lines also respect maxLength with markers', () => {
+  it("force-split long lines also respect maxLength with markers", () => {
     // A single line that exceeds maxLength should be force-split
-    const longLine = 'x'.repeat(200);
+    const longLine = "x".repeat(200);
     const maxLen = 50;
 
     const parts = splitMessage(longLine, maxLen);
@@ -57,13 +60,14 @@ describe('Bug 1: splitMessage Part marker overhead', () => {
     }
   });
 
-  it('real-world report content respects maxLength after splitting', () => {
+  it("real-world report content respects maxLength after splitting", () => {
     // Simulate a very long report
-    const reportHeader = '📊 Daily Report — 12 Juni 2026\n\nHol＿Horse | A+ (#431)\n';
+    const reportHeader =
+      "📊 Daily Report — 12 Juni 2026\n\nHol＿Horse | A+ (#431)\n";
     const memberLines = Array.from(
       { length: 40 },
-      (_, i) => `${i + 1}. Member${i} — +${(100 - i) * 100000}`
-    ).join('\n');
+      (_, i) => `${i + 1}. Member${i} — +${(100 - i) * 100000}`,
+    ).join("\n");
     const report = reportHeader + memberLines;
 
     if (report.length > MAX_LENGTH) {

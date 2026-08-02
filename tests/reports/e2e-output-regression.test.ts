@@ -1,31 +1,30 @@
-import type { Snapshot, BotConfig } from '../../src/types';
-import { getDefaultConfig } from '../../src/config';
-import { generateDailyReport } from '../../src/reports/daily';
-import { generateWeeklyReport } from '../../src/reports/weekly';
-import { generateMonthlyReport } from '../../src/reports/monthly';
-import { generateStatsReport } from '../../src/reports/stats';
-import { generateTierReport } from '../../src/reports/tier';
-import { computeMembers } from '../../src/reports/compute';
-import { generateRanksReport } from '../../src/reports/ranks';
-import { generateBottomReport } from '../../src/reports/bottom';
-import { generateMembersReport } from '../../src/reports/members';
+import type { Snapshot, BotConfig } from "../../src/types";
+import { getDefaultConfig } from "../../src/config";
+import { generateDailyReport } from "../../src/reports/daily";
+import { generateWeeklyReport } from "../../src/reports/weekly";
+import { generateMonthlyReport } from "../../src/reports/monthly";
+import { generateStatsReport } from "../../src/reports/stats";
+import { generateTierReport } from "../../src/reports/tier";
+import { computeMembers } from "../../src/reports/compute";
+import { generateRanksReport } from "../../src/reports/ranks";
+import { generateBottomReport } from "../../src/reports/bottom";
+import { generateMembersReport } from "../../src/reports/members";
 
 const config: BotConfig = getDefaultConfig();
-
 
 function makeEmptyMembersSnapshot(): Snapshot {
   return {
     circle: {
       circle_id: 1,
-      name: 'TestCircle',
-      comment: 'test',
+      name: "TestCircle",
+      comment: "test",
       leader_viewer_id: 100,
-      leader_name: 'Leader',
+      leader_name: "Leader",
       member_count: 0,
       join_style: 1,
       policy: 1,
-      created_at: '2026-01-01T00:00:00Z',
-      last_updated: '2026-06-11T00:00:00Z',
+      created_at: "2026-01-01T00:00:00Z",
+      last_updated: "2026-06-11T00:00:00Z",
       monthly_rank: 1,
       monthly_point: 0,
       last_month_rank: null,
@@ -47,11 +46,11 @@ function makeEmptyMembersSnapshot(): Snapshot {
   };
 }
 
-describe('Empty snapshot: all generators handle gracefully', () => {
+describe("Empty snapshot: all generators handle gracefully", () => {
   const emptySnapshot = makeEmptyMembersSnapshot();
   const members = computeMembers(emptySnapshot, config);
 
-  it('all report generators produce non-empty strings without crashing', async () => {
+  it("all report generators produce non-empty strings without crashing", async () => {
     const results = await Promise.all([
       Promise.resolve(generateDailyReport(emptySnapshot, config, members)),
       Promise.resolve(generateWeeklyReport(emptySnapshot, config, members)),
@@ -64,12 +63,12 @@ describe('Empty snapshot: all generators handle gracefully', () => {
     ]);
 
     for (const result of results) {
-      expect(typeof result).toBe('string');
+      expect(typeof result).toBe("string");
       expect(result.length).toBeGreaterThan(0);
     }
   });
 
-  it('all report generators return helpful message for empty members', async () => {
+  it("all report generators return helpful message for empty members", async () => {
     const generators = [
       () => generateDailyReport(emptySnapshot, config, members),
       () => generateWeeklyReport(emptySnapshot, config, members),
@@ -83,7 +82,9 @@ describe('Empty snapshot: all generators handle gracefully', () => {
 
     for (const generate of generators) {
       const result = await generate();
-      expect(result).toMatch(/data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i);
+      expect(result).toMatch(
+        /data anggota|Belum ada data|belum tersedia|belum ada kontribusi/i,
+      );
     }
   });
 });
