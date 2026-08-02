@@ -330,9 +330,11 @@ describe("last-connect marker / shouldPurgeSignalState", () => {
     expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(false);
   });
 
-  it("shouldPurgeSignalState: creds + missing marker → purge (unknown staleness)", () => {
+  it("shouldPurgeSignalState: creds + missing marker → no purge (first boot after feature lands)", () => {
+    // Every existing install has creds but no marker on first boot with this
+    // feature — unknown age must mean KEEP, not mass-purge.
     writeCreds();
-    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(true);
+    expect(shouldPurgeSignalState(tempDir, PURGE_DAYS)).toBe(false);
   });
 
   it("shouldPurgeSignalState: creds + recent marker → no purge", () => {

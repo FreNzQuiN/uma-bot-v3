@@ -72,12 +72,16 @@ export function groupByCollision(
     if (time) entries.push({ type: reportType, time });
   }
   const timeMap = groupByTime(entries);
+  // Unknown types sort as daily (order 0) — matches pre-refactor behavior.
+  const reportTypeOrder = new Map<string, number>([
+    [SCHEDULED_DAILY, 0],
+    [SCHEDULED_WEEKLY, 1],
+    [SCHEDULED_MONTHLY, 2],
+  ]);
   const groups: string[][] = [];
   for (const [, grouped] of timeMap) {
     grouped.sort(
-      (a, b) =>
-        SCHEDULED_REPORT_TYPES.indexOf(a as ScheduledReportType) -
-        SCHEDULED_REPORT_TYPES.indexOf(b as ScheduledReportType),
+      (a, b) => (reportTypeOrder.get(a) ?? 0) - (reportTypeOrder.get(b) ?? 0),
     );
     groups.push(grouped);
   }

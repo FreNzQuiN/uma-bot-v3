@@ -885,6 +885,20 @@ export class WhatsAppClient {
             if (numeric) protectedJids.add(numeric);
           }
         }
+        // Session files are LID-keyed after migration; participants must be
+        // LID-resolved too, or their sessions slip past protection and get
+        // age-pruned despite the documented "active members never pruned".
+        const participantPns = Object.values(groups).flatMap((group) =>
+          (group.participants ?? []).map((p) => p.id),
+        );
+        if (participantPns.length > 0) {
+          for (const lid of resolveProtectedLids(
+            this.authDir,
+            participantPns,
+          )) {
+            protectedJids.add(lid);
+          }
+        }
         participantsLoaded = true;
       } catch (err) {
         log.warn(

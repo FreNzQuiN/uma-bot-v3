@@ -212,10 +212,13 @@ export async function fetchAndSaveSnapshot(
   // Retry with exponential backoff for current-month data.
   // Max wait = 23h minus data age. If data is 20h old, retry for 3h.
   // If data is 1h old, retry for 22h. If 23h+, stop immediately.
+  // First retry polls soon (5m) because the scraper may be minutes late;
+  // delays double to a 1h cap, and the 23h budget aligns with the next
+  // data-refresh horizon (00:00 JST).
   const HOUR_MS = 60 * 60_000;
   const MAX_RETRY_BUDGET_MS = 23 * HOUR_MS;
-  const MAX_DELAY_MS = 60 * HOUR_MS;
-  const INITIAL_DELAY_MS = 5 * HOUR_MS;
+  const MAX_DELAY_MS = 60 * 60_000;
+  const INITIAL_DELAY_MS = 5 * 60_000;
 
   let dataAgeMs = 0;
   if (existing && existing.members.length > 0) {

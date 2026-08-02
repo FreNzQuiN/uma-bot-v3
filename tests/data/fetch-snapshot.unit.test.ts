@@ -1,9 +1,10 @@
 /**
  * Tests for fetchAndSaveSnapshot — fetch decision logic and persistence.
  *
- * The retry loop sleeps up to 5 minutes per iteration; these tests keep
+ * The retry loop sleeps up to 5 minutes per iteration; most tests keep
  * maxWaitMs at 0 (stale last_updated) or make the fetch succeed on the
- * first attempt, so no test ever sleeps.
+ * first attempt, so they never sleep. The backoff regression test uses
+ * fake timers to assert the first retry waits 5 minutes, not 5 hours.
  */
 
 import { fetchAndSaveSnapshot } from "../../src/data/fetch-snapshot";
@@ -81,6 +82,8 @@ const umaMoe = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // clearAllMocks resets calls but not implementations set by earlier tests
+  mockedSave.mockImplementation(() => "");
   // "Now" is June 2026, JST day 12.
   mockedComponents.mockReturnValue({ year: 2026, month: 6, day: 12 });
   mockedDay.mockReturnValue(12);
@@ -139,5 +142,33 @@ describe("fetchAndSaveSnapshot", () => {
     await expect(
       fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, { rootDir: "/tmp/test" }),
     ).rejects.toThrow("disk full");
+  });
+
+  it("waits 5 minutes (not hours) before the first retry when data is behind", async () => {
+    jest.useFakeTimers();
+    try {
+      const existing = makeSnapshot(2026, 6, 5);
+      // 1h-old data → retry budget ~22h, so the loop actually sleeps
+      existing.circle.last_updated = new Date(
+        Date.now() - 60 * 60_000,
+      ).toISOString();
+      mockedLoad.mockReturnValue(existing);
+      const stale = makeSnapshot(2026, 6, 6);
+      const fresh = makeSnapshot(2026, 6, 11);
+      umaMoe.fetchCircleData
+        .mockResolvedValueOnce(stale)
+        .mockResolvedValue(fresh);
+
+      const promise = fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+      });
+      await jest.advanceTimersByTimeAsync(5 * 60_000 - 1);
+      expect(umaMoe.fetchCircleData).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(umaMoe.fetchCircleData).toHaveBeenCalledTimes(2);
+      await promise;
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

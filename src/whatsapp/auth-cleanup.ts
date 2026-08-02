@@ -204,7 +204,10 @@ export function backupCreds(authDir: string): boolean {
     if (!existsSync(src)) return false;
     copyFileSync(src, join(authDir, CREDS_BACKUP_FILE));
     return true;
-  } catch {
+  } catch (err) {
+    // Fail-silent is deliberate (a backup failure must not block connect),
+    // but the operator still needs a signal — else the first hint is a QR.
+    log.warn("WhatsApp", "Failed to back up creds.json", err);
     return false;
   }
 }
@@ -215,7 +218,8 @@ export function restoreCredsBackup(authDir: string): boolean {
     if (!existsSync(src)) return false;
     copyFileSync(src, join(authDir, CREDS_FILE));
     return true;
-  } catch {
+  } catch (err) {
+    log.warn("WhatsApp", "Failed to restore creds.json backup", err);
     return false;
   }
 }
@@ -244,8 +248,10 @@ export function isCredsUsable(authDir: string): boolean {
  * NOT a usable proxy — Baileys rewrites creds.json on every connect, so a bot
  * restarted multiple times in one day always looks "recent" even when its
  * sessions are weeks old. Returns null when the marker is missing (first run
- * after this feature, or marker lost) — the caller treats that as "unknown
- * staleness" and purges if creds exist.
+ * after this feature, or marker lost) — treated as "unknown age", which means
+ * KEEP: a fresh install can't be told apart from a dormant one, and stale
+ * sessions self-heal via pre-key exchange anyway. Age-pruning and the
+ * marker-old path cover genuine long downtime.
  */
 export function getLastConnect(authDir: string): number | null {
   try {
@@ -268,9 +274,11 @@ export function writeLastConnect(authDir: string): void {
 /**
  * Whether stale signal state should be purged before connecting.
  *
- * True when the bot has an identity (creds.json) but no recorded connection
- * within purgeAfterDays — either the marker is missing (unknown age) or old
- * (genuine long downtime). Fresh installs (no creds) return false.
+ * True when the bot has an identity (creds.json) and its last recorded
+ * connection is older than purgeAfterDays. A missing marker means "unknown
+ * age" and returns false — every install's first boot after this feature
+ * lands has creds but no marker, and mass-purging there would nuke sessions
+ * for no reason. Fresh installs (no creds) return false.
  */
 export function shouldPurgeSignalState(
   authDir: string,
@@ -278,7 +286,7 @@ export function shouldPurgeSignalState(
 ): boolean {
   if (!isCredsUsable(authDir)) return false;
   const lastConnect = getLastConnect(authDir);
-  if (lastConnect === null) return true;
+  if (lastConnect === null) return false;
   return Date.now() - lastConnect > purgeAfterDays * DAY_MS;
 }
 

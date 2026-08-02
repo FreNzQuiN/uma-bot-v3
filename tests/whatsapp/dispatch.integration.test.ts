@@ -18,6 +18,7 @@ import {
 import { getDefaultConfig } from "../../src/config";
 import type { BotConfig, Snapshot } from "../../src/types";
 import type { IDatabase } from "../../src/db/types";
+import type { DeepPartial } from "../_helpers";
 import { makeConfig as makeConfigBase, makeMessage } from "../_helpers";
 
 // Prevent admin command tests from writing to the actual config.yaml
@@ -49,14 +50,6 @@ const FANS_TO_NEXT_TIER = 500_000;
 const FANS_TO_LOWER_TIER = 50_000;
 const YESTERDAY_FANS_TO_NEXT_TIER = 600_000;
 const YESTERDAY_FANS_TO_LOWER_TIER = 40_000;
-
-type DeepPartial<T> = {
-  [K in keyof T]?: T[K] extends (infer U)[]
-    ? U[]
-    : T[K] extends object
-      ? DeepPartial<T[K]>
-      : T[K];
-};
 
 function makeConfig(overrides: DeepPartial<BotConfig> = {}): BotConfig {
   return makeConfigBase({

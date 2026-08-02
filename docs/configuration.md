@@ -448,11 +448,13 @@ WhatsApp auth state retention. The bot prunes stale `session-*`, `sender-key-*`,
 ```yaml
 auth:
   retentionDays: 30
+  purgeAfterDays: 14
 ```
 
-| Field           | Type     | Default | Description                                                                |
-| --------------- | -------- | ------- | -------------------------------------------------------------------------- |
-| `retentionDays` | `number` | `30`    | Session/sender/identity keys older than this many days are pruned (min 14) |
+| Field            | Type     | Default | Description                                                                                                                                                                  |
+| ---------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retentionDays`  | `number` | `30`    | Session/sender/identity keys older than this many days are pruned (min 14)                                                                                                   |
+| `purgeAfterDays` | `number` | `14`    | Long-downtime threshold: after this many days without a successful connect, all Signal session/sender/identity files are purged to rebuild fresh (creds kept, no QR re-scan) |
 
 Protected from pruning: configured admins/groups and every participant of the bot's live groups (matching both PN and LID forms via the lid-mapping cache). `creds.json` is never pruned — it is backed up on connect and restored automatically if corrupted. Pre-key files are never pruned: Baileys deletes them on consumption, and deleting uploaded-but-unconsumed pre-keys would break decryption of messages queued while the bot was offline.
 

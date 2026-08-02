@@ -20,7 +20,7 @@ import type { Snapshot, BotConfig, MemberData } from "../../src/types";
 import type { IncomingMessage } from "../../src/whatsapp/client";
 import type { IDatabase } from "../../src/db/types";
 
-type DeepPartial<T> = {
+export type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends (infer U)[]
     ? U[]
     : T[K] extends object
