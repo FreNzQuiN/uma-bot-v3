@@ -19,9 +19,7 @@ import {
   getDataDateComponents,
 } from "../utils/timezone";
 import { log } from "../utils/logger";
-import { groupByCollision } from "./helpers";
-
-const REPORT_TYPES = ["daily", "weekly", "monthly"] as const;
+import { groupByCollision, SCHEDULED_REPORT_TYPES } from "./helpers";
 
 /**
  * Compute the most recent scheduled date for a report type.
@@ -105,7 +103,7 @@ export class CatchUpManager {
   async detectMissedReports(): Promise<string[]> {
     const missed: string[] = [];
 
-    for (const reportType of REPORT_TYPES) {
+    for (const reportType of SCHEDULED_REPORT_TYPES) {
       if (!this.isReportEnabled(reportType)) continue;
       if (await this.isReportMissed(reportType)) {
         missed.push(reportType);

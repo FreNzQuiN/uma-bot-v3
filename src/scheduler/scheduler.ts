@@ -11,7 +11,7 @@ import type { BotConfig } from "../types";
 import type { IDatabase } from "../db/types";
 import { getDataDate, getDisplayDay } from "../utils/timezone";
 import { log } from "../utils/logger";
-import { getCollidingTypes } from "./helpers";
+import { getCollidingTypes, SCHEDULED_REPORT_TYPES } from "./helpers";
 
 export class Scheduler {
   private getConfig: () => BotConfig;
@@ -226,8 +226,8 @@ export class Scheduler {
               const dailyEnabled = this.config.schedule.daily.enabled;
 
               if (
-                collidingTypes.includes("daily") &&
-                collidingTypes.includes("weekly") &&
+                collidingTypes.includes(SCHEDULED_REPORT_TYPES[0]) &&
+                collidingTypes.includes(SCHEDULED_REPORT_TYPES[1]) &&
                 dailyEnabled
               ) {
                 return;
@@ -240,7 +240,10 @@ export class Scheduler {
                 this.config.schedule.weekly.time;
 
               if (monthlyEnabled && sameTimeAsMonthly && isMonthlyDay) {
-                await this.recordAndSendCombined(["weekly", "monthly"]);
+                await this.recordAndSendCombined([
+                  SCHEDULED_REPORT_TYPES[1],
+                  SCHEDULED_REPORT_TYPES[2],
+                ]);
                 return;
               }
 
@@ -271,8 +274,8 @@ export class Scheduler {
 
               // Skip if daily handler will combine with monthly (same time)
               if (
-                collidingTypes.includes("daily") &&
-                collidingTypes.includes("monthly") &&
+                collidingTypes.includes(SCHEDULED_REPORT_TYPES[0]) &&
+                collidingTypes.includes(SCHEDULED_REPORT_TYPES[2]) &&
                 dailyEnabled
               ) {
                 return;

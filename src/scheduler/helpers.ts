@@ -2,6 +2,15 @@ import type { BotConfig } from "../types";
 import { log } from "../utils/logger";
 import { getTargetMonth } from "../utils/timezone";
 
+/**
+ * Canonical scheduled report types shared by the scheduler and catch-up.
+ *
+ * Single source of truth so the two modules can't drift apart when a
+ * 4th report type is added.
+ */
+export const SCHEDULED_REPORT_TYPES = ["daily", "weekly", "monthly"] as const;
+export type ScheduledReportType = (typeof SCHEDULED_REPORT_TYPES)[number];
+
 export function isScheduledToday(
   type: string,
   dayOfMonth: number,
