@@ -48,6 +48,9 @@ import { ReportOrchestrator } from "./orchestrator/report-orchestrator";
 
 const PID_FILE = "data/bot.pid";
 
+/** Warn when the bot hasn't run successfully for a week — WhatsApp revokes sessions after ~14 days offline. */
+const INACTIVITY_WARNING_MS = 7 * 24 * 60 * 60 * 1000;
+
 let emergencyCleanup: (() => Promise<void>) | null = null;
 
 process.on("unhandledRejection", (reason) => {
@@ -422,7 +425,7 @@ async function main() {
         }
         if (
           lastActivityTs === null ||
-          Date.now() - lastActivityTs > 7 * 24 * 60 * 60 * 1000
+          Date.now() - lastActivityTs > INACTIVITY_WARNING_MS
         ) {
           log.warn(
             "WhatsApp",
