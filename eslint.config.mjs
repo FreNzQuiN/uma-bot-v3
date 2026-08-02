@@ -15,6 +15,7 @@
 
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import security from "eslint-plugin-security";
 
 export default tseslint.config(
   {
@@ -22,6 +23,7 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  security.configs.recommended,
   {
     rules: {
       complexity: ["warn", 15],
