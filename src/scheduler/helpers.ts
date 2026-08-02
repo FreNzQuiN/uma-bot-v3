@@ -8,12 +8,15 @@ import { getTargetMonth } from "../utils/timezone";
  * Single source of truth so the two modules can't drift apart when a
  * 4th report type is added.
  */
-export const SCHEDULED_REPORT_TYPES = ["daily", "weekly", "monthly"] as const;
+export const SCHEDULED_DAILY = "daily" as const;
+export const SCHEDULED_WEEKLY = "weekly" as const;
+export const SCHEDULED_MONTHLY = "monthly" as const;
+export const SCHEDULED_REPORT_TYPES = [
+  SCHEDULED_DAILY,
+  SCHEDULED_WEEKLY,
+  SCHEDULED_MONTHLY,
+] as const;
 export type ScheduledReportType = (typeof SCHEDULED_REPORT_TYPES)[number];
-
-export const SCHEDULED_DAILY: ScheduledReportType = SCHEDULED_REPORT_TYPES[0];
-export const SCHEDULED_WEEKLY: ScheduledReportType = SCHEDULED_REPORT_TYPES[1];
-export const SCHEDULED_MONTHLY: ScheduledReportType = SCHEDULED_REPORT_TYPES[2];
 
 export function getCollidingTypes(
   dayOfMonth: number,
