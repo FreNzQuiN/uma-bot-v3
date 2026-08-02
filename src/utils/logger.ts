@@ -160,7 +160,7 @@ class Logger {
       const consoleLine = this.formatLine(level, tag, consoleMsg);
       const color = this.getColor(level);
       const reset = "\x1b[0m";
-      // eslint-disable-next-line no-console
+       
       console.log(`${color}${consoleLine}${reset}`);
     }
 
