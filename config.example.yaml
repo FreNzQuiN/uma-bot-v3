@@ -10,7 +10,8 @@
 
 # Your Uma Musume circle ID (required)
 # Find it in the URL when viewing your circle on uma.moe
-circleId: 232229195
+# REPLACE with your circle ID
+circleId: 123456789
 
 # Timezone for all user-facing dates and schedules
 timezone: Asia/Jakarta
