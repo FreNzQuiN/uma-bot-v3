@@ -93,14 +93,19 @@ function classifyAuthFile(filename: string): string {
 }
 
 /**
- * Delete lid-mapping files older than maxAgeMs.
+ * Age-prune files matching any of the given prefixes.
  *
- * LID mappings are reverse-lookup caches that Baileys recreates on demand.
- * Old mappings for contacts no longer in any shared group are pure bloat.
+ * extractKey maps a filename to its protection key (numeric JID, group JID);
+ * null means "can't parse — keep". Files whose key is in protectedKeys are
+ * skipped without being stat'ed — an unreadable protected file is not an
+ * error. Omit extractKey to prune all prefix matches unconditionally.
  */
-export function pruneStaleLidMappings(
+function pruneFiles(
   authDir: string,
-  maxAgeMs: number = DEFAULT_LID_MAX_AGE_MS,
+  prefixes: string[],
+  extractKey: ((filename: string) => string | null) | undefined,
+  protectedKeys: ReadonlySet<string> | undefined,
+  maxAgeMs: number,
 ): CleanupResult {
   let deleted = 0;
   let errors = 0;
@@ -110,15 +115,15 @@ export function pruneStaleLidMappings(
   }
 
   const now = Date.now();
-  const files = readdirSync(authDir);
-
-  for (const file of files) {
-    if (!file.startsWith(LID_MAPPING_PREFIX)) continue;
-
+  for (const file of readdirSync(authDir)) {
+    if (!prefixes.some((prefix) => file.startsWith(prefix))) continue;
+    if (extractKey) {
+      const key = extractKey(file);
+      if (key === null || protectedKeys?.has(key)) continue;
+    }
     const filePath = join(authDir, file);
     try {
-      const stat = statSync(filePath);
-      if (now - stat.mtimeMs > maxAgeMs) {
+      if (now - statSync(filePath).mtimeMs > maxAgeMs) {
         unlinkSync(filePath);
         deleted++;
       }
@@ -128,6 +133,25 @@ export function pruneStaleLidMappings(
   }
 
   return { deleted, errors };
+}
+
+/**
+ * Delete lid-mapping files older than maxAgeMs.
+ *
+ * LID mappings are reverse-lookup caches that Baileys recreates on demand.
+ * Old mappings for contacts no longer in any shared group are pure bloat.
+ */
+export function pruneStaleLidMappings(
+  authDir: string,
+  maxAgeMs: number = DEFAULT_LID_MAX_AGE_MS,
+): CleanupResult {
+  return pruneFiles(
+    authDir,
+    [LID_MAPPING_PREFIX],
+    undefined,
+    undefined,
+    maxAgeMs,
+  );
 }
 
 /**
@@ -331,30 +355,13 @@ export function pruneStaleSenderKeys(
   protectedGroups: Set<string>,
   maxAgeMs: number,
 ): CleanupResult {
-  let deleted = 0;
-  let errors = 0;
-
-  if (!existsSync(authDir)) {
-    return { deleted, errors };
-  }
-
-  const now = Date.now();
-  for (const file of readdirSync(authDir)) {
-    if (!file.startsWith(SENDER_KEY_PREFIX)) continue;
-    const groupJid = extractSenderKeyGroupJid(file);
-    if (groupJid === null || protectedGroups.has(groupJid)) continue;
-    const filePath = join(authDir, file);
-    try {
-      if (now - statSync(filePath).mtimeMs > maxAgeMs) {
-        unlinkSync(filePath);
-        deleted++;
-      }
-    } catch {
-      errors++;
-    }
-  }
-
-  return { deleted, errors };
+  return pruneFiles(
+    authDir,
+    [SENDER_KEY_PREFIX],
+    extractSenderKeyGroupJid,
+    protectedGroups,
+    maxAgeMs,
+  );
 }
 
 function pruneStaleSessionsAndIdentities(
@@ -362,35 +369,13 @@ function pruneStaleSessionsAndIdentities(
   protectedJids: Set<string>,
   maxAgeMs: number,
 ): CleanupResult {
-  let deleted = 0;
-  let errors = 0;
-
-  if (!existsSync(authDir)) {
-    return { deleted, errors };
-  }
-
-  const now = Date.now();
-  for (const file of readdirSync(authDir)) {
-    if (
-      !file.startsWith(SESSION_PREFIX) &&
-      !file.startsWith(IDENTITY_KEY_PREFIX)
-    ) {
-      continue;
-    }
-    const numericJid = extractNumericJid(file);
-    if (numericJid === null || protectedJids.has(numericJid)) continue;
-    const filePath = join(authDir, file);
-    try {
-      if (now - statSync(filePath).mtimeMs > maxAgeMs) {
-        unlinkSync(filePath);
-        deleted++;
-      }
-    } catch {
-      errors++;
-    }
-  }
-
-  return { deleted, errors };
+  return pruneFiles(
+    authDir,
+    [SESSION_PREFIX, IDENTITY_KEY_PREFIX],
+    extractNumericJid,
+    protectedJids,
+    maxAgeMs,
+  );
 }
 
 /**
