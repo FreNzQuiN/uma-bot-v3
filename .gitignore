@@ -26,6 +26,7 @@ data/uma-moe-main.js
 data/chunk-chunk-*.js
 data/circle-api-response.json
 data/live-circle-response.json
+data/tier-exploration
 
 # Runtime files
 data/bot.pid
@@ -47,3 +48,5 @@ tests/stats_output2.txt
 .DS_Store
 Thumbs.db
 nul
+.codegraph
+.npmrc

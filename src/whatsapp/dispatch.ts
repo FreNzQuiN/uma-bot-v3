@@ -8,7 +8,11 @@
 import type { BotConfig, Snapshot } from "../types";
 import type { IDatabase } from "../db/types";
 import type { FetchResult } from "../data/fetch-snapshot";
-import { getDataDayFromSnapshot } from "../data/daily-fans";
+import { SnapshotSaveError } from "../data/fetch-snapshot";
+import {
+  getDataDayFromSnapshot,
+  getSnapshotLastUpdatedMs,
+} from "../data/daily-fans";
 import type { WhatsAppClient, IncomingMessage } from "./client";
 import { parseCommand, parseStrictInt, resolveMemberName } from "./commands";
 import {
@@ -42,6 +46,7 @@ import {
   getTargetMonth,
   getDataDateComponents,
   getDataDay,
+  formatDisplayTimestamp,
 } from "../utils/timezone";
 import { preFetchMonthlySnapshot } from "../scheduler/helpers";
 
@@ -226,18 +231,18 @@ async function handleFetchCommand(
     await ctx.client.sendOrEdit(
       chatJid,
       loadingMsgId,
-      formatFetchResult(result),
+      formatFetchResult(result, ctx.config.timezone),
     );
   } catch (err) {
     log.error("Dispatch", "/fetch failed", err);
     // Only reply when the loading message made it out — if it didn't, the
     // client is likely disconnected and a failure reply would fail too.
     if (loadingMsgId !== null) {
-      await ctx.client.sendOrEdit(
-        chatJid,
-        loadingMsgId,
-        "⚠️ Gagal mengambil data dari uma.moe. Coba lagi.",
-      );
+      const reply =
+        err instanceof SnapshotSaveError
+          ? "⚠️ Data berhasil diambil dari uma.moe, tapi gagal disimpan ke disk. Coba lagi."
+          : "⚠️ Gagal mengambil data dari uma.moe. Coba lagi.";
+      await ctx.client.sendOrEdit(chatJid, loadingMsgId, reply);
     }
   } finally {
     fetchInFlight.active = false;
@@ -255,6 +260,13 @@ function snapshotDateLabel(snapshot: Snapshot): string {
     : `${member.year}-${month}`;
 }
 
+/** Refresh timestamp as "YYYY-MM-DD HH:MM" in the display timezone, or null when the snapshot has no parseable timestamp. */
+function snapshotTsLabel(snapshot: Snapshot, timezone: string): string | null {
+  const ms = getSnapshotLastUpdatedMs(snapshot);
+  if (ms === null) return null;
+  return formatDisplayTimestamp(new Date(ms), timezone);
+}
+
 /**
  * Map the /fetch result to a reply. The previous-month backfill outcome wins
  * because at month roll the admin wants the latest real data, which lives in
@@ -262,7 +274,7 @@ function snapshotDateLabel(snapshot: Snapshot): string {
  * return data with no usable day yet, so the message always states the data
  * date and flags when it lags behind the current JST day.
  */
-function formatFetchResult(result: ForceFetchResult): string {
+function formatFetchResult(result: ForceFetchResult, timezone: string): string {
   const { current, previous } = result;
   const curSnap = current.snapshot;
   const curDay = curSnap ? getDataDayFromSnapshot(curSnap) : null;
@@ -278,7 +290,7 @@ function formatFetchResult(result: ForceFetchResult): string {
       prevSnap &&
       (prevDay ?? 0) > 0
     ) {
-      return `ℹ️ Data terbaru masih dari bulan lalu — data ${snapshotDateLabel(prevSnap)}.`;
+      return `ℹ️ Data terbaru masih dari bulan lalu — data ${snapshotTsLabel(prevSnap, timezone) ?? snapshotDateLabel(prevSnap)}.`;
     }
   }
 
@@ -290,13 +302,20 @@ function formatFetchResult(result: ForceFetchResult): string {
   }
 
   if (curSnap && curDay === 0) {
+    const tsLabel = snapshotTsLabel(curSnap, timezone);
+    if (tsLabel) {
+      return `⚠️ Data bulan ini belum tersedia di uma.moe — refresh terakhir ${tsLabel}. Coba lagi nanti.`;
+    }
     return "⚠️ Data bulan ini belum tersedia di uma.moe — coba lagi nanti.";
   }
 
   const reason = current.reason ?? previous?.reason ?? "";
   if (reason.startsWith("not_newer")) {
     const snap = curSnap ?? prevSnap;
-    return `ℹ️ uma.moe belum punya data baru — snapshot terbaru: ${snap ? snapshotDateLabel(snap) : "-"}.`;
+    const when = snap
+      ? (snapshotTsLabel(snap, timezone) ?? snapshotDateLabel(snap))
+      : "-";
+    return `ℹ️ uma.moe belum punya data baru — snapshot terbaru: ${when}.`;
   }
   if (reason.startsWith("empty_response")) {
     return "⚠️ uma.moe belum punya data untuk bulan ini. Coba lagi nanti.";

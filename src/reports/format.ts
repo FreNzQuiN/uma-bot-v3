@@ -12,7 +12,11 @@ import {
 } from "../utils/timezone";
 import type { Snapshot, BotConfig, ComputedMember } from "../types";
 import { CLUB_TIERS } from "../types";
-import { getLatestDataDay, isStaleForReport } from "../data/daily-fans";
+import {
+  getLatestDataDay,
+  isStaleForReport,
+  getSnapshotLastUpdatedMs,
+} from "../data/daily-fans";
 import { getDataDayFromSnapshot } from "../data/snapshot";
 import { sanitizeName } from "../utils/format";
 import { STALE_DAY_TOLERANCE } from "./helpers";
@@ -50,21 +54,18 @@ export function buildDateStr(snapshot: Snapshot, dataDay?: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-export function buildFooter(config: BotConfig, snapshotDate?: string): string {
-  const parsed =
-    snapshotDate && /^\d{4}-\d{2}-\d{2}$/.test(snapshotDate)
-      ? new Date(snapshotDate + DATA_UPDATE_OFFSET)
-      : new Date();
-  const dateToUse = isNaN(parsed.getTime()) ? new Date() : parsed;
-  return `⸻\nTerakhir sync: ${formatForDisplay(dateToUse, config.timezone)}`;
+export function getSnapshotDataTime(snapshot: Snapshot): Date {
+  const ms = getSnapshotLastUpdatedMs(snapshot);
+  return ms !== null ? new Date(ms) : new Date();
 }
 
-// Pins the data-update instant: 22:00 WIB = 00:00 JST, matches DATA_UPDATE_STRING
-const DATA_UPDATE_OFFSET = "T22:00:00+07:00";
-const DATA_UPDATE_STRING = "22:00 WIB";
+export function buildFooter(config: BotConfig, snapshot: Snapshot): string {
+  const dataTime = getSnapshotDataTime(snapshot);
+  return `⸻\nTerakhir sync: ${formatForDisplay(dataTime, config.timezone)}`;
+}
 
 function buildDataLine(formattedDate: string): string {
-  return `Periode data: ${formattedDate}, ${DATA_UPDATE_STRING}`;
+  return `Periode data: ${formattedDate}`;
 }
 
 /**

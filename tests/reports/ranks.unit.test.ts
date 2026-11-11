@@ -271,7 +271,7 @@ describe("Report header structure", () => {
   });
 
   it("line 3: data line", () => {
-    expect(lines[3]).toBe("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(lines[3]).toBe("Periode data: 11 Juni 2026");
   });
 
   it("line 4: blank", () => {
@@ -539,7 +539,7 @@ describe("Complete line-by-line verification against raw data", () => {
     expect(lines[0]).toBe("🏆 *Peringkat Bulanan*");
     expect(lines[1]).toBe("");
     expect(lines[2]).toBe("Hol＿Horse | A+ (#431)");
-    expect(lines[3]).toBe("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(lines[3]).toBe("Periode data: 11 Juni 2026");
     expect(lines[4]).toBe("");
 
     // Member lines sit at indices 5-14, after the 5 header lines.

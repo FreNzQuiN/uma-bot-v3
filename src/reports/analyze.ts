@@ -120,6 +120,6 @@ export function generateAnalyzeReport(
   lines.push(`• Proyeksi akhir bulan: ~${formatNumber(projected)}`);
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(activeSnapshot)));
+  lines.push(buildFooter(config, activeSnapshot));
   return lines.join("\n");
 }

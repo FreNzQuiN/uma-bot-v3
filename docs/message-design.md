@@ -90,19 +90,19 @@
 {emoji} *{Report Title}*
 
 {Club Name} | {Tier} (#{rank})
-Data: {date}, {time} WIB
+Periode data: {date}
 
 {report body content}
 
 ⸻
-Sync at: {timestamp}
+Terakhir sync: {D/M HH:MM}
 ```
 
 **Rules:**
 
 - Title is bold with single emoji prefix
 - Club info always on its own line below title
-- Data freshness note always on following line
+- Data period note always on following line (date-only — the sync clock lives in the footer)
 - Separator `⸻` before sync timestamp
 - Sections within body separated by blank lines
 - Bullet points use `•` not `-` or `*`
@@ -236,10 +236,11 @@ Files: `src/reports/daily.ts`, `weekly.ts`, `monthly.ts`, `ranks.ts`, `bottom.ts
 
 Files: All report files
 
-- Current: `⸻\nSync at: {timestamp}`
-- Keep the separator but consider Bourbon-flavored label:
-  `⸻\nLast sync: {timestamp}`
-- Or: `⸻\nData retrieved: {timestamp}`
+- Current: `⸻\nTerakhir sync: {D/M HH:MM}`
+- Timestamp = the snapshot's real `last_updated` (max across members, fallback `circle.last_updated`), converted to the configured display timezone — never a fixed/assumed update time
+- Header data line: `Periode data: {tanggal}` (date-only, no clock)
+- Previous-month reports (monthly offset=-1, analyze) show the previous month's snapshot timestamp
+- Combined reports strip each section's footer and emit one shared footer from the current snapshot
 
 ### Catch-up Tag
 

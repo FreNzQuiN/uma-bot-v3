@@ -42,6 +42,7 @@ jest.mock("../../src/data/snapshot", () => {
 });
 
 import { loadMonthSnapshot } from "../../src/data/snapshot";
+import { SnapshotSaveError } from "../../src/data/fetch-snapshot";
 const mockLoadMonthSnapshots = loadMonthSnapshot as jest.MockedFunction<
   typeof loadMonthSnapshot
 >;
@@ -1084,7 +1085,91 @@ describe("/fetch command", () => {
 
     expect(sentMessages).toHaveLength(2);
     expect(sentMessages[1].text).toContain("belum punya data baru");
-    expect(sentMessages[1].text).toContain("2026-06-13");
+    // Refresh timestamp rendered in the display timezone (default Asia/Jakarta):
+    // circle.last_updated "2026-06-13T14:00:00Z" is the latest refresh → 21:00 WIB.
+    expect(sentMessages[1].text).toContain("2026-06-13 21:00");
+  });
+
+  it("falls back to the date label when the snapshot has no parseable timestamp", async () => {
+    const noTs = makeSnapshot();
+    noTs.circle.last_updated = "bogus";
+    noTs.members = noTs.members.map((m) => ({ ...m, last_updated: "bogus" }));
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot: noTs, saved: false, reason: "not_newer" },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).toContain("belum punya data baru");
+    expect(sentMessages[1].text).toContain("snapshot terbaru: 2026-06-13.");
+    expect(sentMessages[1].text).not.toMatch(/\d{2}:\d{2}/);
+  });
+
+  it("shows the previous-month refresh timestamp when the backfill has no new data", async () => {
+    mockCurrentDate(2026, 6, 12);
+    const prevSnap = makeSnapshot();
+    prevSnap.members = [
+      {
+        ...prevSnap.members[0],
+        year: 2026,
+        month: 5,
+        daily_fans: new Array(31).fill(1000),
+        last_updated: "2026-05-31",
+      },
+    ];
+    prevSnap.circle.last_updated = "2026-05-31";
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot, saved: false, reason: "empty_response" },
+      previous: { snapshot: prevSnap, saved: false, reason: "not_newer" },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).toContain("masih dari bulan lalu");
+    expect(sentMessages[1].text).toContain("2026-05-31 07:00");
+  });
+
+  it("shows the refresh timestamp when the current month has no data yet", async () => {
+    const day0 = makeSnapshot();
+    day0.members = day0.members.map((m) => ({
+      ...m,
+      daily_fans: new Array(32).fill(0),
+    }));
+    const forceFetch = jest.fn().mockResolvedValue({
+      current: { snapshot: day0, saved: true },
+    });
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages[1].text).toContain("belum tersedia di uma.moe");
+    expect(sentMessages[1].text).toContain("refresh terakhir 2026-06-13 21:00");
   });
 
   it("flags when the saved data still lags behind the current JST day", async () => {
@@ -1165,6 +1250,30 @@ describe("/fetch command", () => {
     expect(sentMessages).toHaveLength(2);
     expect(sentMessages[0].text).toMatch(/^⏳ /);
     expect(sentMessages[1].text).toContain("Gagal mengambil data");
+  });
+
+  it("replies that the save failed when the fetch succeeded but disk write threw", async () => {
+    const forceFetch = jest
+      .fn()
+      .mockRejectedValue(
+        new SnapshotSaveError("Failed to save", new Error("disk full")),
+      );
+    setupCommandHandler(
+      mockClient,
+      config,
+      mockDb,
+      () => snapshot,
+      undefined,
+      undefined,
+      forceFetch,
+    );
+
+    await messageHandler!(adminFetchMessage());
+
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[0].text).toMatch(/^⏳ /);
+    expect(sentMessages[1].text).toContain("gagal disimpan ke disk");
+    expect(sentMessages[1].text).not.toContain("Gagal mengambil data");
   });
 
   it("tells the admin a fetch is already running instead of double-fetching", async () => {

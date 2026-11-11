@@ -300,6 +300,25 @@ export function getDataDayFromSnapshot(snapshot: Snapshot): number {
   return maxDay;
 }
 
+/**
+ * Data-refresh timestamp for a snapshot as epoch ms.
+ * Latest of members[].last_updated (they refresh individually) and
+ * circle.last_updated (bumps on roster/tier changes). Returns null when
+ * nothing parses. uma.moe refreshes data multiple times per day, so this
+ * is the freshness signal — not the calendar day derived from daily_fans.
+ */
+export function getSnapshotLastUpdatedMs(snapshot: Snapshot): number | null {
+  const memberTimes = snapshot.members
+    .map((m) => Date.parse(m.last_updated))
+    .filter((t) => Number.isFinite(t));
+  const circleMs = Date.parse(snapshot.circle.last_updated);
+  const latest = Math.max(
+    memberTimes.length > 0 ? Math.max(...memberTimes) : -Infinity,
+    Number.isFinite(circleMs) ? circleMs : -Infinity,
+  );
+  return Number.isFinite(latest) ? latest : null;
+}
+
 export function computeTierData(snapshot: Snapshot): TierData {
   const { club_rank, fans_to_next_tier, fans_to_lower_tier } = snapshot;
   const tierName = CLUB_TIERS[club_rank] || `T${club_rank}`;

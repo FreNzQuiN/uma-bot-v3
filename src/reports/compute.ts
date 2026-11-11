@@ -20,10 +20,20 @@ import {
   getMonthlyGain,
   isTransferMember,
 } from "../data/daily-fans";
+import { log } from "../utils/logger";
 export { computeTierData } from "../data/daily-fans";
 
 // Ghost-gap sanity cap: gaps above this ratio mean member_count is a data error, not leavers
 const GHOST_GAP_MAX_RATIO = 0.5;
+
+function getReferenceDataDay(members: ComputedMember[]): number {
+  const days = members
+    .map((m) => m.latestPositiveDay)
+    .filter((d) => d >= 1)
+    .sort((a, b) => a - b);
+  if (days.length === 0) return 0;
+  return days[Math.floor(days.length / 2)];
+}
 
 /**
  * Stale is computed per-report using report-specific thresholds,
@@ -78,12 +88,6 @@ export function computeMembers(
     };
   });
 
-  // Second pass: ghost detection via member_count
-  // If snapshot has more members than member_count, the extra members are
-  // ghosts who left the club. Among all active members, the bottom
-  // ghostCount by monthly gain are reclassified as 'left'.
-  // Guard: skip ghost detection if member_count is unreliable (0 or negative)
-  // or if the gap is unreasonably large (more than half the roster)
   const memberCount = snapshot.circle.member_count;
   const ghostCount =
     memberCount > 0 ? Math.max(0, snapshot.members.length - memberCount) : 0;
@@ -92,11 +96,25 @@ export function computeMembers(
     ghostCount > 0 &&
     ghostCount < snapshot.members.length * GHOST_GAP_MAX_RATIO
   ) {
-    const candidates = [...membersWithGain].sort(
-      (a, b) => a.monthlyGain - b.monthlyGain,
-    );
+    const referenceDay = getReferenceDataDay(membersWithGain);
+    const candidates = membersWithGain
+      .filter(
+        (m) => m.latestPositiveDay >= 1 && m.latestPositiveDay < referenceDay,
+      )
+      .sort(
+        (a, b) =>
+          a.latestPositiveDay - b.latestPositiveDay ||
+          a.monthlyGain - b.monthlyGain ||
+          a.viewerId - b.viewerId,
+      );
 
     const toReclassify = candidates.slice(0, ghostCount);
+    if (toReclassify.length < ghostCount) {
+      log.warn(
+        "Report",
+        `Ghost detection deferred: ${toReclassify.length} confirmed of ${ghostCount} gap (referenceDay=${referenceDay})`,
+      );
+    }
     const reclassifyIds = new Set(toReclassify.map((m) => m.viewerId));
 
     for (const m of membersWithGain) {

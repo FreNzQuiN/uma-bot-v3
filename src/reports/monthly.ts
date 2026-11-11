@@ -11,7 +11,6 @@ import { getDataDayFromSnapshot } from "../data/snapshot";
 import { formatNumber, sanitizeName } from "../utils/format";
 import {
   getStaleDataWarning,
-  buildDateStr,
   buildFooter,
   buildReportHeader,
   buildStaleSection,
@@ -163,6 +162,6 @@ export function generateMonthlyReport(
   }
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(activeSnapshot)));
+  lines.push(buildFooter(config, activeSnapshot));
   return lines.join("\n");
 }

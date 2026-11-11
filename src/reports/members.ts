@@ -11,7 +11,7 @@ import type { ComputedMember } from "../types";
 import type { IDatabase } from "../db/types";
 import { formatNumber, sanitizeName } from "../utils/format";
 import { formatDateWIB } from "../utils/timezone";
-import { buildFooter, buildDateStr, buildReportHeader } from "./format";
+import { buildFooter, buildReportHeader } from "./format";
 import { getLeftMembers } from "../data/member-history";
 
 export async function generateMembersReport(
@@ -69,6 +69,6 @@ export async function generateMembersReport(
   }
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }

@@ -12,13 +12,13 @@ A WhatsApp bot for Uma Musume circle leaders. It tracks ~30 members' daily fan p
 
 Everything revolves around one data structure: the `daily_fans` array. It's 32 cumulative integers — one per day of the month. Every report type (daily, weekly, monthly, ranks, bottom, stats) is different arithmetic on this same array.
 
-This is not a coincidence. It's how uma.moe provides data. The API gives you one snapshot per day with cumulative fans. The bot's job is to turn that into every question a leader might ask: "Who gained the most today?" "Who's on track for the month?" "Who's about to get kicked?"
+This is not a coincidence. It's how uma.moe provides data. The API gives you a fresh snapshot per refresh with cumulative fans — multiple refreshes land per day. The bot's job is to turn that into every question a leader might ask: "Who gained the most today?" "Who's on track for the month?" "Who's about to get kicked?"
 
 ## Why Single Process
 
 No microservices, no cache layer, no message queue. One Node.js process handles everything: WhatsApp (Baileys), HTTP API, cron scheduling, report generation.
 
-Data processing is arithmetic on arrays of ~34 integers. uma.moe data is static for 24h. Splitting adds operational friction without benefit. The bot runs intermittently — it starts, catches up on missed reports, runs scheduled reports, and shuts down. A single process keeps this simple.
+Data processing is arithmetic on arrays of ~34 integers. uma.moe refreshes its data several times per day. Splitting adds operational friction without benefit. The bot runs intermittently — it starts, catches up on missed reports, runs scheduled reports, and shuts down. A single process keeps this simple.
 
 ## Data Flow
 
@@ -27,7 +27,7 @@ uma.moe API → Snapshot (immutable JSON) → computeMembers() → Report → Wh
 ```
 
 1. **Fetch:** Playwright opens uma.moe, solves Cloudflare Turnstile, gets circle data.
-2. **Snapshot:** Saved as `data/snapshots/YYYY/MM/DD.json`. Immutable once written — reports recompute from the array each time.
+2. **Snapshot:** Saved as `data/snapshots/YYYY/MM/DD.json`. Never edited in place — a same-day refresh atomically replaces the day's file.
 3. **Compute:** `computeMembers()` transforms raw `daily_fans` arrays into `ComputedMember` objects with gains, status, weekly breakdowns.
 4. **Report:** 11 generator functions produce WhatsApp-formatted strings from computed members.
 5. **Deliver:** Split at newline boundaries (WhatsApp 4096 char limit), send to announcement groups.

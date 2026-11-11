@@ -53,7 +53,7 @@ describe("Output structure", () => {
   });
 
   it("report shows data period date", () => {
-    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(report).toContain("Periode data: 11 Juni 2026");
   });
 
   it("report shows promotion and demotion info", () => {

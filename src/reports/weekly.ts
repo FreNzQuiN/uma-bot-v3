@@ -136,6 +136,6 @@ export function generateWeeklyReport(
   }
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }

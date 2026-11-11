@@ -7,7 +7,10 @@
  * fake timers to assert the first retry waits 5 minutes, not 5 hours.
  */
 
-import { fetchAndSaveSnapshot } from "../../src/data/fetch-snapshot";
+import {
+  fetchAndSaveSnapshot,
+  SnapshotSaveError,
+} from "../../src/data/fetch-snapshot";
 import type { Snapshot } from "../../src/types";
 
 jest.mock("../../src/data/snapshot");
@@ -30,6 +33,8 @@ function makeSnapshot(
   month: number,
   dataDay: number,
   circleId = 100,
+  lastUpdated = "2020-01-01T00:00:00Z",
+  memberCount = 1,
 ): Snapshot {
   return {
     circle: {
@@ -38,11 +43,11 @@ function makeSnapshot(
       comment: "",
       leader_viewer_id: 1,
       leader_name: "Leader",
-      member_count: 1,
+      member_count: memberCount,
       join_style: 0,
       policy: 0,
       created_at: "",
-      last_updated: "2020-01-01T00:00:00Z",
+      last_updated: lastUpdated,
       monthly_rank: 100,
       monthly_point: 1000000,
       last_month_rank: null,
@@ -55,19 +60,17 @@ function makeSnapshot(
       live_rank: null,
       last_live_update: null,
     },
-    members: [
-      {
-        id: 1,
-        circle_id: circleId,
-        viewer_id: 1001,
-        trainer_name: "Ryu",
-        shame_score: null,
-        year,
-        month,
-        daily_fans: new Array(dataDay).fill(1000),
-        last_updated: "2020-01-01T00:00:00Z",
-      },
-    ],
+    members: Array.from({ length: memberCount }, (_, i) => ({
+      id: i + 1,
+      circle_id: circleId,
+      viewer_id: 1001 + i,
+      trainer_name: `Ryu${i}`,
+      shame_score: null,
+      year,
+      month,
+      daily_fans: new Array(dataDay).fill(1000),
+      last_updated: lastUpdated,
+    })),
     club_rank: 8,
     fans_to_next_tier: 500000,
     fans_to_lower_tier: 50000,
@@ -141,7 +144,7 @@ describe("fetchAndSaveSnapshot", () => {
 
     await expect(
       fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, { rootDir: "/tmp/test" }),
-    ).rejects.toThrow("disk full");
+    ).rejects.toThrow(SnapshotSaveError);
   });
 
   describe("force mode", () => {
@@ -252,7 +255,189 @@ describe("fetchAndSaveSnapshot", () => {
           rootDir: "/tmp/test",
           force: true,
         }),
-      ).rejects.toThrow("disk full");
+      ).rejects.toThrow(SnapshotSaveError);
+    });
+  });
+
+  describe("isFetchedNewer timestamp ordering", () => {
+    it("treats a newer refresh timestamp as newer even when the data day is lower", async () => {
+      const existing = makeSnapshot(2026, 6, 11, 100, "2026-06-10T00:00:00Z");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 10, 100, "2026-06-10T12:00:00Z");
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    it("saves an equal-timestamp snapshot with a higher data day", async () => {
+      const existing = makeSnapshot(2026, 6, 10, 100, "2026-06-10T12:00:00Z");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 11, 100, "2026-06-10T12:00:00Z");
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(true);
+    });
+
+    it("saves an equal-timestamp, equal-day snapshot with more members", async () => {
+      const existing = makeSnapshot(2026, 6, 11, 100, "2026-06-10T12:00:00Z");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 11, 100, "2026-06-10T12:00:00Z", 2);
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(true);
+    });
+
+    it("rejects an older timestamp even when the data day is higher", async () => {
+      // A snapshot can only gain a day after the refresh that published it,
+      // so a higher day with an older timestamp means uma.moe served a
+      // stale/cached payload — never replace the newer disk snapshot.
+      const existing = makeSnapshot(2026, 6, 10, 100, "2026-06-10T12:00:00Z");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 12, 100, "2026-06-10T00:00:00Z");
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(false);
+      expect(result.reason).toBe("not_newer");
+      expect(result.snapshot).toBe(existing);
+    });
+
+    it("saves an equal-day fetch when the existing timestamp is unparseable", async () => {
+      // Regression lock: a non-parseable existing timestamp must never make
+      // a valid fetched one lose the comparison (the old `?? ""` string
+      // compare could drop a correct save).
+      const existing = makeSnapshot(2026, 6, 10, 100, "bogus");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 10, 100, "2026-06-10T12:00:00Z");
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(true);
+    });
+
+    it("rejects when both timestamps are unparseable and days are equal", async () => {
+      const existing = makeSnapshot(2026, 6, 11, 100, "bogus");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 11, 100, "garbage");
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(false);
+      expect(result.reason).toBe("not_newer");
+    });
+
+    it("saves more members when both timestamps are unparseable and days are equal", async () => {
+      const existing = makeSnapshot(2026, 6, 11, 100, "bogus");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 11, 100, "garbage", 2);
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(true);
+    });
+
+    it("saves a higher data day when both timestamps are unparseable", async () => {
+      const existing = makeSnapshot(2026, 6, 10, 100, "bogus");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 11, 100, "garbage");
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(true);
+    });
+
+    it("saves when only the circle timestamp advanced", async () => {
+      // Circle bumps on roster/tier changes even when member rows lag —
+      // the max(members, circle) helper must treat that as a refresh.
+      const existing = makeSnapshot(2026, 6, 11, 100, "2026-06-10T10:00:00Z");
+      existing.circle.last_updated = "2026-06-10T12:00:00Z";
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 11, 100, "2026-06-10T10:00:00Z");
+      fetched.circle.last_updated = "2026-06-10T13:00:00Z";
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(true);
+    });
+
+    it("treats identical instants in different offset formats as equal", async () => {
+      // 2026-06-10T00:00:00+09:00 == 2026-06-09T15:00:00Z — a naive string
+      // compare orders them wrong; numeric compare must not.
+      const existing = makeSnapshot(2026, 6, 9, 100, "2026-06-09T15:00:00Z");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(
+        2026,
+        6,
+        9,
+        100,
+        "2026-06-10T00:00:00+09:00",
+      );
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(false);
+      expect(result.reason).toBe("not_newer");
+    });
+
+    it("rejects an unparseable fetched timestamp even when the data day is higher", async () => {
+      // Discriminates against the old day-first ordering, which would have
+      // saved day 12 > day 10 without consulting the timestamp.
+      const existing = makeSnapshot(2026, 6, 10, 100, "2026-06-10T12:00:00Z");
+      mockedLoad.mockReturnValue(existing);
+      const fetched = makeSnapshot(2026, 6, 12, 100, "bogus");
+      umaMoe.fetchCircleData.mockResolvedValue(fetched);
+
+      const result = await fetchAndSaveSnapshot(umaMoe, 100, 2026, 6, {
+        rootDir: "/tmp/test",
+        force: true,
+      });
+
+      expect(result.saved).toBe(false);
+      expect(result.reason).toBe("not_newer");
     });
   });
 
@@ -267,6 +452,12 @@ describe("fetchAndSaveSnapshot", () => {
       mockedLoad.mockReturnValue(existing);
       const stale = makeSnapshot(2026, 6, 6);
       const fresh = makeSnapshot(2026, 6, 11);
+      // Timestamps must be monotone: a day-advancing payload is published
+      // after the existing one, so its refresh time is newer.
+      stale.circle.last_updated = new Date(
+        Date.now() - 59 * 60_000,
+      ).toISOString();
+      fresh.circle.last_updated = new Date(Date.now()).toISOString();
       umaMoe.fetchCircleData
         .mockResolvedValueOnce(stale)
         .mockResolvedValue(fresh);

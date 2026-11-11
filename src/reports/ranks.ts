@@ -8,7 +8,7 @@
 import { Snapshot, BotConfig } from "../types";
 import type { ComputedMember } from "../types";
 import { formatNumber, sanitizeName } from "../utils/format";
-import { buildDateStr, buildFooter, buildReportHeader } from "./format";
+import { buildFooter, buildReportHeader } from "./format";
 import { TOP_N } from "./helpers";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -43,6 +43,6 @@ export function generateRanksReport(
   }
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }

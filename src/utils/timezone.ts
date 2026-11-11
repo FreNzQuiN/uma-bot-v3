@@ -2,7 +2,7 @@
  * Timezone utilities using Node.js Intl API.
  *
  * Architecture:
- * - Data source (uma.moe) scrapes at 00:00 JST → 'Asia/Tokyo' is the data timezone
+ * - Data source (uma.moe) refreshes multiple times per day; first refresh ~00:00 JST → 'Asia/Tokyo' is the data timezone
  * - Display timezone comes from config (default: 'Asia/Jakarta' / WIB)
  * - All internal date logic uses the data timezone (JST)
  * - Display conversion uses the configured display timezone
@@ -142,4 +142,20 @@ export function formatDateWIB(dateStr: string): string {
 export function formatForDisplay(date: Date, displayTimezone: string): string {
   const { day, month, hour, minute } = extractInTimezone(date, displayTimezone);
   return `${day}/${month} ${pad2(hour)}:${pad2(minute)}`;
+}
+
+/**
+ * Format a Date for display in the configured timezone as "YYYY-MM-DD HH:MM".
+ * Year included so month-boundary backfills stay unambiguous. Used by /fetch
+ * replies where the refresh timestamp, not a data day, is the signal.
+ */
+export function formatDisplayTimestamp(
+  date: Date,
+  displayTimezone: string,
+): string {
+  const { year, month, day, hour, minute } = extractInTimezone(
+    date,
+    displayTimezone,
+  );
+  return `${year}-${pad2(month)}-${pad2(day)} ${pad2(hour)}:${pad2(minute)}`;
 }

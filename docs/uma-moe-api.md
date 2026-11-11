@@ -1,7 +1,7 @@
 # uma.moe — Technical Documentation
 
 > Reverse-engineered from the live Angular frontend (`prod-build.71.1`) and full API probing via Playwright token harvest.
-> Last verified: June 9, 2026
+> Last verified: August 3, 2026
 
 ## Overview
 
@@ -119,43 +119,43 @@ Fetch circle (club) data for a specific month.
 
 **Response fields:**
 
-| Field                            | Type  | Description                                                     |
-| -------------------------------- | ----- | --------------------------------------------------------------- |
-| `circle.circle_id`               | int   | Club ID                                                         |
-| `circle.name`                    | str   | Club name                                                       |
-| `circle.comment`                 | str   | Club description                                                |
-| `circle.leader_viewer_id`        | int   | Leader's viewer ID                                              |
-| `circle.leader_name`             | str   | Leader's display name                                           |
-| `circle.member_count`            | int   | Number of members                                               |
-| `circle.join_style`              | int   | Join policy (2=open, 3=approval)                                |
-| `circle.policy`                  | int   | Play style code                                                 |
-| `circle.created_at`              | str   | Club creation ISO timestamp                                     |
-| `circle.last_updated`            | str   | Last data update ISO timestamp                                  |
-| `circle.monthly_rank`            | int   | Current month ranking                                           |
-| `circle.monthly_point`           | int   | Total monthly fans                                              |
-| `circle.last_month_rank`         | int?  | Previous month rank                                             |
-| `circle.last_month_point`        | int?  | Previous month fans                                             |
-| `circle.archived`                | bool  | Whether club is archived                                        |
-| `circle.yesterday_updated`       | str?  | Yesterday's update time                                         |
-| `circle.yesterday_points`        | int?  | Yesterday's total fans                                          |
-| `circle.yesterday_rank`          | int?  | Yesterday's rank                                                |
-| `circle.live_points`             | int?  | Live event points (null if no event)                            |
-| `circle.live_rank`               | int?  | Live event rank                                                 |
-| `circle.last_live_update`        | str?  | Last live update time                                           |
-| `club_rank`                      | int   | Club tier rank (1-11)                                           |
-| `fans_to_next_tier`              | int   | Fans needed for promotion to next tier                          |
-| `fans_to_lower_tier`             | int   | Fans above demotion threshold (buffer before dropping)          |
-| `yesterday_fans_to_next_tier`    | int   | Yesterday's promotion threshold (changes daily)                 |
-| `yesterday_fans_to_lower_tier`   | int   | Yesterday's demotion threshold (changes daily)                  |
-| `members[].id`                   | int   | Internal DB ID                                                  |
-| `members[].viewer_id`            | int   | Trainer's viewer ID                                             |
-| `members[].trainer_name`         | str   | Display name                                                    |
-| `members[].shame_score`          | int?  | Activity score (null if not tracked)                            |
-| `members[].daily_fans`           | int[] | 32-element cumulative daily fans                                |
-| `members[].last_updated`         | str   | Last update ISO timestamp                                       |
-| `members[].previous_circle_id`   | int?  | Transfer source club ID                                         |
-| `members[].previous_circle_name` | str?  | Transfer source club name                                       |
-| `members[].next_month_start`     | int?  | Projected starting fans for next month (appears in some months) |
+| Field                            | Type  | Description                                                                                               |
+| -------------------------------- | ----- | --------------------------------------------------------------------------------------------------------- |
+| `circle.circle_id`               | int   | Club ID                                                                                                   |
+| `circle.name`                    | str   | Club name                                                                                                 |
+| `circle.comment`                 | str   | Club description                                                                                          |
+| `circle.leader_viewer_id`        | int   | Leader's viewer ID                                                                                        |
+| `circle.leader_name`             | str   | Leader's display name                                                                                     |
+| `circle.member_count`            | int   | Number of members                                                                                         |
+| `circle.join_style`              | int   | Join policy (2=open, 3=approval)                                                                          |
+| `circle.policy`                  | int   | Play style code                                                                                           |
+| `circle.created_at`              | str   | Club creation ISO timestamp                                                                               |
+| `circle.last_updated`            | str   | ISO timestamp of the latest data refresh — updates multiple times per day; authoritative freshness signal |
+| `circle.monthly_rank`            | int   | Current month ranking                                                                                     |
+| `circle.monthly_point`           | int   | Total monthly fans                                                                                        |
+| `circle.last_month_rank`         | int?  | Previous month rank                                                                                       |
+| `circle.last_month_point`        | int?  | Previous month fans                                                                                       |
+| `circle.archived`                | bool  | Whether club is archived                                                                                  |
+| `circle.yesterday_updated`       | str?  | Yesterday's update time                                                                                   |
+| `circle.yesterday_points`        | int?  | Yesterday's total fans                                                                                    |
+| `circle.yesterday_rank`          | int?  | Yesterday's rank                                                                                          |
+| `circle.live_points`             | int?  | Live event points (null if no event)                                                                      |
+| `circle.live_rank`               | int?  | Live event rank                                                                                           |
+| `circle.last_live_update`        | str?  | Last live update time                                                                                     |
+| `club_rank`                      | int   | Club tier rank (1-11)                                                                                     |
+| `fans_to_next_tier`              | int   | Fans needed for promotion to next tier                                                                    |
+| `fans_to_lower_tier`             | int   | Fans above demotion threshold (buffer before dropping)                                                    |
+| `yesterday_fans_to_next_tier`    | int   | Yesterday's promotion threshold (changes daily)                                                           |
+| `yesterday_fans_to_lower_tier`   | int   | Yesterday's demotion threshold (changes daily)                                                            |
+| `members[].id`                   | int   | Internal DB ID                                                                                            |
+| `members[].viewer_id`            | int   | Trainer's viewer ID                                                                                       |
+| `members[].trainer_name`         | str   | Display name                                                                                              |
+| `members[].shame_score`          | int?  | Activity score (null if not tracked)                                                                      |
+| `members[].daily_fans`           | int[] | 32-element cumulative daily fans                                                                          |
+| `members[].last_updated`         | str   | ISO timestamp of the member's latest data refresh (varies per member; refreshes land throughout the day)  |
+| `members[].previous_circle_id`   | int?  | Transfer source club ID                                                                                   |
+| `members[].previous_circle_name` | str?  | Transfer source club name                                                                                 |
+| `members[].next_month_start`     | int?  | Projected starting fans for next month (appears in some months)                                           |
 
 #### `daily_fans` Array
 
@@ -501,7 +501,8 @@ Count total inheritance records and support card accounts.
 
 ## Data Refresh
 
-- **Snapshot time:** 00:00 JST (daily)
+- **First refresh:** ~00:00 JST (daily anchor), with further refreshes throughout the day — the same calendar day can ship multiple payload revisions
+- **Freshness signal:** `circle.last_updated` / `members[].last_updated` — compare the timestamps, not the calendar day
 - **Live data:** Available during events via `live_points` and `live_rank`
 - **Cache strategy:** Server caches responses with configurable TTL (default 300s)
 
@@ -516,3 +517,4 @@ Count total inheritance records and support card accounts.
 7. **Search `total` is a string** — returns `"over 10000"` instead of an integer (soft cap)
 8. **Veterans endpoint requires UUID** — not numeric viewer_id. Returns 400 with numeric IDs
 9. **`/api/tasks` is listed in health but returns 404** — likely deprecated or internal-only
+10. **Multiple refreshes per day** — uma.moe serves new data several times daily. Unchanged data returns the same `last_updated`; a changed timestamp means a refresh (possibly on the same calendar day). `circle.yesterday_updated` records the prior day's finalization and is deliberately not used for freshness

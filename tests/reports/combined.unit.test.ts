@@ -12,7 +12,7 @@ import { generateDailyReport } from "../../src/reports/daily";
 import { generateWeeklyReport } from "../../src/reports/weekly";
 import { generateMonthlyReport } from "../../src/reports/monthly";
 import { computeMembers } from "../../src/reports/compute";
-import { buildFooter, buildDateStr } from "../../src/reports/format";
+import { buildFooter } from "../../src/reports/format";
 import { loadRealSnapshot, makeConfig } from "../_helpers";
 
 const SYNC_FOOTER_REGEX = /Terakhir sync:/g;
@@ -34,7 +34,7 @@ function stripFooter(report: string): string {
 }
 
 function sharedFooter(): string {
-  return buildFooter(config, buildDateStr(snapshot));
+  return buildFooter(config, snapshot);
 }
 
 describe("generateCombinedReport", () => {

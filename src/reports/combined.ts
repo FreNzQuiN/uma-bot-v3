@@ -13,7 +13,7 @@ import type { BotConfig, Snapshot, ComputedMember } from "../types";
 import { generateDailyReport } from "./daily";
 import { generateWeeklyReport } from "./weekly";
 import { generateMonthlyReport } from "./monthly";
-import { buildFooter, buildDateStr } from "./format";
+import { buildFooter } from "./format";
 
 const FOOTER_MARKER = "⸻";
 
@@ -64,6 +64,6 @@ export function generateCombinedReport(
   }
   if (parts.length === 0) return "";
 
-  parts.push(buildFooter(config, buildDateStr(snapshot)));
+  parts.push(buildFooter(config, snapshot));
   return parts.join("\n\n");
 }

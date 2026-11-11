@@ -248,7 +248,7 @@ describe("Line-by-line verification of monthly report", () => {
   });
 
   it("line 3: data line", () => {
-    expect(lines[3]).toBe("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(lines[3]).toBe("Periode data: 11 Juni 2026");
   });
 
   it("line 4: Promosi | Degradasi (combined)", () => {

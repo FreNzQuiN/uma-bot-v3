@@ -111,6 +111,6 @@ export function generateCompareReport(
   }
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }

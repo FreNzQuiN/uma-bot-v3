@@ -13,13 +13,21 @@
 import type { Snapshot } from "../types";
 import { loadMonthSnapshot, saveSnapshot } from "./snapshot";
 import { getDataDateComponents, getDataDay } from "../utils/timezone";
-import { getDataDayFromSnapshot } from "./daily-fans";
+import { getDataDayFromSnapshot, getSnapshotLastUpdatedMs } from "./daily-fans";
 import { log } from "../utils/logger";
 
 export interface FetchResult {
   snapshot: Snapshot | null;
   saved: boolean;
   reason?: string;
+}
+
+/** Disk write failed after a successful fetch — distinct from a fetch failure. */
+export class SnapshotSaveError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "SnapshotSaveError";
+  }
 }
 
 /** Structural type for the uma.moe client — keeps the data layer free of api-layer imports. */
@@ -62,7 +70,11 @@ function persistFetched(
 ): string | null {
   const fileDate = getDataDateForFile(fetched);
   if (fileDate) {
-    saveSnapshot(fetched, fileDate, rootDir);
+    try {
+      saveSnapshot(fetched, fileDate, rootDir);
+    } catch (err) {
+      throw new SnapshotSaveError(`Failed to save ${monthLabel} snapshot`, err);
+    }
     log.info(
       "Snapshot",
       `Saved ${monthLabel} (${fetched.members.length} members) as ${fileDate}`,
@@ -98,10 +110,25 @@ function isSnapshotComplete(snapshot: Snapshot): boolean {
 }
 
 /**
- * True if fetched snapshot has strictly more/fresher data than existing.
- * Tiebreakers: member count, then circle.last_updated.
+ * True if fetched snapshot has more/fresher data than existing.
+ *
+ * uma.moe refreshes data multiple times per day, so freshness is the
+ * data-refresh timestamp (getSnapshotLastUpdatedMs), compared numerically —
+ * a calendar day derived from daily_fans is too coarse. Unparseable or
+ * missing timestamps degrade to -Infinity so they can never claim newer.
+ * Equal timestamps fall back to data day, then member count: a snapshot can
+ * gain a day or members without the timestamp bumping. Under a newer
+ * timestamp a lower data day replaces an older day (the day can regress) —
+ * a fresh-ts but truncated payload wins because the timestamp is the
+ * authoritative signal.
  */
 function isFetchedNewer(fetched: Snapshot, existing: Snapshot): boolean {
+  const fetchedMs = getSnapshotLastUpdatedMs(fetched) ?? -Infinity;
+  const existingMs = getSnapshotLastUpdatedMs(existing) ?? -Infinity;
+
+  if (fetchedMs > existingMs) return true;
+  if (fetchedMs < existingMs) return false;
+
   const fetchedDay = getDataDayFromSnapshot(fetched);
   const existingDay = getDataDayFromSnapshot(existing);
   if (fetchedDay > existingDay) return true;
@@ -110,14 +137,6 @@ function isFetchedNewer(fetched: Snapshot, existing: Snapshot): boolean {
     fetched.members.length > existing.members.length
   )
     return true;
-  if (
-    fetchedDay === existingDay &&
-    fetched.members.length === existing.members.length
-  ) {
-    return (
-      (fetched.circle.last_updated ?? "") > (existing.circle.last_updated ?? "")
-    );
-  }
   return false;
 }
 
@@ -222,11 +241,11 @@ export async function fetchAndSaveSnapshot(
   }
 
   // Retry with exponential backoff for current-month data.
-  // Max wait = 23h minus data age. If data is 20h old, retry for 3h.
-  // If data is 1h old, retry for 22h. If 23h+, stop immediately.
-  // First retry polls soon (5m) because the scraper may be minutes late;
-  // delays double to a 1h cap, and the 23h budget aligns with the next
-  // data-refresh horizon (00:00 JST).
+  // Budget = 23h minus data age: a barely-stale snapshot retries almost a
+  // full day, an old one stops immediately. First retry polls soon (5m)
+  // because the refresh may be minutes late; delays double to a 1h cap.
+  // Refreshes can arrive several times a day, so the budget bounds total
+  // wait even when a refresh never lands.
   const HOUR_MS = 60 * 60_000;
   const MAX_RETRY_BUDGET_MS = 23 * HOUR_MS;
   const MAX_DELAY_MS = 60 * 60_000;

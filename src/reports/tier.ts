@@ -8,7 +8,7 @@
 import { Snapshot, BotConfig, CLUB_TIERS } from "../types";
 import type { ComputedMember, TierData } from "../types";
 import { formatNumber } from "../utils/format";
-import { buildDateStr, buildFooter, buildReportHeader } from "./format";
+import { buildFooter, buildReportHeader } from "./format";
 import { computeTierData } from "../data/daily-fans";
 
 export function generateTierReport(
@@ -51,6 +51,6 @@ export function generateTierReport(
   );
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }

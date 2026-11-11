@@ -10,8 +10,12 @@ import { Snapshot, BotConfig } from "../../src/types";
 import { getDefaultConfig } from "../../src/config";
 import { formatNumber, splitMessage } from "../../src/utils/format";
 import { formatDateWIB } from "../../src/utils/timezone";
-import { getStaleDataWarning } from "../../src/reports/format";
-import { loadRealSnapshot } from "../_helpers";
+import {
+  getStaleDataWarning,
+  getSnapshotDataTime,
+  buildFooter,
+} from "../../src/reports/format";
+import { loadRealSnapshot, makeMember, makeSnapshot } from "../_helpers";
 
 const snapshot: Snapshot = loadRealSnapshot();
 
@@ -261,5 +265,101 @@ describe("getStaleDataWarning", () => {
     const now = makeNowJST(2026, 6, 14);
     const result = getStaleDataWarning(2026, 6, 11, now);
     expect(result).toContain("⚠️");
+  });
+});
+
+describe("getSnapshotDataTime", () => {
+  it("returns the latest refresh timestamp across members and circle", () => {
+    const snap = makeSnapshot({
+      members: [
+        makeMember({ viewer_id: 1001, last_updated: "2026-06-10T10:00:00Z" }),
+        makeMember({ viewer_id: 1002, last_updated: "2026-06-11T17:01:16Z" }),
+        makeMember({ viewer_id: 1003, last_updated: "2026-06-09T08:00:00Z" }),
+      ],
+    });
+    // makeSnapshot's default circle.last_updated (2026-06-12T14:00:00Z) is
+    // later than every member timestamp — circle bumps on roster/tier changes.
+    expect(getSnapshotDataTime(snap).toISOString()).toBe(
+      "2026-06-12T14:00:00.000Z",
+    );
+  });
+
+  it("returns the max member last_updated when it is later than the circle", () => {
+    const snap = makeSnapshot({
+      circle: {
+        ...makeSnapshot().circle,
+        last_updated: "2026-06-10T12:00:00Z",
+      },
+      members: [
+        makeMember({ viewer_id: 1001, last_updated: "2026-06-11T17:01:16Z" }),
+      ],
+    });
+    expect(getSnapshotDataTime(snap).toISOString()).toBe(
+      "2026-06-11T17:01:16.000Z",
+    );
+  });
+
+  it("falls back to circle.last_updated when member times are invalid", () => {
+    const snap = makeSnapshot({
+      circle: {
+        ...makeSnapshot().circle,
+        last_updated: "2026-06-11T14:00:00Z",
+      },
+      members: [
+        makeMember({ viewer_id: 1001, last_updated: "not-a-date" }),
+        makeMember({ viewer_id: 1002, last_updated: "" }),
+      ],
+    });
+    expect(getSnapshotDataTime(snap).toISOString()).toBe(
+      "2026-06-11T14:00:00.000Z",
+    );
+  });
+
+  it("returns current time when every timestamp is invalid", () => {
+    const before = Date.now();
+    const snap = makeSnapshot({
+      circle: {
+        ...makeSnapshot().circle,
+        last_updated: "broken",
+      },
+      members: [makeMember({ viewer_id: 1001, last_updated: "not-a-date" })],
+    });
+    const result = getSnapshotDataTime(snap).getTime();
+    expect(result).toBeGreaterThanOrEqual(before);
+    expect(result).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("returns current time for a snapshot with no members", () => {
+    const before = Date.now();
+    const snap = makeSnapshot({
+      circle: { ...makeSnapshot().circle, last_updated: "broken" },
+      members: [],
+    });
+    const result = getSnapshotDataTime(snap).getTime();
+    expect(result).toBeGreaterThanOrEqual(before);
+    expect(result).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe("buildFooter", () => {
+  it("renders the real snapshot time in the configured timezone", () => {
+    const snap = makeSnapshot({
+      members: [
+        makeMember({ viewer_id: 1001, last_updated: "2026-08-02T18:21:29Z" }),
+      ],
+    });
+    const cfg = { ...getDefaultConfig(), timezone: "Asia/Jakarta" };
+    expect(buildFooter(cfg, snap)).toBe("⸻\nTerakhir sync: 3/8 01:21");
+  });
+
+  it("does not throw when every timestamp is invalid", () => {
+    const snap = makeSnapshot({
+      members: [makeMember({ viewer_id: 1001, last_updated: "nope" })],
+    });
+    const cfg = { ...getDefaultConfig(), timezone: "Asia/Jakarta" };
+    expect(() => buildFooter(cfg, snap)).not.toThrow();
+    expect(buildFooter(cfg, snap)).toMatch(
+      /Terakhir sync: \d+\/\d+ \d{2}:\d{2}$/,
+    );
   });
 });

@@ -8,7 +8,7 @@
 import { Snapshot, ComputedMember, BotConfig } from "../../src/types";
 import { getDefaultConfig } from "../../src/config";
 import { computeMembers } from "../../src/reports/compute";
-import { loadRealSnapshot } from "../_helpers";
+import { loadRealSnapshot, makeCumulativeFansSeries } from "../_helpers";
 
 const snapshot: Snapshot = loadRealSnapshot();
 
@@ -379,9 +379,13 @@ describe("computeMembers", () => {
 
       // 30 contributing = active (includes transfers)
       expect(active.length).toBe(snapshot.circle.member_count);
-      // 4 ghosts = left (reclassified from bottom gain by member_count gap)
       expect(left.length).toBe(
         snapshot.members.length - snapshot.circle.member_count,
+      );
+
+      const leftNames = left.map((m) => m.trainerName).sort();
+      expect(leftNames).toEqual(
+        ["DOA IBU", "Kuro", "Lebowski", "Rowking"].sort(),
       );
     });
 
@@ -398,6 +402,149 @@ describe("computeMembers", () => {
       for (const name of names) {
         const m = members.find((x) => x.trainerName === name);
         expect(m).toBeDefined();
+      }
+    });
+  });
+
+  describe("ghost detection data-day signal", () => {
+    function buildGhostSnapshot(
+      memberCount: number,
+      members: Array<{
+        viewerId: number;
+        name: string;
+        activeDays: number;
+        gain: number;
+      }>,
+    ): Snapshot {
+      return {
+        ...snapshot,
+        circle: { ...snapshot.circle, member_count: memberCount },
+        members: members.map((m) => ({
+          id: m.viewerId,
+          circle_id: snapshot.circle.circle_id,
+          viewer_id: m.viewerId,
+          trainer_name: m.name,
+          shame_score: null,
+          year: 2026,
+          month: 8,
+          daily_fans: makeCumulativeFansSeries(1_000_000, m.gain, m.activeDays),
+          last_updated: "2026-08-02T18:21:29Z",
+        })),
+      };
+    }
+
+    it("marks gainful member with no latest-day data as left", () => {
+      const s = buildGhostSnapshot(3, [
+        { viewerId: 1, name: "ActiveHigh", activeDays: 3, gain: 5_000_000 },
+        { viewerId: 2, name: "ActiveLow", activeDays: 3, gain: 495_200 },
+        { viewerId: 3, name: "GainfulLeft", activeDays: 2, gain: 2_698_535 },
+        { viewerId: 4, name: "ZeroGainLeft", activeDays: 2, gain: 0 },
+        { viewerId: 5, name: "ActiveD", activeDays: 3, gain: 1_000_000 },
+      ]);
+      const members = computeMembers(s, config);
+      const byName = new Map(members.map((m) => [m.trainerName, m]));
+      expect(byName.get("GainfulLeft")?.status).toBe("left");
+      expect(byName.get("ZeroGainLeft")?.status).toBe("left");
+      expect(byName.get("ActiveHigh")?.status).toBe("active");
+      expect(byName.get("ActiveLow")?.status).toBe("active");
+      expect(byName.get("ActiveD")?.status).toBe("active");
+    });
+
+    it("uses the upper median for even-length data-day lists", () => {
+      const s = buildGhostSnapshot(3, [
+        { viewerId: 1, name: "LeftA", activeDays: 2, gain: 0 },
+        { viewerId: 2, name: "ActiveBorderline", activeDays: 2, gain: 0 },
+        { viewerId: 3, name: "ActiveA", activeDays: 3, gain: 1_000_000 },
+        { viewerId: 4, name: "ActiveB", activeDays: 3, gain: 1_000_000 },
+      ]);
+      const members = computeMembers(s, config);
+      const byName = new Map(members.map((m) => [m.trainerName, m]));
+      expect(byName.get("LeftA")?.status).toBe("left");
+      expect(byName.get("ActiveBorderline")?.status).toBe("active");
+      expect(byName.get("ActiveA")?.status).toBe("active");
+      expect(byName.get("ActiveB")?.status).toBe("active");
+    });
+
+    it("does not reclassify zero-data members (lpd floor)", () => {
+      const s = buildGhostSnapshot(3, [
+        { viewerId: 1, name: "ActiveA", activeDays: 3, gain: 1_000 },
+        { viewerId: 2, name: "ActiveB", activeDays: 3, gain: 1_000 },
+        { viewerId: 3, name: "NoData", activeDays: 0, gain: 0 },
+        { viewerId: 4, name: "ActiveC", activeDays: 3, gain: 1_000 },
+      ]);
+      const members = computeMembers(s, config);
+      const byName = new Map(members.map((m) => [m.trainerName, m]));
+      expect(byName.get("NoData")?.status).toBe("stale");
+      expect(byName.get("ActiveA")?.status).toBe("active");
+      expect(byName.get("ActiveB")?.status).toBe("active");
+      expect(byName.get("ActiveC")?.status).toBe("active");
+    });
+
+    it("defers when confirmed candidates are fewer than ghostCount", () => {
+      const s = buildGhostSnapshot(4, [
+        { viewerId: 1, name: "ActiveA", activeDays: 3, gain: 5_000_000 },
+        { viewerId: 2, name: "ActiveB", activeDays: 3, gain: 3_000_000 },
+        { viewerId: 3, name: "ActiveC", activeDays: 3, gain: 100 },
+        { viewerId: 4, name: "LeftOne", activeDays: 2, gain: 500_000 },
+        { viewerId: 5, name: "LeftTwo", activeDays: 2, gain: 400_000 },
+        { viewerId: 6, name: "ActiveD", activeDays: 3, gain: 2_000_000 },
+        { viewerId: 7, name: "ActiveE", activeDays: 3, gain: 1_000_000 },
+      ]);
+      const members = computeMembers(s, config);
+      const byName = new Map(members.map((m) => [m.trainerName, m]));
+      expect(byName.get("LeftOne")?.status).toBe("left");
+      expect(byName.get("LeftTwo")?.status).toBe("left");
+      expect(byName.get("ActiveA")?.status).toBe("active");
+      expect(byName.get("ActiveC")?.status).toBe("active");
+      expect(byName.get("ActiveD")?.status).toBe("active");
+    });
+
+    it("marks nothing left when all members share the latest data day", () => {
+      const s = buildGhostSnapshot(3, [
+        { viewerId: 1, name: "ActiveA", activeDays: 3, gain: 5_000_000 },
+        { viewerId: 2, name: "ActiveB", activeDays: 3, gain: 3_000_000 },
+        { viewerId: 3, name: "ActiveC", activeDays: 3, gain: 100 },
+        { viewerId: 4, name: "ActiveD", activeDays: 3, gain: 2_000_000 },
+        { viewerId: 5, name: "ActiveE", activeDays: 3, gain: 1_000_000 },
+      ]);
+      const members = computeMembers(s, config);
+      for (const m of members) {
+        expect(m.status).toBe("active");
+      }
+    });
+
+    it("breaks ties deterministically by viewerId", () => {
+      const s = buildGhostSnapshot(5, [
+        { viewerId: 10, name: "LeftLowId", activeDays: 2, gain: 0 },
+        { viewerId: 20, name: "LeftHighId", activeDays: 2, gain: 0 },
+        { viewerId: 30, name: "ActiveBorderline", activeDays: 2, gain: 0 },
+        { viewerId: 40, name: "ActiveA", activeDays: 3, gain: 1_000_000 },
+        { viewerId: 50, name: "ActiveB", activeDays: 3, gain: 1_000_000 },
+        { viewerId: 60, name: "ActiveC", activeDays: 3, gain: 1_000_000 },
+        { viewerId: 70, name: "ActiveD", activeDays: 3, gain: 1_000_000 },
+      ]);
+      const members = computeMembers(s, config);
+      const byName = new Map(members.map((m) => [m.trainerName, m]));
+      expect(byName.get("LeftLowId")?.status).toBe("left");
+      expect(byName.get("LeftHighId")?.status).toBe("left");
+      expect(byName.get("ActiveBorderline")?.status).toBe("active");
+      expect(byName.get("ActiveA")?.status).toBe("active");
+      expect(byName.get("ActiveB")?.status).toBe("active");
+    });
+
+    it("rejects outlier data-day influence via median reference", () => {
+      const s = buildGhostSnapshot(4, [
+        { viewerId: 1, name: "Outlier", activeDays: 31, gain: 1_000_000 },
+        { viewerId: 2, name: "ActiveA", activeDays: 3, gain: 500_000 },
+        { viewerId: 3, name: "ActiveB", activeDays: 3, gain: 500_000 },
+        { viewerId: 4, name: "ActiveC", activeDays: 3, gain: 500_000 },
+        { viewerId: 5, name: "ActiveD", activeDays: 3, gain: 500_000 },
+      ]);
+      const members = computeMembers(s, config);
+      const byName = new Map(members.map((m) => [m.trainerName, m]));
+      expect(byName.get("Outlier")?.status).toBe("active");
+      for (const name of ["ActiveA", "ActiveB", "ActiveC", "ActiveD"]) {
+        expect(byName.get(name)?.status).toBe("active");
       }
     });
   });

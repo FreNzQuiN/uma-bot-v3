@@ -16,7 +16,7 @@ WhatsApp bot for Uma Musume club leaders. Tracks member performance, sends autom
 
 ## How It Works
 
-Single Node.js process. No microservices, no cache layer. One process handles WhatsApp (Baileys), HTTP API, cron scheduling, and report generation. Data processing is arithmetic on arrays of ~34 integers. uma.moe data is static for 24h. Splitting adds friction without benefit.
+Single Node.js process. No microservices, no cache layer. One process handles WhatsApp (Baileys), HTTP API, cron scheduling, and report generation. Data processing is arithmetic on arrays of ~34 integers. uma.moe refreshes its data several times per day — freshness is keyed by the `last_updated` timestamp, not the calendar day. Splitting adds friction without benefit.
 
 **Key constraint:** The bot runs intermittently (on/off at unpredictable intervals). It must detect missed reports on restart and send catch-up reports tagged `*⚠️ Catch-up*`.
 
@@ -96,19 +96,19 @@ Env vars (optional, `.env`): `API_PORT` (default 3000), `API_TOKEN` (bearer toke
 
 ## Key Gotchas
 
-| Gotcha                       | Why it matters                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------ |
-| **Snapshot immutability**    | Never mutate saved snapshots. Reports recompute from the array each time.      |
-| **Month boundaries**         | Monthly reports use offset=-1 (previous month). Pre-fetching is automatic.     |
-| **Combined reports**         | On collision days (daily + weekly), a single combined message is sent.         |
-| **sql.js, not sqlite3**      | In-memory WASM SQLite. No native compilation. DB file is a binary blob.        |
-| **mysql2 is optional**       | Only imported when `backend: mysql`. SQLite works without it.                  |
-| **MySQL 8.0.31+ required**   | Adapter checks version at startup. TiDB auto-detected and bypasses check.      |
-| **Config hot-reload**        | Polls mtime every 5s. Schedule changes restart scheduler automatically.        |
-| **Baileys doesn't clean up** | Tests use `--forceExit` because Baileys sockets don't close cleanly.           |
-| **User-facing language**     | Indonesian (`id`). All reports, alerts, and bot responses.                     |
-| **JST as Server Time**       | User can configure display time in config, uma.moe data updates at ~00:00 JST. |
-| **Message Management**       | Keep Display Text short and concise. Long reports split at newline boundaries. |
+| Gotcha                       | Why it matters                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Snapshot immutability**    | Snapshots are never edited in place; a same-day refresh atomically replaces the day's file. Reports recompute from the array each time.                |
+| **Month boundaries**         | Monthly reports use offset=-1 (previous month). Pre-fetching is automatic.                                                                             |
+| **Combined reports**         | On collision days (daily + weekly), a single combined message is sent.                                                                                 |
+| **sql.js, not sqlite3**      | In-memory WASM SQLite. No native compilation. DB file is a binary blob.                                                                                |
+| **mysql2 is optional**       | Only imported when `backend: mysql`. SQLite works without it.                                                                                          |
+| **MySQL 8.0.31+ required**   | Adapter checks version at startup. TiDB auto-detected and bypasses check.                                                                              |
+| **Config hot-reload**        | Polls mtime every 5s. Schedule changes restart scheduler automatically.                                                                                |
+| **Baileys doesn't clean up** | Tests use `--forceExit` because Baileys sockets don't close cleanly.                                                                                   |
+| **User-facing language**     | Indonesian (`id`). All reports, alerts, and bot responses.                                                                                             |
+| **JST as Server Time**       | User can configure display time in config. uma.moe's first refresh lands ~00:00 JST, then more throughout the day — `last_updated` distinguishes them. |
+| **Message Management**       | Keep Display Text short and concise. Long reports split at newline boundaries.                                                                         |
 
 ---
 

@@ -10,12 +10,7 @@ import type { ComputedMember } from "../types";
 import { getDataDayFromSnapshot } from "../data/snapshot";
 import { countActiveDays } from "../data/daily-fans";
 import { formatNumber, sanitizeName } from "../utils/format";
-import {
-  getStaleDataWarning,
-  buildDateStr,
-  buildFooter,
-  buildReportHeader,
-} from "./format";
+import { getStaleDataWarning, buildFooter, buildReportHeader } from "./format";
 
 export function generateStatsReport(
   snapshot: Snapshot,
@@ -171,6 +166,6 @@ export function generateStatsReport(
   }
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }

@@ -48,7 +48,7 @@ Circle leaders set monthly fan requirements. Members who don't meet them may be 
 
 ## What Data Is Available?
 
-uma.moe is a third-party platform that scrapes game data once daily at 00:00 JST (22:00 WIB). It provides:
+uma.moe is a third-party platform that scrapes game data on a rolling basis — first refresh ~00:00 JST (22:00 WIB), then multiple times per day. It provides:
 
 - Circle metadata (name, rank, tier, member count)
 - Per-member cumulative daily fans (32-element array)
@@ -56,7 +56,7 @@ uma.moe is a third-party platform that scrapes game data once daily at 00:00 JST
 - Club rankings among all tracked circles
 - Tier thresholds (exact fans needed for promotion/demotion)
 
-**Why once daily:** The game updates player stats once per day. uma.moe scrapes after the update. The bot fetches after that (22:05 WIB — 5-minute buffer for data to settle).
+**Why multiple refreshes:** The game updates player stats once per day, but uma.moe re-scrapes throughout the day as refreshes land. The bot fetches after the first refresh (22:05 WIB — 5-minute buffer for data to settle) and relies on the `last_updated` timestamp thereafter.
 
 See `docs/uma-moe-api.md` for the full API documentation (reverse-engineered, may be outdated).
 See `tests/examples/snapshot-june-12.json` for real data.

@@ -66,7 +66,7 @@ describe("Bottom report: full output and basic structure", () => {
     expect(lines[0]).toBe("\ud83d\udcc9 *Perlu Perhatian*");
     expect(lines[1]).toBe("");
     expect(lines[2]).toBe("Hol＿Horse | A+ (#431)");
-    expect(lines[3]).toBe("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(lines[3]).toBe("Periode data: 11 Juni 2026");
     expect(lines[4]).toBe("");
     expect(lines[5]).toBe(
       `🎯 Target bulanan: ${formatNumber(config.requirements.monthlyFans)}`,

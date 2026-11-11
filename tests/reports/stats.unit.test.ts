@@ -660,7 +660,7 @@ describe("Output line structure", () => {
   });
 
   it("has data line on line 4", () => {
-    expect(lines[3]).toBe("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(lines[3]).toBe("Periode data: 11 Juni 2026");
   });
 
   it("has Total anggota line", () => {

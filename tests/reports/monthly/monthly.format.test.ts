@@ -89,7 +89,7 @@ describe("Full monthly report output (offset=0)", () => {
   });
 
   it("report shows data period date", () => {
-    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(report).toContain("Periode data: 11 Juni 2026");
   });
 
   it("report shows promotion and demotion info", () => {
@@ -326,7 +326,7 @@ describe("Header format and metadata", () => {
 
   it("data line with date", () => {
     const report = generateMonthlyReport(snapshot, config, computedMembers, 0);
-    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(report).toContain("Periode data: 11 Juni 2026");
   });
 
   it("summary line shows formatted total", () => {

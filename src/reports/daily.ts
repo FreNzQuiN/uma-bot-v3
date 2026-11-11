@@ -127,6 +127,6 @@ export function generateDailyReport(
   }
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot, latestDataDay)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }

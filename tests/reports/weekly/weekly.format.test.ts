@@ -63,7 +63,7 @@ describe("Full weekly report output (offset=0, W2)", () => {
   });
 
   it("report shows data period date", () => {
-    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(report).toContain("Periode data: 11 Juni 2026");
   });
 
   it("report shows period day range", () => {
@@ -274,7 +274,7 @@ describe("Header format and metadata", () => {
 
   it("data line with date", () => {
     const report = generateWeeklyReport(snapshot, config, computedMembers, 0);
-    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(report).toContain("Periode data: 11 Juni 2026");
   });
 
   it("period line shows correct day range for each week", () => {
@@ -363,7 +363,7 @@ describe("Line-by-line verification of W2 report", () => {
   });
 
   it("report contains data date", () => {
-    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(report).toContain("Periode data: 11 Juni 2026");
   });
 
   it("report contains period", () => {

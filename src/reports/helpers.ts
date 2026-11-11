@@ -11,7 +11,7 @@ import { computeMembers } from "./compute";
 // Top-N list size for leaderboard-style reports
 export const TOP_N = 10;
 
-// Allow 1 day of data lag (uma.moe publishes once daily)
+// Allow 1 day of data lag (refreshes can land as late as the next JST day)
 export const STALE_DAY_TOLERANCE = 1;
 
 interface HistoricalSnapshotResult {

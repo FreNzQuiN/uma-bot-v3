@@ -115,7 +115,7 @@ describe("/daily dispatch integration (real snapshot)", () => {
     expect(report).toContain("Hol＿Horse");
     expect(report).toContain("A+");
     expect(report).toContain("#431");
-    expect(report).toContain("Periode data: 11 Juni 2026, 22:00 WIB");
+    expect(report).toContain("Periode data: 11 Juni 2026");
     expect(report).toContain("Promosi: 349.2M fans lagi");
     expect(report).toContain("Degradasi: buffer 21.8M");
     expect(report).toMatch(/👥 27 kontribusi dari 30 anggota \| Total: /);

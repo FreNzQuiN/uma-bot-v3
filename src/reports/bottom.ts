@@ -9,12 +9,7 @@ import { Snapshot, BotConfig } from "../types";
 import type { ComputedMember } from "../types";
 import { getDataDayFromSnapshot } from "../data/snapshot";
 import { formatNumber, sanitizeName } from "../utils/format";
-import {
-  buildDateStr,
-  buildFooter,
-  buildReportHeader,
-  buildStaleSection,
-} from "./format";
+import { buildFooter, buildReportHeader, buildStaleSection } from "./format";
 import { TOP_N } from "./helpers";
 
 export function generateBottomReport(
@@ -82,6 +77,6 @@ export function generateBottomReport(
   );
 
   lines.push("");
-  lines.push(buildFooter(config, buildDateStr(snapshot)));
+  lines.push(buildFooter(config, snapshot));
   return lines.join("\n");
 }
